@@ -4,14 +4,13 @@ Canonical repository for VO2 AI agent governance prompts and runtime.
 
 ## Current release
 
-Version: `5.3.0`
+Version: `5.4.0`
 
 ## Canonical active files
 
-- `prompts/CommonPrompt.md`
-- `prompts/SportPrompt.md`
-- `runtime/server.js`
-- `runtime/serverjscmd.sh`
+- `CommonCatalog/CommonPrompt.txt`
+- `SportManager/SportPrompt.txt`
+- `server.js`
 
 ## Source of truth policy
 
@@ -25,6 +24,9 @@ Google Drive is a mirror/distribution layer.
 - DatabaseNamingLanguage: English
 - ScheduledOutputLanguage: Czech
 - OperatorReportLanguage: Czech
+- UserConversationLanguage: Czech
+- CanonicalPromptFileLanguage: English
+- ServerSourceLanguage: English
 
 ## Warning policy
 
