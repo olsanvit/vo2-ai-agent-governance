@@ -4,7 +4,7 @@ Canonical repository for VO2 AI agent governance prompts and runtime.
 
 ## Current release
 
-Version: `5.4.0`
+Version: `5.3.0`
 
 ## Canonical active files
 
