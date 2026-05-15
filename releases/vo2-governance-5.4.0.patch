@@ -1,0 +1,389 @@
+diff --git a/CommonCatalog/CommonPrompt.txt b/CommonCatalog/CommonPrompt.txt
+--- a/CommonCatalog/CommonPrompt.txt
++++ b/CommonCatalog/CommonPrompt.txt
+@@ -1,6 +1,42 @@
+-PromptVersion: 5.3.0
++PromptVersion: 5.4.0
+ Timezone: Europe/Prague
+ 
+ ---
+ 
++# COMMONPROMPT 5.4.0 -- CANONICAL GITHUB PROMPT VERSION PREFLIGHT
++
++This section is the canonical English v5.4.0 layer. It is additive. It preserves the complete governed source below and adds mandatory GitHub prompt-version preflight rules.
++
++Core additions in v5.4.0:
++- Canonical GitHub prompt-version preflight
++- Deterministic CommonPrompt discovery from the canonical repository
++- Prompt freshness blocker rules
++- Mandatory refresh/apply requirement when the runtime prompt is older
++- Manual review escalation for unknown or asymmetric prompt states
++
++Canonical repository:
++- Repository: `olsanvit/vo2-ai-agent-governance`
++- Canonical file: `CommonCatalog/CommonPrompt.txt`
++
++Startup preflight rules:
++- at the beginning of every run, an agent governed by CommonPrompt must read the canonical `CommonCatalog/CommonPrompt.txt` from the repository above
++- the agent must extract the canonical `PromptVersion` before continuing
++- the canonical GitHub file is the source of truth for CommonPrompt freshness
++- local memory, chat history, copied prompt text or mirror storage must not override the canonical GitHub version check
++
++Version comparison rules:
++- if the runtime agent prompt version is lower than the canonical GitHub `PromptVersion`, the agent must apply the canonical CommonPrompt before continuing
++- if the runtime agent prompt version matches the canonical GitHub `PromptVersion`, the agent may continue normally
++- if the runtime agent prompt version is higher than the canonical GitHub `PromptVersion`, the run must enter manual review or warning-blocker mode until canonical identity is confirmed
++- if the canonical GitHub `PromptVersion` cannot be read, freshness cannot be claimed and the run must not be reported as fully successful
++
++Application and reporting rules:
++- apply means the agent must refresh itself from the canonical CommonPrompt before any governed execution continues
++- the agent must report the runtime prompt version, the canonical GitHub prompt version and the comparison result
++- the agent must report whether the canonical prompt was applied, already aligned or blocked
++- the agent must not silently continue on stale prompt state
++- stale prompt state is a warning_blocker when it affects correctness, auditability, lineage, canonical identity, scheduled output reliability or report trustworthiness
++- prompt freshness claims without a successful GitHub check are forbidden
++
++If an older preserved section conflicts with this English v5.4.0 overlay, the English v5.4.0 overlay wins.
++
++---
++
+ # COMMONPROMPT 5.3.0 — CANONICAL ENGLISH ENTERPRISE GOVERNANCE OVERLAY
+diff --git a/SportManager/SportPrompt.txt b/SportManager/SportPrompt.txt
+--- a/SportManager/SportPrompt.txt
++++ b/SportManager/SportPrompt.txt
+@@ -1,10 +1,48 @@
+ Agent: [SPORT_NAME] Data Manager
+ Alias: [SPORT_ALIAS_OPTIONAL]
+-PromptVersion: 5.3.0
++PromptVersion: 5.4.0
+ RunMode: historical_maintenance
+ Timezone: Europe/Prague
+ DryRunAllowed: true
+ 
+ ---
+ 
++# SPORTPROMPT 5.4.0 -- CANONICAL GITHUB PROMPT VERSION PREFLIGHT
++
++This section is the canonical English v5.4.0 layer. It is additive. It preserves the complete governed source below and adds mandatory GitHub prompt-version preflight rules for sport-governed agents.
++
++Core additions in v5.4.0:
++- Canonical GitHub prompt-version preflight
++- Deterministic SportPrompt discovery from the canonical repository
++- Prompt freshness blocker rules for sport agents
++- Mandatory refresh/apply requirement when the runtime prompt is older
++- Manual review escalation for unknown or asymmetric prompt states
++
++Canonical repository:
++- Repository: `olsanvit/vo2-ai-agent-governance`
++- Canonical file: `SportManager/SportPrompt.txt`
++
++Startup preflight rules:
++- at the beginning of every run, a sport-governed agent must read the canonical `SportManager/SportPrompt.txt` from the repository above
++- the agent must extract the canonical `PromptVersion` before continuing
++- the canonical GitHub file is the source of truth for SportPrompt freshness
++- local memory, chat history, copied prompt text or mirror storage must not override the canonical GitHub version check
++
++Version comparison rules:
++- if the runtime agent prompt version is lower than the canonical GitHub `PromptVersion`, the agent must apply the canonical SportPrompt before continuing
++- if the runtime agent prompt version matches the canonical GitHub `PromptVersion`, the agent may continue normally
++- if the runtime agent prompt version is higher than the canonical GitHub `PromptVersion`, the run must enter manual review or warning-blocker mode until canonical identity is confirmed
++- if the canonical GitHub `PromptVersion` cannot be read, freshness cannot be claimed and the run must not be reported as fully successful
++
++Application and reporting rules:
++- apply means the agent must refresh itself from the canonical SportPrompt before any governed execution continues
++- the agent must report the runtime prompt version, the canonical GitHub prompt version and the comparison result
++- the agent must report whether the canonical prompt was applied, already aligned or blocked
++- the agent must not silently continue on stale prompt state
++- stale prompt state is a warning_blocker when it affects correctness, auditability, lineage, canonical identity, scheduled output reliability or report trustworthiness
++- prompt freshness claims without a successful GitHub check are forbidden
++
++If an older preserved section conflicts with this English v5.4.0 overlay, the English v5.4.0 overlay wins.
++
++---
++
+ # SPORTPROMPT 5.3.0 — CANONICAL ENGLISH ENTERPRISE GOVERNANCE OVERLAY
+diff --git a/server.js b/server.js
+--- a/server.js
++++ b/server.js
+@@ -10,11 +10,17 @@
+ const { Pool } = pkg;
+ 
+ const AUTH_TOKEN = process.env.AUTH_TOKEN || "Roundnet575Padel";
+-const MCP_VERSION = "5.3.0";
++const MCP_VERSION = "5.4.0";
+ const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
+ const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
+ const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
+ const UPLOAD_DIR = process.env.UPLOAD_DIR || "/app/uploads";
+ const PUBLIC_UPLOAD_BASE_URL = process.env.PUBLIC_UPLOAD_BASE_URL || "";
++const GOVERNED_CANONICAL_REPOSITORY = process.env.GOVERNED_CANONICAL_REPOSITORY || "olsanvit/vo2-ai-agent-governance";
++const GOVERNED_CANONICAL_REF = process.env.GOVERNED_CANONICAL_REF || "main";
++const GOVERNED_RAW_BASE_URL = process.env.GOVERNED_RAW_BASE_URL || `https://raw.githubusercontent.com/${GOVERNED_CANONICAL_REPOSITORY}/${GOVERNED_CANONICAL_REF}`;
++const GOVERNED_COMMON_PROMPT_PATH = "CommonCatalog/CommonPrompt.txt";
++const GOVERNED_SPORT_PROMPT_PATH = "SportManager/SportPrompt.txt";
+ 
+ const pool = new Pool({
+   connectionString: process.env.DATABASE_URL,
+@@ -196,6 +202,97 @@ function safeLimit(limit, max = 100) {
+   return Math.min(Math.max(Number.isFinite(n) ? n : 20, 1), max);
+ }
+ 
++function parseVersionParts(value) {
++  return String(value || "0.0.0")
++    .trim()
++    .split(".")
++    .map(part => Number.parseInt(part, 10))
++    .map(part => (Number.isFinite(part) ? part : 0));
++}
++
++function compareVersions(left, right) {
++  const a = parseVersionParts(left);
++  const b = parseVersionParts(right);
++  const length = Math.max(a.length, b.length);
++
++  for (let i = 0; i < length; i++) {
++    const av = a[i] || 0;
++    const bv = b[i] || 0;
++    if (av > bv) return 1;
++    if (av < bv) return -1;
++  }
++
++  return 0;
++}
++
++function extractPromptVersion(text) {
++  const match = String(text || "").match(/^\s*PromptVersion:\s*([0-9]+\.[0-9]+\.[0-9]+)/m);
++  return match ? match[1] : null;
++}
++
++function resolvePromptTypeForAgent(agentName = "") {
++  const name = String(agentName || "");
++  if (/catalog/i.test(name)) return "common";
++  if (/manager/i.test(name)) return "sport";
++  return null;
++}
++
++function canonicalPromptPathForAgent(agentName = "", promptType = null) {
++  const resolved = promptType || resolvePromptTypeForAgent(agentName);
++  if (resolved === "common") return GOVERNED_COMMON_PROMPT_PATH;
++  if (resolved === "sport") return GOVERNED_SPORT_PROMPT_PATH;
++  return null;
++}
++
++async function fetchTextWithTimeout(url, timeoutMs = 10000) {
++  const response = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
++  if (!response.ok) throw new Error(`fetch failed: ${response.status} ${response.statusText}`);
++  return await response.text();
++}
++
++async function fetchCanonicalPrompt(agentName = "", promptType = null) {
++  const resolvedPromptType = promptType || resolvePromptTypeForAgent(agentName);
++  const pathName = canonicalPromptPathForAgent(agentName, resolvedPromptType);
++  if (!pathName) throw new Error("Cannot resolve canonical prompt path for agent.");
++
++  const url = `${GOVERNED_RAW_BASE_URL}/${pathName}`;
++  const text = await fetchTextWithTimeout(url);
++
++  return {
++    repository: GOVERNED_CANONICAL_REPOSITORY,
++    ref: GOVERNED_CANONICAL_REF,
++    promptType: resolvedPromptType,
++    path: pathName,
++    url,
++    promptVersion: extractPromptVersion(text),
++    text
++  };
++}
++
++function buildGovernedReleaseManifest() {
++  return {
++    repository: GOVERNED_CANONICAL_REPOSITORY,
++    ref: GOVERNED_CANONICAL_REF,
++    mcpVersion: MCP_VERSION,
++    governedFiles: [GOVERNED_COMMON_PROMPT_PATH, GOVERNED_SPORT_PROMPT_PATH, "server.js"],
++    promptTypeRules: {
++      common: { agentNameIncludes: "Catalog", canonicalFile: GOVERNED_COMMON_PROMPT_PATH },
++      sport: { agentNameIncludes: "Manager", canonicalFile: GOVERNED_SPORT_PROMPT_PATH }
++    },
++    comparisonPolicy: {
++      actionOnLower: "apply_canonical_prompt_before_continue",
++      actionOnEqual: "continue",
++      actionOnHigher: "manual_review_required",
++      actionOnUnknown: "warning_blocker"
++    }
++  };
++}
++
++function promptVersionPreflightReport({ agentName = "", promptType = null, runtimePromptVersion = null, canonicalPromptVersion = null }) {
++  const resolvedPromptType = promptType || resolvePromptTypeForAgent(agentName);
++  const pathName = canonicalPromptPathForAgent(agentName, resolvedPromptType);
++
++  if (!resolvedPromptType || !pathName) {
++    return {
++      status: "manual_review_required",
++      reason: "unknown_agent_prompt_type",
++      agentName,
++      promptType: resolvedPromptType,
++      runtimePromptVersion: runtimePromptVersion || null,
++      canonicalPromptVersion: canonicalPromptVersion || null,
++      action: "determine canonical prompt type before continuing"
++    };
++  }
++
++  if (!canonicalPromptVersion) {
++    return {
++      status: "warning_blocker",
++      reason: "canonical_prompt_version_unavailable",
++      agentName,
++      promptType: resolvedPromptType,
++      canonicalPath: pathName,
++      runtimePromptVersion: runtimePromptVersion || null,
++      canonicalPromptVersion: null,
++      action: "refresh canonical GitHub prompt metadata before continuing"
++    };
++  }
++
++  if (!runtimePromptVersion) {
++    return {
++      status: "warning_blocker",
++      reason: "runtime_prompt_version_unavailable",
++      agentName,
++      promptType: resolvedPromptType,
++      canonicalPath: pathName,
++      runtimePromptVersion: null,
++      canonicalPromptVersion,
++      action: "determine runtime prompt version before continuing"
++    };
++  }
++
++  const comparison = compareVersions(runtimePromptVersion, canonicalPromptVersion);
++  if (comparison < 0) {
++    return {
++      status: "upgrade_required",
++      reason: "runtime_prompt_older_than_canonical",
++      agentName,
++      promptType: resolvedPromptType,
++      canonicalPath: pathName,
++      runtimePromptVersion,
++      canonicalPromptVersion,
++      action: "apply canonical prompt before continuing"
++    };
++  }
++
++  if (comparison === 0) {
++    return {
++      status: "ok",
++      reason: "prompt_versions_aligned",
++      agentName,
++      promptType: resolvedPromptType,
++      canonicalPath: pathName,
++      runtimePromptVersion,
++      canonicalPromptVersion,
++      action: "continue"
++    };
++  }
++
++  return {
++    status: "manual_review_required",
++    reason: "runtime_prompt_newer_than_canonical",
++    agentName,
++    promptType: resolvedPromptType,
++    canonicalPath: pathName,
++    runtimePromptVersion,
++    canonicalPromptVersion,
++    action: "review canonical identity before continuing"
++  };
++}
++
+ function buildWhere(criteria, startIndex = 1) {
+   const keys = Object.keys(criteria || {});
+   if (keys.length === 0) throw new Error("criteria must not be empty");
+@@ -492,6 +589,53 @@ function createMcpServer() {
+     const r = await pool.query("SELECT now() AS now");
+     return { content: [{ type: "text", text: JSON.stringify({ ok: true, now: r.rows[0].now, version: MCP_VERSION, pgcryptoAvailable, citextAvailable, postgisAvailable, vectorAvailable }, null, 2) }] };
+   });
++
++  wrapTool("governed_release_manifest", "Return the governed release manifest for the canonical repository.", {}, async () => {
++    return { content: [{ type: "text", text: JSON.stringify(buildGovernedReleaseManifest(), null, 2) }] };
++  });
++
++  wrapTool("fetch_canonical_prompt", "Fetch the canonical CommonPrompt or SportPrompt text from the governed GitHub repository.", {
++    agentName: z.string().optional(),
++    promptType: z.enum(["common", "sport"]).optional(),
++    includeText: z.boolean().optional()
++  }, async ({ agentName = "", promptType = undefined, includeText = false }) => {
++    const result = await fetchCanonicalPrompt(agentName, promptType || null);
++    const payload = includeText ? result : { ...result };
++    if (!includeText) delete payload.text;
++    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
++  });
++
++  wrapTool("prompt_version_preflight", "Compare runtime prompt version with the canonical GitHub prompt version for a governed agent.", {
++    agentName: z.string(),
++    runtimePromptVersion: z.string().optional(),
++    promptType: z.enum(["common", "sport"]).optional(),
++    includePromptText: z.boolean().optional()
++  }, async ({ agentName, runtimePromptVersion = null, promptType = undefined, includePromptText = false }) => {
++    const canonical = await fetchCanonicalPrompt(agentName, promptType || null);
++    const report = promptVersionPreflightReport({
++      agentName,
++      promptType: promptType || canonical.promptType,
++      runtimePromptVersion,
++      canonicalPromptVersion: canonical.promptVersion
++    });
++
++    const payload = {
++      ...report,
++      canonicalRepository: canonical.repository,
++      canonicalRef: canonical.ref,
++      canonicalUrl: canonical.url,
++      canonicalPromptVersion: canonical.promptVersion,
++      canonicalPromptText: includePromptText ? canonical.text : undefined
++    };
++
++    if (!includePromptText) delete payload.canonicalPromptText;
++    return { content: [{ type: "text", text: JSON.stringify(payload, null, 2) }] };
++  });
+ 
+   wrapTool("list_tables", "List public database tables.", {}, async () => {
+     const r = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`);
+@@ -746,7 +890,11 @@ function createMcpServer() {
+           maxImageBytes: MAX_IMAGE_BYTES,
+           uploadDir: UPLOAD_DIR,
+           publicUploadBaseUrl: PUBLIC_UPLOAD_BASE_URL,
++          governedCanonicalRepository: GOVERNED_CANONICAL_REPOSITORY,
++          governedCanonicalRef: GOVERNED_CANONICAL_REF,
++          governedCommonPromptPath: GOVERNED_COMMON_PROMPT_PATH,
++          governedSportPromptPath: GOVERNED_SPORT_PROMPT_PATH,
+           rawWriteSqlAllowed: false,
+           deleteAllowed: false,
+           dropAllowed: false,
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -4,14 +4,15 @@ Canonical repository for VO2 AI agent governance prompts and runtime.
+ ## Current release
+ 
+-Version: `5.3.0`
++Version: `5.4.0`
+ 
+ ## Canonical active files
+ 
+-- `prompts/CommonPrompt.md`
+-- `prompts/SportPrompt.md`
+-- `runtime/server.js`
+-- `runtime/serverjscmd.sh`
++- `CommonCatalog/CommonPrompt.txt`
++- `SportManager/SportPrompt.txt`
++- `server.js`
++
++Supporting release artifact: `releases/vo2-governance-5.4.0.patch`
+ 
+ ## Source of truth policy
+ 
+diff --git a/VERSION b/VERSION
+--- a/VERSION
++++ b/VERSION
+@@ -1 +1 @@
+-5.3.0
++5.4.0
