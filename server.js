@@ -10,8 +10,8 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 
 const { Pool } = pkg;
 
-const AUTH_TOKEN = process.env.AUTH_TOKEN || "Roundnet575Padel";
-const MCP_VERSION = "5.3.0";
+const AUTH_TOKEN = process.env.AUTH_TOKEN;
+const MCP_VERSION = "6.11.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -20,9 +20,15 @@ const PUBLIC_UPLOAD_BASE_URL = process.env.PUBLIC_UPLOAD_BASE_URL || "";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: Number(process.env.PG_POOL_MAX || 20),
+  max: Number(process.env.PG_POOL_MAX || 10),
   idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
   connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT || 10000),
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
+});
+
+pool.on("error", (err) => {
+  console.error("[pool] Unexpected idle client error:", err.message);
 });
 
 let pgcryptoAvailable = false;
@@ -31,6 +37,7 @@ let postgisAvailable = false;
 let vectorAvailable = false;
 
 const schemaCache = new Map();
+const SCHEMA_CACHE_TTL = 5 * 60 * 1000; // 5 minut
 
 const metrics = {
   startedAt: new Date().toISOString(),
@@ -43,6 +50,11 @@ const metrics = {
   imagesSaved: 0,
   jobsEnqueued: 0,
   migrationsRecorded: 0,
+};
+
+const runtimeGovernanceState = {
+  lastPromptUpgradeLifecycleReport: null,
+  lastPromptUpgradeLifecycleAt: null,
 };
 
 const BASE_COLUMNS = [
@@ -131,6 +143,12 @@ function pgTypeForKey(key, value, explicitTypes = {}) {
   if (explicitTypes && explicitTypes[name]) return sanitizePgType(explicitTypes[name]);
   if (name === "Guid" || isGuidColumn(name) || isUuidString(value)) return "uuid";
   if (/Score$/i.test(name)) return "numeric(5,2)";
+  // Explicit text overrides — prevent false-positive numeric inference from substrings
+  // e.g. "Migration" contains "ratio", "Operation" contains "ratio", "Integrate" contains "rate"
+  if (/(Name|Hash|Title|Label|Slug|Description|Type|Category|Status|Tag|Token|Key|Path|Url|Uri|Message|Error|Reason|Comment|Summary|Body|Content|Format|Locale|Language|Timezone|Currency|Country|Region|City|Address|Email|Phone|Operation|Migration|Integration|Generation|Iteration|Enumeration|Configuration|Decoration|Duration|Location)$/i.test(name)) {
+    if (/Email|NormalizedName|Slug|Code/i.test(name) && citextAvailable) return "citext";
+    return "text";
+  }
   if (/Amount|Price|Cost|Value|Rate|Ratio|Percent|Percentage|Odds|Weight|Height|Length|Width|Distance|Latitude|Longitude/i.test(name)) return "numeric(18,4)";
   if (/Count|Total|Number|Rank|Position|Year|Age/i.test(name)) return "integer";
   if (/Size|Bytes|RowVersion/i.test(name)) return "bigint";
@@ -181,6 +199,43 @@ function normalizeScoreData(data) {
   }
   if (touched && !Object.prototype.hasOwnProperty.call(out, "ScoreUpdatedAt")) out.ScoreUpdatedAt = new Date().toISOString();
   return out;
+}
+
+function buildScoreBreakdown(record = {}) {
+  const normalized = normalizeScoreData(record);
+  const presentScores = {};
+  for (const col of SCORE_COLUMNS) {
+    if (Object.prototype.hasOwnProperty.call(normalized, col)) {
+      const value = normalized[col];
+      if (value !== null && value !== undefined && value !== "") presentScores[col] = Number(value);
+    }
+  }
+
+  const criticalScores = ["ConfidenceScore", "ValidationScore", "CoverageScore"]
+    .filter(key => Object.prototype.hasOwnProperty.call(presentScores, key))
+    .map(key => ({ key, value: presentScores[key] }));
+
+  const limitingFactor = criticalScores.length > 0
+    ? criticalScores.reduce((lowest, current) => current.value < lowest.value ? current : lowest)
+    : null;
+
+  const warnings = [];
+  for (const [key, value] of Object.entries(presentScores)) {
+    if (value < 40) warnings.push(`${key} is critically low`);
+    else if (value < 60) warnings.push(`${key} is below preferred confidence`);
+  }
+
+  if (presentScores.FinalScore !== undefined && limitingFactor && presentScores.FinalScore > limitingFactor.value) {
+    warnings.push(`FinalScore exceeds limiting critical score ${limitingFactor.key}`);
+  }
+
+  return {
+    scores: presentScores,
+    limitingFactor,
+    scoreReason: String(normalized.ScoreReason || ""),
+    scoreUpdatedAt: normalized.ScoreUpdatedAt || null,
+    warnings
+  };
 }
 
 function normalizeSearchText(value) {
@@ -275,7 +330,8 @@ async function tableExists(table) {
 
 async function getColumns(table) {
   const t = normalizeIdentifierName(table);
-  if (schemaCache.has(t)) return new Set(schemaCache.get(t).columns);
+  const cached = schemaCache.get(t);
+  if (cached && (Date.now() - cached.loadedAt) < SCHEMA_CACHE_TTL) return new Set(cached.columns);
   const r = await pool.query(`SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=$1`, [t]);
   const columns = r.rows.map(x => x.column_name);
   schemaCache.set(t, { columns, loadedAt: Date.now() });
@@ -521,14 +577,20 @@ async function upsertRecord(table, criteria, data, skipAudit = false) {
 async function findRecords(table, criteria = {}, limit = 20) {
   const t = normalizeIdentifierName(table);
   const safe = safeLimit(limit, 500);
+  const cols = await getColumns(t);
+  const hasIsDeleted = cols.has("IsDeleted");
+  const hasUpdatedAt = cols.has("UpdatedAt");
+
+  const deletedClause = hasIsDeleted ? ` AND "IsDeleted"=false` : "";
+  const orderClause = hasUpdatedAt ? ` ORDER BY "UpdatedAt" DESC` : "";
 
   if (Object.keys(criteria).length === 0) {
-    const r = await pool.query(`SELECT * FROM "${t}" WHERE COALESCE("IsDeleted", false)=false ORDER BY "UpdatedAt" DESC LIMIT ${safe}`);
+    const r = await pool.query(`SELECT * FROM "${t}" WHERE true${deletedClause}${orderClause} LIMIT ${safe}`);
     return r.rows;
   }
 
   const where = buildWhere(criteria);
-  const r = await pool.query(`SELECT * FROM "${t}" WHERE ${where.where} AND COALESCE("IsDeleted", false)=false LIMIT ${safe}`, where.values);
+  const r = await pool.query(`SELECT * FROM "${t}" WHERE ${where.where}${deletedClause} LIMIT ${safe}`, where.values);
   return r.rows;
 }
 
@@ -536,23 +598,179 @@ async function searchRecords(table, query, limit = 20) {
   const t = normalizeIdentifierName(table);
   const safe = safeLimit(limit, 200);
   const normalized = normalizeSearchText(query);
+  const cols = await getColumns(t);
+
+  const hasSearchText = cols.has("SearchText");
+  const hasNormalizedName = cols.has("NormalizedName");
+  if (!hasSearchText && !hasNormalizedName) {
+    throw new Error(`Table "${t}" has neither SearchText nor NormalizedName column — search_records requires at least one.`);
+  }
+
+  const hasIsDeleted = cols.has("IsDeleted");
+  const hasUpdatedAt = cols.has("UpdatedAt");
+
+  const searchCond = hasSearchText && hasNormalizedName
+    ? `("SearchText" ILIKE $1 OR "NormalizedName" ILIKE $1)`
+    : hasSearchText
+      ? `"SearchText" ILIKE $1`
+      : `"NormalizedName" ILIKE $1`;
+  const deletedClause = hasIsDeleted ? ` AND "IsDeleted"=false` : "";
+  const orderClause = hasUpdatedAt ? ` ORDER BY "UpdatedAt" DESC` : "";
 
   const r = await pool.query(
-    `SELECT * FROM "${t}"
-     WHERE COALESCE("IsDeleted", false)=false
-     AND ("SearchText" ILIKE $1 OR "NormalizedName" ILIKE $1)
-     ORDER BY "UpdatedAt" DESC
-     LIMIT ${safe}`,
+    `SELECT * FROM "${t}" WHERE ${searchCond}${deletedClause}${orderClause} LIMIT ${safe}`,
     [`%${normalized}%`]
   );
-
   return r.rows;
+}
+
+async function listAgentEntityTables(agentName, entityTables = []) {
+  if (Array.isArray(entityTables) && entityTables.length > 0) {
+    return entityTables.map(normalizeIdentifierName);
+  }
+
+  const normalizedAgentName = normalizeIdentifierName(agentName).toLowerCase();
+  const excludedTables = new Set([
+    "AuditLog",
+    "MigrationLog",
+    "JobQueue",
+    "EntityImages",
+    "DeadLetterQueue",
+    ...ENTERPRISE_530_TABLES
+  ].map(name => name.toLowerCase()));
+
+  const r = await pool.query(`
+    SELECT table_name
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_type = 'BASE TABLE'
+    ORDER BY table_name
+  `);
+
+  return r.rows
+    .map(row => String(row.table_name || "").trim())
+    .filter(Boolean)
+    .filter(name => !excludedTables.has(name.toLowerCase()))
+    .filter(name => {
+      const lower = name.toLowerCase();
+      return lower.startsWith(normalizedAgentName) || lower.includes(normalizedAgentName);
+    })
+    .map(normalizeIdentifierName);
+}
+
+async function countActiveRows(table) {
+  const t = normalizeIdentifierName(table);
+  const cols = await getColumns(t);
+  const sql = cols.has("IsDeleted")
+    ? `SELECT COUNT(*)::int AS row_count FROM "${t}" WHERE "IsDeleted"=false`
+    : `SELECT COUNT(*)::int AS row_count FROM "${t}"`;
+  const r = await pool.query(sql);
+  return Number(r.rows?.[0]?.row_count || 0);
+}
+
+async function fetchHistoricalRows(table, limit, offset = 0) {
+  const t = normalizeIdentifierName(table);
+  const safe = safeLimit(limit, 100);
+  const safeOffset = Math.max(0, Number(offset || 0));
+  const cols = await getColumns(t);
+  const hasIsDeleted = cols.has("IsDeleted");
+  const hasCreatedAt = cols.has("CreatedAt");
+  const hasUpdatedAt = cols.has("UpdatedAt");
+
+  const deletedClause = hasIsDeleted ? `WHERE "IsDeleted"=false` : "";
+  let orderClause = "";
+  if (hasCreatedAt && hasUpdatedAt) orderClause = `ORDER BY COALESCE("CreatedAt", "UpdatedAt") ASC NULLS FIRST, "UpdatedAt" ASC NULLS FIRST`;
+  else if (hasCreatedAt) orderClause = `ORDER BY "CreatedAt" ASC NULLS FIRST`;
+  else if (hasUpdatedAt) orderClause = `ORDER BY "UpdatedAt" ASC NULLS FIRST`;
+
+  const r = await pool.query(
+    `SELECT * FROM "${t}" ${deletedClause} ${orderClause} LIMIT $1 OFFSET $2`,
+    [safe, safeOffset]
+  );
+  return r.rows;
+}
+
+async function getAgentHistoricalSample({ agentName, entityTables = [], totalLimit = 100 }) {
+  const safeTotal = safeLimit(totalLimit, 100);
+  const tables = await listAgentEntityTables(agentName, entityTables);
+  if (tables.length === 0) {
+    return {
+      agentName,
+      totalRequested: safeTotal,
+      totalReturned: 0,
+      tablesScanned: 0,
+      distribution: [],
+      rows: []
+    };
+  }
+
+  const counts = [];
+  for (const table of tables) counts.push({ table, available: await countActiveRows(table), allocated: 0 });
+
+  let remaining = safeTotal;
+  while (remaining > 0) {
+    const candidates = counts.filter(item => item.allocated < item.available);
+    if (candidates.length === 0) break;
+    for (const item of candidates) {
+      if (remaining <= 0) break;
+      item.allocated += 1;
+      remaining -= 1;
+    }
+  }
+
+  const distribution = [];
+  const rows = [];
+  for (const item of counts) {
+    if (item.allocated <= 0) continue;
+    const sampledRows = await fetchHistoricalRows(item.table, item.allocated, 0);
+    distribution.push({
+      table: item.table,
+      requested: item.allocated,
+      returned: sampledRows.length,
+      available: item.available
+    });
+    for (const row of sampledRows) rows.push({ entityTable: item.table, row });
+  }
+
+  return {
+    agentName,
+    totalRequested: safeTotal,
+    totalReturned: rows.length,
+    tablesScanned: tables.length,
+    distribution,
+    rows
+  };
+}
+
+async function getScoreBreakdownByTableGuid(table, guid) {
+  const rows = await findRecords(table, { Guid: guid }, 1);
+  if (!rows[0]) {
+    return {
+      table: normalizeIdentifierName(table),
+      guid,
+      found: false,
+      scoreBreakdown: null
+    };
+  }
+
+  return {
+    table: normalizeIdentifierName(table),
+    guid,
+    found: true,
+    scoreBreakdown: buildScoreBreakdown(rows[0]),
+    record: rows[0]
+  };
 }
 
 async function softDeleteRecord(table, criteria) {
   const t = normalizeIdentifierName(table);
-  const where = buildWhere(criteria);
+  const cols = await getColumns(t);
+  const missing = ["IsDeleted", "IsActive", "DeletedAt"].filter(c => !cols.has(c));
+  if (missing.length > 0) {
+    throw new Error(`soft_delete_record requires BaseGuid columns missing from "${t}": ${missing.join(", ")}. Run ensure_base_structure first.`);
+  }
 
+  const where = buildWhere(criteria);
   const result = await pool.query(
     `UPDATE "${t}" SET "IsDeleted"=true, "IsActive"=false, "DeletedAt"=now() WHERE ${where.where} RETURNING "Guid"`,
     where.values
@@ -951,57 +1169,101 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(r.rows, null, 2) }] };
   });
 
-  wrapTool("describe_database", "Describe database tables, columns, indexes and foreign keys.", {}, async () => {
-    const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`);
-    const out = [];
-
-    for (const row of tables.rows) {
-      const table = row.table_name;
-      const columns = await pool.query(
-        `SELECT column_name, data_type, is_nullable, column_default
-         FROM information_schema.columns
-         WHERE table_schema='public' AND table_name=$1
-         ORDER BY ordinal_position`,
-        [table]
-      );
-      const indexes = await pool.query(`SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public' AND tablename=$1 ORDER BY indexname`, [table]);
-      const foreignKeys = await pool.query(
-        `SELECT tc.constraint_name, kcu.column_name, ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name
+  wrapTool("describe_database", "Describe database tables, columns, indexes and foreign keys. Use filter to narrow down to matching table names.", {
+    filter: z.string().optional()
+  }, async ({ filter }) => {
+    // All queries in parallel — no N+1 loop
+    const [tablesRes, colsRes, idxRes, fkRes] = await Promise.all([
+      pool.query(
+        filter
+          ? `SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name ILIKE $1 ORDER BY table_name`
+          : `SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`,
+        filter ? [`%${filter}%`] : []
+      ),
+      pool.query(
+        `SELECT table_name, column_name, data_type, is_nullable, column_default
+         FROM information_schema.columns WHERE table_schema='public'
+         ORDER BY table_name, ordinal_position`
+      ),
+      pool.query(`SELECT tablename, indexname, indexdef FROM pg_indexes WHERE schemaname='public' ORDER BY tablename, indexname`),
+      pool.query(
+        `SELECT tc.table_name, tc.constraint_name, kcu.column_name,
+                ccu.table_name AS foreign_table_name, ccu.column_name AS foreign_column_name
          FROM information_schema.table_constraints tc
-         JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
-         JOIN information_schema.constraint_column_usage ccu ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema
-         WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='public' AND tc.table_name=$1`,
-        [table]
-      );
-      out.push({ table, columns: columns.rows, indexes: indexes.rows, foreignKeys: foreignKeys.rows });
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
+         JOIN information_schema.constraint_column_usage ccu
+           ON ccu.constraint_name=tc.constraint_name AND ccu.table_schema=tc.table_schema
+         WHERE tc.constraint_type='FOREIGN KEY' AND tc.table_schema='public'`
+      ),
+    ]);
+
+    // Group by table name
+    const colsByTable = {};
+    for (const r of colsRes.rows) {
+      (colsByTable[r.table_name] ||= []).push({ column_name: r.column_name, data_type: r.data_type, is_nullable: r.is_nullable, column_default: r.column_default });
     }
+    const idxByTable = {};
+    for (const r of idxRes.rows) {
+      (idxByTable[r.tablename] ||= []).push({ indexname: r.indexname, indexdef: r.indexdef });
+    }
+    const fkByTable = {};
+    for (const r of fkRes.rows) {
+      (fkByTable[r.table_name] ||= []).push({ constraint_name: r.constraint_name, column_name: r.column_name, foreign_table_name: r.foreign_table_name, foreign_column_name: r.foreign_column_name });
+    }
+
+    const out = tablesRes.rows.map(({ table_name }) => ({
+      table: table_name,
+      columns: colsByTable[table_name] || [],
+      indexes: idxByTable[table_name] || [],
+      foreignKeys: fkByTable[table_name] || [],
+    }));
 
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
-  wrapTool("schema_report", "Report schema gaps.", {}, async () => {
-    const tables = await pool.query(`SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`);
-    const report = [];
-
-    for (const row of tables.rows) {
-      const table = row.table_name;
-      const cols = await getColumns(table);
-      const pk = await pool.query(
-        `SELECT kcu.column_name
+  wrapTool("schema_report", "Report schema gaps (missing BaseGuid / score columns) for all public tables. Use filter to narrow results.", {
+    filter: z.string().optional()
+  }, async ({ filter }) => {
+    // Bulk fetch — 2 queries total instead of N+1
+    const [tablesRes, colsRes, pkRes] = await Promise.all([
+      pool.query(
+        filter
+          ? `SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name ILIKE $1 ORDER BY table_name`
+          : `SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name`,
+        filter ? [`%${filter}%`] : []
+      ),
+      pool.query(`SELECT table_name, column_name FROM information_schema.columns WHERE table_schema='public'`),
+      pool.query(
+        `SELECT tc.table_name, kcu.column_name
          FROM information_schema.table_constraints tc
-         JOIN information_schema.key_column_usage kcu ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
-         WHERE tc.table_schema='public' AND tc.table_name=$1 AND tc.constraint_type='PRIMARY KEY'`,
-        [table]
-      );
-      const pkCols = pk.rows.map(x => x.column_name);
-      report.push({
-        table,
-        missingBaseColumns: BASE_COLUMNS.filter(c => !cols.has(c)),
-        missingScoreColumns: [...SCORE_COLUMNS, "ScoreUpdatedAt", "ScoreReason"].filter(c => !cols.has(c)),
-        primaryKey: pkCols,
-        guidIsPrimaryKey: pkCols.length === 1 && pkCols[0] === "Guid"
-      });
+         JOIN information_schema.key_column_usage kcu
+           ON tc.constraint_name=kcu.constraint_name AND tc.table_schema=kcu.table_schema
+         WHERE tc.table_schema='public' AND tc.constraint_type='PRIMARY KEY'`
+      ),
+    ]);
+
+    const colsByTable = {};
+    for (const r of colsRes.rows) {
+      (colsByTable[r.table_name] ||= new Set()).add(r.column_name);
     }
+    const pkByTable = {};
+    for (const r of pkRes.rows) {
+      (pkByTable[r.table_name] ||= []).push(r.column_name);
+    }
+
+    const SCORE_ALL = [...SCORE_COLUMNS, "ScoreUpdatedAt", "ScoreReason"];
+    const report = tablesRes.rows.map(({ table_name }) => {
+      const cols = colsByTable[table_name] || new Set();
+      const pkCols = pkByTable[table_name] || [];
+      return {
+        table: table_name,
+        missingBaseColumns: BASE_COLUMNS.filter(c => !cols.has(c)),
+        missingScoreColumns: SCORE_ALL.filter(c => !cols.has(c)),
+        primaryKey: pkCols,
+        guidIsPrimaryKey: pkCols.length === 1 && pkCols[0] === "Guid",
+      };
+    });
 
     return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
   });
@@ -1030,6 +1292,64 @@ function createMcpServer() {
   wrapTool("search_records", "Search records using SearchText and NormalizedName.", { table: z.string(), query: z.string(), limit: z.number().optional() }, async ({ table, query, limit = 20 }) => {
     const rows = await searchRecords(table, query, limit);
     return { content: [{ type: "text", text: JSON.stringify(rows, null, 2) }] };
+  });
+
+  wrapTool("get_agent_historical_sample", "Return up to 100 older rows spread across entity tables related to the given agent.", {
+    agentName: z.string(),
+    entityTables: z.array(z.string()).optional(),
+    totalLimit: z.number().optional()
+  }, async ({ agentName, entityTables = [], totalLimit = 100 }) => {
+    const result = await getAgentHistoricalSample({ agentName, entityTables, totalLimit });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  });
+
+  wrapTool("score_breakdown_report", "Explain score fields, limiting factors, and score warnings for a record.", {
+    record: z.record(z.any())
+  }, async ({ record }) => {
+    const result = buildScoreBreakdown(record);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  });
+
+  wrapTool("score_breakdown_by_guid", "Load a record by table and Guid, then explain score fields, limiting factors, and score warnings.", {
+    table: z.string(),
+    guid: z.string()
+  }, async ({ table, guid }) => {
+    const result = await getScoreBreakdownByTableGuid(table, guid);
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  });
+
+  wrapTool("prompt_upgrade_lifecycle_report", "Return a runtime prompt upgrade lifecycle audit report.", {
+    promptName: z.string().optional(),
+    activeRuntimePromptVersion: z.string(),
+    canonicalPromptVersion: z.string(),
+    fetchOk: z.boolean().optional(),
+    verifyOk: z.boolean().optional(),
+    compatibilityOk: z.boolean().optional(),
+    activateOk: z.boolean().optional()
+  }, async (args) => {
+    const result = buildPromptUpgradeLifecycle630(args);
+    runtimeGovernanceState.lastPromptUpgradeLifecycleReport = result;
+    runtimeGovernanceState.lastPromptUpgradeLifecycleAt = new Date().toISOString();
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+  });
+
+  wrapTool("report_score_visibility_audit", "Audit whether a report exposes the required score fields and numeric visibility.", {
+    reportType: z.string(),
+    includedScores: z.array(z.string()).optional(),
+    omittedNumericScores: z.boolean().optional(),
+    materiallyDegraded: z.boolean().optional(),
+    disputed: z.boolean().optional(),
+    blocked: z.boolean().optional()
+  }, async ({ reportType, includedScores = [], omittedNumericScores = false, materiallyDegraded = false, disputed = false, blocked = false }) => {
+    const result = buildReportScoreVisibilityAudit({
+      reportType,
+      includedScores,
+      omittedNumericScores,
+      materiallyDegraded,
+      disputed,
+      blocked
+    });
+    return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
 
   wrapTool("preview_upsert_record", "Preview upsert. No write.", { table: z.string(), criteria: z.record(z.any()), data: z.record(z.any()) }, async ({ table, criteria, data }) => {
@@ -1098,13 +1418,18 @@ function createMcpServer() {
 
   wrapTool("deduplicate_table", "Find duplicate groups.", { table: z.string(), columns: z.array(z.string()) }, async ({ table, columns }) => {
     const t = normalizeIdentifierName(table);
+    const tableCols = await getColumns(t);
+    const missing = ["Guid", "CreatedAt", "IsDeleted"].filter(c => !tableCols.has(c));
+    if (missing.length > 0) {
+      throw new Error(`deduplicate_table requires BaseGuid columns missing from "${t}": ${missing.join(", ")}. Run ensure_base_structure first.`);
+    }
     const safeColumns = columns.map(normalizeIdentifierName);
-    const cols = safeColumns.map(c => `"${c}"`).join(", ");
+    const colsSql = safeColumns.map(c => `"${c}"`).join(", ");
     const r = await pool.query(`
-      SELECT ${cols}, COUNT(*) AS count, ARRAY_AGG("Guid" ORDER BY "CreatedAt") AS guids
+      SELECT ${colsSql}, COUNT(*) AS count, ARRAY_AGG("Guid" ORDER BY "CreatedAt") AS guids
       FROM "${t}"
-      WHERE COALESCE("IsDeleted", false)=false
-      GROUP BY ${cols}
+      WHERE "IsDeleted"=false
+      GROUP BY ${colsSql}
       HAVING COUNT(*) > 1
       ORDER BY COUNT(*) DESC
       LIMIT 100
@@ -1112,14 +1437,34 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(r.rows, null, 2) }] };
   });
 
-  wrapTool("table_stats", "Return row count and last update.", { table: z.string() }, async ({ table }) => {
+  wrapTool("table_stats", "Return row count (fast estimate) and last update.", { table: z.string() }, async ({ table }) => {
     const t = normalizeIdentifierName(table);
-    const r = await pool.query(`
-      SELECT COUNT(*)::int AS row_count, MAX("UpdatedAt") AS last_update
-      FROM "${t}"
-      WHERE COALESCE("IsDeleted", false)=false
-    `);
-    return { content: [{ type: "text", text: JSON.stringify(r.rows[0], null, 2) }] };
+    const cols = await getColumns(t);
+    const hasIsDeleted = cols.has("IsDeleted");
+    const hasUpdatedAt = cols.has("UpdatedAt");
+
+    // Fast estimate from pg_class, exact COUNT only for small tables (<50k rows)
+    const est = await pool.query(
+      `SELECT reltuples::bigint AS estimate FROM pg_class WHERE relname=$1 AND relnamespace='public'::regnamespace`,
+      [t]
+    );
+    const estimate = Number(est.rows[0]?.estimate ?? -1);
+    let row_count, exact;
+    if (estimate < 50000) {
+      const countSql = hasIsDeleted
+        ? `SELECT COUNT(*)::int AS row_count FROM "${t}" WHERE "IsDeleted"=false`
+        : `SELECT COUNT(*)::int AS row_count FROM "${t}"`;
+      const r = await pool.query(countSql);
+      row_count = r.rows[0].row_count;
+      exact = true;
+    } else {
+      row_count = estimate;
+      exact = false;
+    }
+    const last_update = hasUpdatedAt
+      ? (await pool.query(`SELECT MAX("UpdatedAt") AS last_update FROM "${t}"`)).rows[0]?.last_update
+      : null;
+    return { content: [{ type: "text", text: JSON.stringify({ table: t, row_count, exact, last_update }, null, 2) }] };
   });
 
   wrapTool("run_select_sql", "Run safe read-only SELECT SQL.", { sql: z.string() }, async ({ sql }) => {
@@ -1409,12 +1754,19 @@ app.use(express.json({ limit: "25mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
 
 app.use((req, res, next) => {
+  res.setTimeout(45000, () => {
+    if (!res.headersSent) res.status(503).json({ error: "Request timeout" });
+  });
   metrics.requests++;
   next();
 });
 
 app.get("/", (req, res) => {
   res.json({ status: "ok", name: "VO2QNAPDB MCP", version: MCP_VERSION });
+});
+
+app.get("/ping", (req, res) => {
+  res.json({ ok: true, version: MCP_VERSION });
 });
 
 app.get("/health", async (req, res) => {
@@ -1430,10 +1782,19 @@ app.get("/health", async (req, res) => {
       pgcryptoAvailable,
       citextAvailable,
       postgisAvailable,
-      vectorAvailable
+      vectorAvailable,
+      promptUpgradeLifecycle: runtimeGovernanceState.lastPromptUpgradeLifecycleReport,
+      promptUpgradeLifecycleCheckedAt: runtimeGovernanceState.lastPromptUpgradeLifecycleAt
     });
   } catch (e) {
-    res.status(500).json({ status: "error", version: MCP_VERSION, db: "error", error: e.message });
+    res.status(500).json({
+      status: "error",
+      version: MCP_VERSION,
+      db: "error",
+      error: e.message,
+      promptUpgradeLifecycle: runtimeGovernanceState.lastPromptUpgradeLifecycleReport,
+      promptUpgradeLifecycleCheckedAt: runtimeGovernanceState.lastPromptUpgradeLifecycleAt
+    });
   }
 });
 
@@ -1442,11 +1803,16 @@ app.get("/metrics", (req, res) => {
     ...metrics,
     uptime: process.uptime(),
     memory: process.memoryUsage(),
-    schemaCacheSize: schemaCache.size
+    schemaCacheSize: schemaCache.size,
+    promptUpgradeLifecycle: runtimeGovernanceState.lastPromptUpgradeLifecycleReport,
+    promptUpgradeLifecycleCheckedAt: runtimeGovernanceState.lastPromptUpgradeLifecycleAt
   });
 });
 
 app.post("/mcp", async (req, res) => {
+  if (!AUTH_TOKEN) {
+    return res.status(500).json({ status: "error", version: MCP_VERSION, error: "AUTH_TOKEN is not configured" });
+  }
   if (req.headers.authorization !== `Bearer ${AUTH_TOKEN}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
@@ -1707,4 +2073,672 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports.classifyCapability530 = classifyCapability530;
   module.exports.isValidSportsMatchState530 = isValidSportsMatchState530;
   module.exports.normalizeReleaseReadiness530 = normalizeReleaseReadiness530;
+}
+
+// ============================================================================
+// Repository Distribution Prompt Diagnostics 5.4.0
+// Repository mirrors remain distribution-only diagnostics and must not be used
+// as prompt activation sources.
+// ============================================================================
+
+const PROMPT_SYNC_GOVERNANCE_VERSION_540 = "5.4.0";
+const CANONICAL_GOVERNANCE_DRIVE_FOLDER_540 = "https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ";
+const COMMON_PROMPT_REPO_PATH_540 = "CommonCatalog/CommonPrompt.txt";
+const SPORT_PROMPT_REPO_PATH_540 = "SportManager/SportPrompt.txt";
+
+const CANONICAL_PROMPT_MANIFEST_540 = {
+  governanceVersion: PROMPT_SYNC_GOVERNANCE_VERSION_540,
+  canonicalDriveFolder: CANONICAL_GOVERNANCE_DRIVE_FOLDER_540,
+  prompts: {
+    CommonPrompt: {
+      canonicalDocumentId: "1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY",
+      canonicalDocumentUrl: "https://docs.google.com/document/d/1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY/edit?usp=drivesdk",
+      distributionRepoPath: COMMON_PROMPT_REPO_PATH_540,
+      activationSource: "google_drive_canonical_document",
+      agentPattern: "Agent: x.y.z Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4], [TOPIC_5]",
+      minimumBaselineEntityCount: 25
+    },
+    SportPrompt: {
+      canonicalDocumentId: "18cSWK_2fRWvmCwF3KBttzNClMZVTUQoVV-kB2WWNz8M",
+      canonicalDocumentUrl: "https://docs.google.com/document/d/18cSWK_2fRWvmCwF3KBttzNClMZVTUQoVV-kB2WWNz8M/edit?usp=drivesdk",
+      distributionRepoPath: SPORT_PROMPT_REPO_PATH_540,
+      activationSource: "google_drive_canonical_document",
+      agentPattern: "Agent: x.y.z [SPORT_NAME] Data Manager",
+      minimumBaselineEntityCount: 25
+    }
+  }
+};
+
+function parseSemver540(version) {
+  const value = String(version || "").trim();
+  const match = value.match(/^(\d+)\.(\d+)\.(\d+)$/);
+  if (!match) return null;
+  return { major: Number(match[1]), minor: Number(match[2]), patch: Number(match[3]) };
+}
+
+function compareSemver540(left, right) {
+  const a = parseSemver540(left);
+  const b = parseSemver540(right);
+  if (!a || !b) return null;
+  if (a.major !== b.major) return a.major > b.major ? 1 : -1;
+  if (a.minor !== b.minor) return a.minor > b.minor ? 1 : -1;
+  if (a.patch !== b.patch) return a.patch > b.patch ? 1 : -1;
+  return 0;
+}
+
+function buildCanonicalPromptManifest540() {
+  return {
+    ...CANONICAL_PROMPT_MANIFEST_540,
+    serverVersion: MCP_VERSION,
+    generatedAt: new Date().toISOString()
+  };
+}
+
+function buildPromptSyncDecision540(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt");
+  const activePromptVersion = String(input.activePromptVersion || "");
+  const repoPromptVersion = String(input.repoPromptVersion || "");
+  const canonicalPromptVersion = String(input.canonicalPromptVersion || "");
+  const repoPromptPath = String(input.repoPromptPath || (promptName === "SportPrompt" ? SPORT_PROMPT_REPO_PATH_540 : COMMON_PROMPT_REPO_PATH_540));
+  const compareRepoVsActive = compareSemver540(repoPromptVersion, activePromptVersion);
+  const warnings = [];
+  let decision = "distribution_mirror_matches_canonical";
+  let applyPrompt = false;
+
+  if (!repoPromptVersion) {
+    decision = "distribution_mirror_missing";
+    warnings.push("Repository distribution mirror prompt version missing or unreadable.");
+  } else if (compareRepoVsActive === null) {
+    decision = "distribution_mirror_unreadable";
+    warnings.push("Repository distribution mirror prompt version could not be parsed as semver.");
+  } else if (compareRepoVsActive !== 0) {
+    decision = "distribution_mirror_mismatch";
+  }
+
+  const compareRepoVsCanonical = compareSemver540(repoPromptVersion, canonicalPromptVersion);
+  if (repoPromptVersion && canonicalPromptVersion && compareRepoVsCanonical !== null && compareRepoVsCanonical !== 0) {
+    warnings.push("Repository distribution mirror prompt version differs from canonical Google Drive version.");
+    decision = "distribution_mirror_mismatch";
+  }
+
+  return {
+    governanceVersion: PROMPT_SYNC_GOVERNANCE_VERSION_540,
+    promptName,
+    repoPromptPath,
+    activePromptVersion,
+    repoPromptVersion,
+    canonicalPromptVersion,
+    decision,
+    applyPrompt,
+    warnings,
+    activationSourceAllowed: false,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildPromptRuntimeCompatibility540(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt");
+  const activePromptVersion = String(input.activePromptVersion || "");
+  const repoPromptVersion = String(input.repoPromptVersion || "");
+  const canonicalPromptVersion = String(input.canonicalPromptVersion || "");
+  const serverVersion = String(input.serverVersion || MCP_VERSION);
+  const activeVsServer = compareSemver540(activePromptVersion, serverVersion);
+  const repoVsServer = compareSemver540(repoPromptVersion, serverVersion);
+  const canonicalVsServer = compareSemver540(canonicalPromptVersion, serverVersion);
+
+  return {
+    governanceVersion: PROMPT_SYNC_GOVERNANCE_VERSION_540,
+    promptName,
+    serverVersion,
+    activePromptVersion,
+    repoPromptVersion,
+    canonicalPromptVersion,
+    activeMatchesServer: activeVsServer === 0,
+    repoMatchesServer: repoPromptVersion ? repoVsServer === 0 : null,
+    canonicalMatchesServer: canonicalPromptVersion ? canonicalVsServer === 0 : null,
+    compatible: activeVsServer === 0 && (canonicalPromptVersion ? canonicalVsServer === 0 : true),
+    checkedAt: new Date().toISOString()
+  };
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports.PROMPT_SYNC_GOVERNANCE_VERSION_540 = PROMPT_SYNC_GOVERNANCE_VERSION_540;
+  module.exports.CANONICAL_GOVERNANCE_DRIVE_FOLDER_540 = CANONICAL_GOVERNANCE_DRIVE_FOLDER_540;
+  module.exports.CANONICAL_PROMPT_MANIFEST_540 = CANONICAL_PROMPT_MANIFEST_540;
+  module.exports.parseSemver540 = parseSemver540;
+  module.exports.compareSemver540 = compareSemver540;
+  module.exports.buildCanonicalPromptManifest540 = buildCanonicalPromptManifest540;
+  module.exports.buildPromptSyncDecision540 = buildPromptSyncDecision540;
+  module.exports.buildPromptRuntimeCompatibility540 = buildPromptRuntimeCompatibility540;
+}
+// ============================================================================
+// Canonical Google Drive Startup Version Sync Governance 6.11.0
+// Canonical Google Drive document identity is the only valid activation source.
+// PromptVersion discovery and activation must complete before DB validation.
+// ============================================================================
+
+const CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600 = "6.11.0";
+const CANONICAL_GOVERNANCE_DRIVE_FOLDER_600 = "https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ";
+const CANONICAL_SERVER_FILE_ID_600 = "1gAG8ncvQRUeCA-ij0VtVRphbHeduagLh";
+const CANONICAL_SERVER_FILE_NAME_600 = "server.js";
+const CANONICAL_SERVER_EXPECTED_NAME_600 = "server.js";
+const RELEASE_640_METADATA = {
+  releaseReason: "version-first agent identity, concise bootstrap and scheduled-run instruction contracts, baseline-25 preservation, and server-side agent-header validation",
+  compatibilityExpectation: "prompt synchronization validates Agent headers against PromptVersion, preserves the minimum baseline of 25 entities, rejects attached or mirrored prompt artifacts as activation sources, and keeps score fields on a bounded 0-100 contract",
+  rollbackNote: "fall back to the last approved 6.10.x handoff if agent-header validation or baseline-25 enforcement causes operational issues"
+};
+
+function parseAgentHeaderVersion650(agentHeader) {
+  const value = String(agentHeader || "").trim();
+  const match = value.match(/^Agent:\s*(\d+\.\d+\.\d+)\b/);
+  return match ? match[1] : null;
+}
+
+function normalizeCatalogTopics650(topicText) {
+  return String(topicText || "")
+    .split(",")
+    .map(part => part.trim())
+    .filter(Boolean);
+}
+
+function validatePromptAgentHeader650(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const agentHeader = String(input.agentHeader || "").trim();
+  const promptVersion = String(input.promptVersion || input.canonicalPromptVersion || "").trim();
+  const expectedSportName = String(input.expectedSportName || "").trim();
+  const headerVersion = parseAgentHeaderVersion650(agentHeader);
+  const issues = [];
+  let formatValid = false;
+  let identityMatchesExpected = false;
+  let topicCount = null;
+  let expectedPatternDescription = "";
+
+  if (!agentHeader) {
+    issues.push("Agent header is missing.");
+  }
+
+  if (promptName === "SportPrompt") {
+    expectedPatternDescription = "Agent: x.y.z [SPORT_NAME] Data Manager";
+    const match = agentHeader.match(/^Agent:\s*(\d+\.\d+\.\d+)\s+\[(.+?)\]\s+Data Manager$/);
+    formatValid = Boolean(match);
+    if (!formatValid) {
+      issues.push("SportPrompt Agent header does not match the required sport-agent format.");
+    } else {
+      const parsedSportName = String(match[2] || "").trim();
+      identityMatchesExpected = parsedSportName.length > 0;
+      if (expectedSportName && expectedSportName !== "[SPORT_NAME]" && parsedSportName !== expectedSportName) {
+        identityMatchesExpected = false;
+        issues.push("SportPrompt Agent header sport identity does not match the expected sport name.");
+      }
+      if (!identityMatchesExpected) {
+        issues.push("SportPrompt Agent header sport identity is missing or invalid.");
+      }
+    }
+  } else {
+    expectedPatternDescription = "Agent: x.y.z Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4], [TOPIC_5]";
+    const match = agentHeader.match(/^Agent:\s*(\d+\.\d+\.\d+)\s+Catalog of\s+(.+)$/);
+    formatValid = Boolean(match);
+    if (!formatValid) {
+      issues.push("CommonPrompt Agent header does not match the required catalog-agent format.");
+    } else {
+      const topics = normalizeCatalogTopics650(match[2]);
+      topicCount = topics.length;
+      identityMatchesExpected = topicCount === 5;
+      if (!identityMatchesExpected) {
+        issues.push("CommonPrompt Agent header must list exactly five catalog topics.");
+      }
+    }
+  }
+
+  const versionMatchesPrompt = Boolean(promptVersion && headerVersion && compareSemver540(headerVersion, promptVersion) === 0);
+  if (promptVersion && !versionMatchesPrompt) {
+    issues.push("Agent header version does not match PromptVersion.");
+  }
+
+  return {
+    promptName,
+    agentHeader,
+    promptVersion,
+    headerVersion,
+    expectedPatternDescription,
+    formatValid,
+    identityMatchesExpected,
+    topicCount,
+    versionMatchesPrompt,
+    compliant: Boolean(agentHeader) && formatValid && identityMatchesExpected && versionMatchesPrompt,
+    issues
+  };
+}
+
+function buildBaselineEntityStatus650(input = {}) {
+  const minimumBaselineEntityCount = Number.isFinite(Number(input.minimumBaselineEntityCount))
+    ? Number(input.minimumBaselineEntityCount)
+    : 25;
+  if (input.baselineEntityCount === undefined || input.baselineEntityCount === null || input.baselineEntityCount === "") {
+    return {
+      minimumBaselineEntityCount,
+      baselineEntityCount: null,
+      status: "unverified",
+      compliant: null,
+      issues: ["Baseline entity count was not provided for validation."]
+    };
+  }
+
+  const baselineEntityCount = Number(input.baselineEntityCount);
+  if (!Number.isFinite(baselineEntityCount)) {
+    return {
+      minimumBaselineEntityCount,
+      baselineEntityCount: null,
+      status: "invalid",
+      compliant: false,
+      issues: ["Baseline entity count is unreadable or invalid."]
+    };
+  }
+
+  if (baselineEntityCount < minimumBaselineEntityCount) {
+    return {
+      minimumBaselineEntityCount,
+      baselineEntityCount,
+      status: "blocked_below_minimum_25",
+      compliant: false,
+      issues: [`Baseline entity count ${baselineEntityCount} is below the required minimum of ${minimumBaselineEntityCount}.`]
+    };
+  }
+
+  return {
+    minimumBaselineEntityCount,
+    baselineEntityCount,
+    status: "verified_minimum_25",
+    compliant: true,
+    issues: []
+  };
+}
+
+function isCanonicalActivationSourceType640(sourceType) {
+  return String(sourceType || "").trim() === "google_drive_canonical_document";
+}
+
+function sourceUrlMatchesCanonical640(sourceUrl, canonicalDocumentUrl) {
+  const left = String(sourceUrl || "").trim();
+  const right = String(canonicalDocumentUrl || "").trim();
+  if (!left || !right) return false;
+  return left === right;
+}
+
+function parseSemverFromPromptTitle600(title, promptName) {
+  const normalizedTitle = String(title || "").trim();
+  const normalizedPromptName = String(promptName || "").trim();
+  if (!normalizedTitle || !normalizedPromptName) return null;
+  if (!normalizedTitle.toLowerCase().startsWith(normalizedPromptName.toLowerCase())) return null;
+  const match = normalizedTitle.match(/(?:^|\s|[-_()])v?(\d+\.\d+\.\d+)(?=$|\s|[-_()])/i);
+  return match ? match[1] : null;
+}
+
+function normalizeCanonicalDriveCandidate600(candidate = {}, promptName = "CommonPrompt") {
+  const title = String(candidate.title || candidate.name || "").trim();
+  const id = String(candidate.id || "").trim() || null;
+  const url = String(candidate.url || candidate.documentUrl || candidate.canonicalDocumentUrl || "").trim() || null;
+  const titleVersion = parseSemverFromPromptTitle600(title, promptName);
+  // Precedence is explicit: body PromptVersion outranks title semver, and the
+  // effective version is the strongest readable signal available.
+  const bodyPromptVersion = String(
+    candidate.bodyPromptVersion ||
+    candidate.promptVersion ||
+    candidate.documentBodyPromptVersion ||
+    candidate.PromptVersion ||
+    ""
+  ).trim() || null;
+  return {
+    title,
+    id,
+    url,
+    titleVersion,
+    bodyPromptVersion,
+    sourceType: isCanonicalActivationSourceType640(candidate.sourceType || "google_drive_canonical_document")
+      ? "google_drive_canonical_document"
+      : String(candidate.sourceType || "google_drive_canonical_document"),
+    effectivePromptVersion: bodyPromptVersion || titleVersion || null
+  };
+}
+
+function buildCanonicalDrivePromptDecision600(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const activePromptVersion = String(input.activePromptVersion || "").trim();
+  const folderReadable = input.folderReadable !== false;
+  const candidates = Array.isArray(input.driveCandidates) ? input.driveCandidates : [];
+  const manifestPrompt = CANONICAL_PROMPT_MANIFEST_540.prompts[promptName] || null;
+  const normalizedCandidates = candidates
+    .map(candidate => normalizeCanonicalDriveCandidate600(candidate, promptName))
+    .filter(candidate => candidate.title && candidate.title.toLowerCase().startsWith(promptName.toLowerCase()))
+    .filter(candidate => !manifestPrompt || (
+      candidate.id === manifestPrompt.canonicalDocumentId ||
+      sourceUrlMatchesCanonical640(candidate.url, manifestPrompt.canonicalDocumentUrl)
+    ));
+  const versionedCandidates = normalizedCandidates.filter(candidate => candidate.effectivePromptVersion);
+  const warnings = [];
+  let decision = "continue_with_active_prompt";
+  let applyPrompt = false;
+  let selectedCandidate = null;
+  let highestDrivePromptVersion = "";
+  let highestDriveTitleVersion = "";
+
+  if (!folderReadable) {
+    decision = "warning_drive_folder_unreadable";
+    warnings.push("Canonical Google Drive folder unreadable before DB validation.");
+  } else if (normalizedCandidates.length === 0) {
+    decision = "warning_drive_prompt_missing";
+    warnings.push("No canonical Google Drive prompt candidate found for the requested prompt name.");
+  } else if (versionedCandidates.length === 0) {
+    decision = "warning_drive_prompt_version_unreadable";
+    warnings.push("Canonical Google Drive prompt candidates found, but no readable PromptVersion was present in the body or title.");
+  } else {
+    const sortedCandidates = [...versionedCandidates].sort((left, right) => {
+      const comparison = compareSemver540(left.effectivePromptVersion, right.effectivePromptVersion);
+      if (comparison === null) return 0;
+      if (comparison !== 0) return comparison * -1;
+      return left.title.localeCompare(right.title);
+    });
+
+    selectedCandidate = sortedCandidates[0] || null;
+    highestDrivePromptVersion = selectedCandidate ? selectedCandidate.effectivePromptVersion : "";
+    highestDriveTitleVersion = selectedCandidate ? selectedCandidate.titleVersion : "";
+
+    const sameHighest = highestDrivePromptVersion
+      ? sortedCandidates.filter(candidate => compareSemver540(candidate.effectivePromptVersion, highestDrivePromptVersion) === 0)
+      : [];
+
+    if (sameHighest.length > 1) {
+      decision = "warning_drive_prompt_ambiguous";
+      warnings.push("Multiple canonical Google Drive prompt candidates expose the same highest effective PromptVersion.");
+    } else {
+      const compareDriveVsActive = compareSemver540(highestDrivePromptVersion, activePromptVersion);
+      if (compareDriveVsActive === null) {
+        decision = "warning_drive_prompt_version_unreadable";
+        warnings.push("Canonical Google Drive effective PromptVersion could not be compared as semver.");
+      } else if (compareDriveVsActive > 0) {
+        decision = "apply_canonical_drive_prompt";
+        applyPrompt = true;
+      } else if (compareDriveVsActive < 0) {
+        decision = "do_not_downgrade";
+      }
+    }
+  }
+
+  return {
+    governanceVersion: CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600,
+    canonicalDriveFolder: CANONICAL_GOVERNANCE_DRIVE_FOLDER_600,
+    promptName,
+    activePromptVersion,
+    highestDrivePromptVersion,
+    highestDriveTitleVersion,
+    canonicalDocumentId: manifestPrompt ? manifestPrompt.canonicalDocumentId : null,
+    canonicalDocumentUrl: manifestPrompt ? manifestPrompt.canonicalDocumentUrl : null,
+    selectedDocumentBodyPromptVersion: selectedCandidate ? selectedCandidate.bodyPromptVersion : null,
+    selectedDocumentTitle: selectedCandidate ? selectedCandidate.title : null,
+    selectedDocumentId: selectedCandidate ? selectedCandidate.id : null,
+    selectedDocumentUrl: selectedCandidate ? selectedCandidate.url : null,
+    candidateCount: normalizedCandidates.length,
+    versionedCandidateCount: versionedCandidates.length,
+    decision,
+    applyPrompt,
+    warnings,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildCanonicalDrivePromptCompatibility600(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const activePromptVersion = String(input.activePromptVersion || "").trim();
+  const highestDrivePromptVersion = String(input.highestDrivePromptVersion || input.highestDriveTitleVersion || "").trim();
+  const highestDriveTitleVersion = String(input.highestDriveTitleVersion || "").trim();
+  const serverVersion = String(input.serverVersion || MCP_VERSION).trim();
+  const activeVsServer = compareSemver540(activePromptVersion, serverVersion);
+  const driveVsServer = compareSemver540(highestDrivePromptVersion, serverVersion);
+
+  return {
+    governanceVersion: CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600,
+    canonicalDriveFolder: CANONICAL_GOVERNANCE_DRIVE_FOLDER_600,
+    promptName,
+    serverVersion,
+    activePromptVersion,
+    highestDrivePromptVersion,
+    highestDriveTitleVersion,
+    activeMatchesServer: activeVsServer === 0,
+    drivePromptMatchesServer: highestDrivePromptVersion ? driveVsServer === 0 : null,
+    compatible: activeVsServer === 0 && (highestDrivePromptVersion ? driveVsServer === 0 : true),
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildPromptUpgradeLifecycle630(input = {}) {
+  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const manifestPrompt = CANONICAL_PROMPT_MANIFEST_540.prompts[promptName] || null;
+  const activeRuntimePromptVersion = String(input.activeRuntimePromptVersion || input.activePromptVersion || "").trim();
+  const runtimePromptVersionAfterActivation = String(input.runtimePromptVersionAfterActivation || input.runtimePromptVersion || "").trim();
+  const canonicalPromptVersion = String(
+    input.canonicalPromptVersion ||
+    input.detectedCanonicalPromptVersion ||
+    input.highestDrivePromptVersion ||
+    ""
+  ).trim();
+  const fetchOk = input.fetchOk === true;
+  const verifyOk = input.verifyOk === true;
+  const activateOk = input.activateOk === true;
+  const compatibilityOk = input.compatibilityOk !== false;
+  const activationStatus = String(input.activationStatus || "").trim();
+  const runtimePromptSourceDocumentId = String(input.runtimePromptSourceDocumentId || input.sourceDocumentId || "").trim();
+  const runtimePromptSourceDocumentUrl = String(input.runtimePromptSourceDocumentUrl || input.sourceDocumentUrl || "").trim();
+  const activationSourceType = String(input.activationSourceType || "google_drive_canonical_document").trim();
+  const sessionStartedAfterActivation = input.sessionStartedAfterActivation === true;
+  const expectedCanonicalDocumentId = manifestPrompt ? manifestPrompt.canonicalDocumentId : "";
+  const expectedCanonicalDocumentUrl = manifestPrompt ? manifestPrompt.canonicalDocumentUrl : "";
+  const agentValidation = validatePromptAgentHeader650({
+    promptName,
+    agentHeader: input.agentHeader,
+    promptVersion: runtimePromptVersionAfterActivation || canonicalPromptVersion
+  });
+  const baselineEntityStatus = buildBaselineEntityStatus650({
+    baselineEntityCount: input.baselineEntityCount,
+    minimumBaselineEntityCount: manifestPrompt ? manifestPrompt.minimumBaselineEntityCount : 25
+  });
+
+  let decision = "continue_with_active_prompt";
+  let blockedPhase = null;
+  let blockedReason = null;
+  let activationResult = "not_required";
+  let reachedPhase = "detect";
+
+  const compareCanonicalVsActive = compareSemver540(canonicalPromptVersion, activeRuntimePromptVersion);
+
+  if (!canonicalPromptVersion) {
+    decision = "blocked_prompt_verify_failed";
+    blockedPhase = "detect";
+    blockedReason = "Canonical PromptVersion was not detected from the canonical document body.";
+    activationResult = "blocked";
+  } else if (!activeRuntimePromptVersion) {
+    decision = "blocked_prompt_verify_failed";
+    blockedPhase = "detect";
+    blockedReason = "Active runtime PromptVersion is missing or unreadable.";
+    activationResult = "blocked";
+  } else if (compareCanonicalVsActive === null) {
+    decision = "blocked_prompt_verify_failed";
+    blockedPhase = "detect";
+    blockedReason = "Prompt versions could not be compared as semver.";
+    activationResult = "blocked";
+  } else if (compareCanonicalVsActive <= 0) {
+    decision = compareCanonicalVsActive < 0 ? "do_not_downgrade" : "continue_with_active_prompt";
+    activationResult = "not_required";
+  } else if (!fetchOk) {
+    reachedPhase = "fetch";
+    decision = "blocked_prompt_fetch_failed";
+    blockedPhase = "fetch";
+    blockedReason = "A newer canonical prompt was detected, but a full canonical prompt fetch was not confirmed.";
+    activationResult = "blocked";
+  } else if (!verifyOk) {
+    reachedPhase = "verify";
+    decision = "blocked_prompt_verify_failed";
+    blockedPhase = "verify";
+    blockedReason = "The fetched canonical prompt could not be verified for integrity, completeness, or lineage safety.";
+    activationResult = "blocked";
+  } else if (!compatibilityOk) {
+    reachedPhase = "verify";
+    decision = "blocked_prompt_compatibility_failed";
+    blockedPhase = "verify";
+    blockedReason = "The fetched canonical prompt is not confirmed as compatible with the active runtime or server version.";
+    activationResult = "blocked";
+  } else if (!activateOk) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "The canonical prompt was fetched and verified, but activation into runtime was not confirmed.";
+    activationResult = "blocked";
+  } else if (activationStatus !== "active") {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Activation status is not explicitly confirmed as active.";
+    activationResult = "blocked";
+  } else if (!runtimePromptVersionAfterActivation) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime PromptVersion after activation was not recorded.";
+    activationResult = "blocked";
+  } else if (compareSemver540(runtimePromptVersionAfterActivation, canonicalPromptVersion) !== 0) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime PromptVersion after activation does not match the canonical PromptVersion.";
+    activationResult = "blocked";
+  } else if (!isCanonicalActivationSourceType640(activationSourceType)) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime prompt activation source type is not the canonical Google Drive document.";
+    activationResult = "blocked";
+  } else if (expectedCanonicalDocumentId && runtimePromptSourceDocumentId !== expectedCanonicalDocumentId) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime prompt source document id does not match the canonical Google Drive document id.";
+    activationResult = "blocked";
+  } else if (expectedCanonicalDocumentUrl && !sourceUrlMatchesCanonical640(runtimePromptSourceDocumentUrl, expectedCanonicalDocumentUrl)) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime prompt source document url does not match the canonical Google Drive document url.";
+    activationResult = "blocked";
+  } else if (!agentValidation.compliant) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_agent_header_invalid";
+    blockedPhase = "activate";
+    blockedReason = agentValidation.issues[0] || "Agent header validation failed.";
+    activationResult = "blocked";
+  } else if (baselineEntityStatus.compliant === false) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_baseline_invalid";
+    blockedPhase = "activate";
+    blockedReason = baselineEntityStatus.issues[0] || "Baseline entity validation failed.";
+    activationResult = "blocked";
+  } else if (!sessionStartedAfterActivation) {
+    reachedPhase = "activate";
+    decision = "blocked_prompt_activate_failed";
+    blockedPhase = "activate";
+    blockedReason = "Runtime session did not prove that it started after activation of the canonical prompt.";
+    activationResult = "blocked";
+  } else {
+    reachedPhase = "activate";
+    decision = "apply_canonical_drive_prompt";
+    activationResult = "activated";
+  }
+
+  return {
+    governanceVersion: CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600,
+    promptName,
+    activeRuntimePromptVersion,
+    runtimePromptVersionAfterActivation,
+    canonicalPromptVersion,
+    fetchOk,
+    verifyOk,
+    compatibilityOk,
+    activateOk,
+    activationStatus,
+    activationSourceType,
+    runtimePromptSourceDocumentId,
+    runtimePromptSourceDocumentUrl,
+    expectedCanonicalDocumentId,
+    expectedCanonicalDocumentUrl,
+    agentHeaderValidation: agentValidation,
+    baselineEntityStatus,
+    sessionStartedAfterActivation,
+    reachedPhase,
+    blockedPhase,
+    blockedReason,
+    activationResult,
+    decision,
+    checkedAt: new Date().toISOString()
+  };
+}
+
+function buildReportScoreVisibilityAudit(input = {}) {
+  const reportType = String(input.reportType || "").trim();
+  const includedScores = Array.isArray(input.includedScores) ? input.includedScores.map(String) : [];
+  const omittedNumericScores = input.omittedNumericScores === true;
+  const materiallyDegraded = input.materiallyDegraded === true;
+  const disputed = input.disputed === true;
+  const blocked = input.blocked === true;
+
+  const requiredByReportType = {
+    SuccessHighlights: ["ConfidenceScore", "ReliabilityScore"],
+    HistoricalAllTimeReport: ["HistoricalScore", "CoverageScore", "ConfidenceScore"],
+    RankingReport: ["ConfidenceScore", "ValidationScore", "CoverageScore"],
+    StandingsReport: ["ValidationScore", "CoverageScore"],
+    SnapshotReport: ["HistoricalScore", "ConfidenceScore"],
+    MergeConflictReport: ["ConfidenceScore", "ReliabilityScore", "ValidationScore"],
+    DataQualityReport: ["QualityScore", "ValidationScore", "CoverageScore", "AnomalyScore"],
+    ReleaseReadinessReport: ["FinalScore", "ValidationScore"]
+  };
+
+  const requiredScores = requiredByReportType[reportType] || [];
+  const missingRequiredScores = requiredScores.filter(score => !includedScores.includes(score));
+  const warnings = [];
+
+  if (missingRequiredScores.length > 0) {
+    warnings.push(`Missing required score fields for ${reportType}: ${missingRequiredScores.join(", ")}`);
+  }
+  if ((blocked || materiallyDegraded || disputed) && omittedNumericScores) {
+    warnings.push("Numeric score display should not be omitted for blocked, degraded, or disputed reports.");
+  }
+
+  return {
+    reportType,
+    includedScores,
+    requiredScores,
+    missingRequiredScores,
+    omittedNumericScores,
+    materiallyDegraded,
+    disputed,
+    blocked,
+    compliant: missingRequiredScores.length === 0 && !((blocked || materiallyDegraded || disputed) && omittedNumericScores),
+    warnings
+  };
+}
+
+if (typeof module !== "undefined" && module.exports) {
+  module.exports.CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600 = CANONICAL_DRIVE_STARTUP_GOVERNANCE_VERSION_600;
+  module.exports.CANONICAL_GOVERNANCE_DRIVE_FOLDER_600 = CANONICAL_GOVERNANCE_DRIVE_FOLDER_600;
+  module.exports.CANONICAL_SERVER_FILE_ID_600 = CANONICAL_SERVER_FILE_ID_600;
+  module.exports.CANONICAL_SERVER_FILE_NAME_600 = CANONICAL_SERVER_FILE_NAME_600;
+  module.exports.CANONICAL_SERVER_EXPECTED_NAME_600 = CANONICAL_SERVER_EXPECTED_NAME_600;
+  module.exports.RELEASE_640_METADATA = RELEASE_640_METADATA;
+  module.exports.buildScoreBreakdown = buildScoreBreakdown;
+  module.exports.parseSemverFromPromptTitle600 = parseSemverFromPromptTitle600;
+  module.exports.normalizeCanonicalDriveCandidate600 = normalizeCanonicalDriveCandidate600;
+  module.exports.buildCanonicalDrivePromptDecision600 = buildCanonicalDrivePromptDecision600;
+  module.exports.buildCanonicalDrivePromptCompatibility600 = buildCanonicalDrivePromptCompatibility600;
+  module.exports.parseAgentHeaderVersion650 = parseAgentHeaderVersion650;
+  module.exports.validatePromptAgentHeader650 = validatePromptAgentHeader650;
+  module.exports.buildBaselineEntityStatus650 = buildBaselineEntityStatus650;
+  module.exports.buildPromptUpgradeLifecycle630 = buildPromptUpgradeLifecycle630;
+  module.exports.buildReportScoreVisibilityAudit = buildReportScoreVisibilityAudit;
 }
