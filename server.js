@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "6.11.0";
+const MCP_VERSION = "8.0.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -1834,8 +1834,9 @@ app.post("/mcp", async (req, res) => {
 
 initDb()
   .then(() => {
-    app.listen(3000, "0.0.0.0", () => {
-      console.log(`VO2QNAPDB MCP ${MCP_VERSION} running on port 3000`);
+    const PORT = Number(process.env.PORT || 3000);
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`VO2QNAPDB MCP ${MCP_VERSION} running on port ${PORT}`);
     });
   })
   .catch(err => {
