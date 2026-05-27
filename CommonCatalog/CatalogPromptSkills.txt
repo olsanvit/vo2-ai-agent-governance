@@ -1,0 +1,118 @@
+SkillsFor: CatalogPrompt
+SkillsVersion: 8.0.0
+Generated: 2026-05-27
+
+Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
+Tento soubor je autoritativní seznam skills povolených pro Catalog agenty.
+
+=============================================================
+PRAVIDLA POUŽITÍ SKILLS
+=============================================================
+
+- pokud skill pokrývá úkol: použít skill, má přednost před obecným workflow
+- pokud skill odporuje canonical governance: canonical governance má přednost
+- pokud skill není dostupný v Claude.ai: pokračovat dle CatalogPrompt governance, reportovat capability_missing
+- nikdy netvrdit, že skill existuje pokud není dostupný
+- uvést SkillsUsed[] v run reportu
+- skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití, reportovat skill_blocked
+- nezkoušet použít skill který není v tomto seznamu, i kdyby byl dostupný v Claude.ai
+
+=============================================================
+SKILL DIRECTORY
+=============================================================
+
+## db-schema-guardian
+Task types: schema governance, tabulky, sloupce, indexy, BaseGuid, migrace
+Description: Autoritativní správce DB schématu. Zajišťuje, že všechny tabulky mají povinné
+  sloupce (Guid, CreatedAt, UpdatedAt, Emoji, Colors, scoring sloupce), správné indexy,
+  FK ve formátu SomethingGuid a BaseGuid pro multi-type entity. Řídí migrace bezpečně.
+Inputs: název tabulky nebo seznam tabulek, požadované schéma změny
+Outputs: SQL migration script, schema diff report, bezpečnostní hodnocení migrace
+Limitations: nespouští migrace automaticky — vždy vyžaduje potvrzení operátora
+
+## archival-run-orchestrator
+Task types: run orchestration, shortest-safe-path, plánování pořadí kroků
+Description: Orchestruje celý scheduled run po nejkratší bezpečné cestě. Rozhoduje, které
+  kroky lze přeskočit (prázdné tabulky, exhausted zdroje), které paralelizovat, a zajišťuje
+  time-budget governance (8 min scheduled, 15 min manual).
+Inputs: dostupné tabulky, zbývající time budget, stav circuit breakerů
+Outputs: ordered execution plan, skipped steps s důvodem, time estimate per krok
+Limitations: nenahrazuje domain-specific logiku sběru dat
+
+## archival-scope-optimizer
+Task types: scope optimization, highest-value safe scope, prioritizace tabulek
+Description: Optimalizuje rozsah runu tak, aby maximalizoval hodnotu zpracovaných dat
+  v rámci time budgetu. Řadí tabulky dle Score, freshness SLA a počtu NULL hodnot.
+Inputs: tabulky s jejich Score, LastRunAt, NULL ratio, time budget
+Outputs: prioritizovaný seznam tabulek s odhadovanou dobou zpracování
+Limitations: neprovádí samotný sběr dat
+
+## match-upsert-guardian
+Task types: identity validace, matching, safe upsert entit
+Description: Bezpečný upsert s validací identity. Provádí multi-step matching
+  (exact name → alias → token 80% → ExternalID → manual queue) před zápisem.
+  Chrání před duplikáty a nechtěnými přepisy canonical hodnot.
+Inputs: entita k upsertnutí s dostupnými identifikátory
+Outputs: match result (matched/new/conflict), Guid, upsert výsledek
+Limitations: při nejednoznačném matchování posílá do ManualReviewQueue, nezapisuje
+
+## shared-entity-normalizer
+Task types: deduplikace, normalizace sdílených entit (People, Organizations, Venues...)
+Description: Detekuje a slučuje duplicitní záznamy sdílených entit napříč katalogy.
+  Udržuje NormalizedName v sync s Name, provádí canonical merge s audit trail.
+Inputs: entita nebo skupina kandidátů na sloučení
+Outputs: canonical záznam, merged Guids, merge audit log
+Limitations: fyzické mazání zakázáno — vždy soft-delete s IsDeleted=true
+
+## relationship-backfill-enricher
+Task types: backfill chybějících relací, FK enrichment
+Description: Doplňuje chybějící FK vazby a relace v existujících záznamech.
+  Pořadí: NULL hodnoty first (IS NULL DESC), pak nejstarší dle UpdatedAt ASC.
+  Sloupce mohou být přepsány novou hodnotou; nikdy nepřepisuje hodnotou NULL.
+Inputs: tabulka, seznam FK sloupců k doplnění, max počet záznamů
+Outputs: počet doplněných záznamů, přeskočené (zdroj nedostupný), backfill report
+Limitations: max 100 záznamů na tabulku na run
+
+## scheduled-run-report-formatter
+Task types: finální run report, formátování výstupu
+Description: Generuje strukturovaný run report ve standardním formátu CatalogPrompt.
+  Zahrnuje: startup sekci, discovery, data collection, výsledky, errors, highlights,
+  SkillsUsed[], capability_missing[], duration.
+Inputs: raw run data (inserted, updated, failed, highlights, errors, SkillsUsed)
+Outputs: formátovaný run report připravený pro save_agent_run_report
+Limitations: report musí být uložen i při selhání runu
+
+## fallback-run-auditor
+Task types: fallback-mode evaluace, degraded run assessment
+Description: Vyhodnocuje run v degraded módu (DB nedostupný, zdroje blokované,
+  time budget překročen). Rozhoduje, které kroky lze bezpečně přeskočit a co
+  musí být zachováno jako minimum (run report vždy).
+Inputs: aktuální stav DB, circuit breakerů, zbývající time budget
+Outputs: fallback execution plan, doporučení pro next run
+Limitations: nelze použít pokud je DB zcela nedostupná (db_unreachable = STOP)
+
+## sheet-fallback-mapper
+Task types: export do Google Sheets, fallback při nedostupnosti DB
+Description: Exportuje sebraná data do Google Sheets jako fallback zálohu
+  při dočasné nedostupnosti DB. Data jsou strukturována pro pozdější reimport.
+Inputs: sebraná data (entity, relace), cílový spreadsheet ID
+Outputs: Google Sheets export s metadaty (timestamp, source, agent, run ID)
+Limitations: pouze fallback — pokud DB dostupná, vždy preferovat přímý zápis do DB
+
+## next-run-calendar-scheduler
+Task types: plánování příštího runu v Google Calendar
+Description: Vytváří nebo aktualizuje Calendar event pro příští scheduled run v AIZapisy.
+  Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
+  Při úspěšném runu přidá suffix " OK", při selhání " X".
+Inputs: agent name, výsledek runu, čas příštího scheduled runu
+Outputs: Calendar event (create nebo update), potvrzení
+Limitations: nemaže historické události — pouze archivuje duplicitní budoucí
+
+## vo2qnapdb-image-guardian
+Task types: image workflow, SharedImages + EntityImages, QNAP upload
+Description: Kompletní image workflow: validace (MIME, velikost, hash, bezpečný filename),
+  dedup přes SHA256, upload přes save_image_url nebo save_image_base64,
+  zápis do SharedImages + EntityImages s historizací (IsCurrent, ValidFrom/ValidTo).
+Inputs: URL nebo base64 obrázku, EntityGuid, EntityType, ImageType
+Outputs: SharedImages Guid, EntityImages záznam, upload potvrzení
+Limitations: pouze když explicitně vyžadováno; SVG bez scriptů; povolené MIME: png, webp, jpeg, svg+xml
