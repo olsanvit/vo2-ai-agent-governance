@@ -2083,29 +2083,39 @@ if (typeof module !== "undefined" && module.exports) {
 
 const PROMPT_SYNC_GOVERNANCE_VERSION_540 = "5.4.0";
 const CANONICAL_GOVERNANCE_DRIVE_FOLDER_540 = "https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ";
-const COMMON_PROMPT_REPO_PATH_540 = "CommonCatalog/CommonPrompt.txt";
-const SPORT_PROMPT_REPO_PATH_540 = "SportManager/SportPrompt.txt";
+const CATALOG_PROMPT_REPO_PATH_540 = "CommonCatalog/CatalogPrompt.txt";
+const MANAGER_PROMPT_REPO_PATH_540 = "SportManager/ManagerPrompt.txt";
+const CATALOG_PROMPT_SKILLS_REPO_PATH_540 = "CommonCatalog/CatalogPromptSkills.txt";
+const MANAGER_PROMPT_SKILLS_REPO_PATH_540 = "SportManager/ManagerPromptSkills.txt";
+// Legacy aliases for backward compatibility
+const COMMON_PROMPT_REPO_PATH_540 = CATALOG_PROMPT_REPO_PATH_540;
+const SPORT_PROMPT_REPO_PATH_540 = MANAGER_PROMPT_REPO_PATH_540;
 
 const CANONICAL_PROMPT_MANIFEST_540 = {
   governanceVersion: PROMPT_SYNC_GOVERNANCE_VERSION_540,
   canonicalDriveFolder: CANONICAL_GOVERNANCE_DRIVE_FOLDER_540,
   prompts: {
-    CommonPrompt: {
+    CatalogPrompt: {
       canonicalDocumentId: "1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY",
       canonicalDocumentUrl: "https://docs.google.com/document/d/1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY/edit?usp=drivesdk",
-      distributionRepoPath: COMMON_PROMPT_REPO_PATH_540,
+      distributionRepoPath: CATALOG_PROMPT_REPO_PATH_540,
+      skillsRepoPath: CATALOG_PROMPT_SKILLS_REPO_PATH_540,
       activationSource: "google_drive_canonical_document",
       agentPattern: "Agent: x.y.z Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4], [TOPIC_5]",
       minimumBaselineEntityCount: 25
     },
-    SportPrompt: {
-      canonicalDocumentId: "18cSWK_2fRWvmCwF3KBttzNClMZVTUQoVV-kB2WWNz8M",
-      canonicalDocumentUrl: "https://docs.google.com/document/d/18cSWK_2fRWvmCwF3KBttzNClMZVTUQoVV-kB2WWNz8M/edit?usp=drivesdk",
-      distributionRepoPath: SPORT_PROMPT_REPO_PATH_540,
+    ManagerPrompt: {
+      canonicalDocumentId: "1NVBWFa9it6oRpkwuHlfnj4io-kQNLrWrWkC4LZkn8t8",
+      canonicalDocumentUrl: "https://docs.google.com/document/d/1NVBWFa9it6oRpkwuHlfnj4io-kQNLrWrWkC4LZkn8t8/edit?usp=drivesdk",
+      distributionRepoPath: MANAGER_PROMPT_REPO_PATH_540,
+      skillsRepoPath: MANAGER_PROMPT_SKILLS_REPO_PATH_540,
       activationSource: "google_drive_canonical_document",
       agentPattern: "Agent: x.y.z [SPORT_NAME] Data Manager",
       minimumBaselineEntityCount: 25
-    }
+    },
+    // Legacy aliases — resolved to canonical names above
+    CommonPrompt: null,
+    SportPrompt: null
   }
 };
 
@@ -2135,11 +2145,11 @@ function buildCanonicalPromptManifest540() {
 }
 
 function buildPromptSyncDecision540(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt");
+  const promptName = String(input.promptName || "CatalogPrompt");
   const activePromptVersion = String(input.activePromptVersion || "");
   const repoPromptVersion = String(input.repoPromptVersion || "");
   const canonicalPromptVersion = String(input.canonicalPromptVersion || "");
-  const repoPromptPath = String(input.repoPromptPath || (promptName === "SportPrompt" ? SPORT_PROMPT_REPO_PATH_540 : COMMON_PROMPT_REPO_PATH_540));
+  const repoPromptPath = String(input.repoPromptPath || (promptName === "ManagerPrompt" || promptName === "SportPrompt" ? MANAGER_PROMPT_REPO_PATH_540 : CATALOG_PROMPT_REPO_PATH_540));
   const compareRepoVsActive = compareSemver540(repoPromptVersion, activePromptVersion);
   const warnings = [];
   let decision = "distribution_mirror_matches_canonical";
@@ -2177,7 +2187,7 @@ function buildPromptSyncDecision540(input = {}) {
 }
 
 function buildPromptRuntimeCompatibility540(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt");
+  const promptName = String(input.promptName || "CatalogPrompt");
   const activePromptVersion = String(input.activePromptVersion || "");
   const repoPromptVersion = String(input.repoPromptVersion || "");
   const canonicalPromptVersion = String(input.canonicalPromptVersion || "");
@@ -2242,7 +2252,11 @@ function normalizeCatalogTopics650(topicText) {
 }
 
 function validatePromptAgentHeader650(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  // Accept both new canonical names and legacy aliases
+  const rawPromptName = String(input.promptName || "CatalogPrompt").trim() || "CatalogPrompt";
+  const promptName = rawPromptName === "SportPrompt" ? "ManagerPrompt"
+    : rawPromptName === "CommonPrompt" ? "CatalogPrompt"
+    : rawPromptName;
   const agentHeader = String(input.agentHeader || "").trim();
   const promptVersion = String(input.promptVersion || input.canonicalPromptVersion || "").trim();
   const expectedSportName = String(input.expectedSportName || "").trim();
@@ -2257,21 +2271,21 @@ function validatePromptAgentHeader650(input = {}) {
     issues.push("Agent header is missing.");
   }
 
-  if (promptName === "SportPrompt") {
+  if (promptName === "ManagerPrompt") {
     expectedPatternDescription = "Agent: x.y.z [SPORT_NAME] Data Manager";
     const match = agentHeader.match(/^Agent:\s*(\d+\.\d+\.\d+)\s+\[(.+?)\]\s+Data Manager$/);
     formatValid = Boolean(match);
     if (!formatValid) {
-      issues.push("SportPrompt Agent header does not match the required sport-agent format.");
+      issues.push("ManagerPrompt Agent header does not match the required sport-agent format.");
     } else {
       const parsedSportName = String(match[2] || "").trim();
       identityMatchesExpected = parsedSportName.length > 0;
       if (expectedSportName && expectedSportName !== "[SPORT_NAME]" && parsedSportName !== expectedSportName) {
         identityMatchesExpected = false;
-        issues.push("SportPrompt Agent header sport identity does not match the expected sport name.");
+        issues.push("ManagerPrompt Agent header sport identity does not match the expected sport name.");
       }
       if (!identityMatchesExpected) {
-        issues.push("SportPrompt Agent header sport identity is missing or invalid.");
+        issues.push("ManagerPrompt Agent header sport identity is missing or invalid.");
       }
     }
   } else {
@@ -2279,13 +2293,13 @@ function validatePromptAgentHeader650(input = {}) {
     const match = agentHeader.match(/^Agent:\s*(\d+\.\d+\.\d+)\s+Catalog of\s+(.+)$/);
     formatValid = Boolean(match);
     if (!formatValid) {
-      issues.push("CommonPrompt Agent header does not match the required catalog-agent format.");
+      issues.push("CatalogPrompt Agent header does not match the required catalog-agent format.");
     } else {
       const topics = normalizeCatalogTopics650(match[2]);
       topicCount = topics.length;
       identityMatchesExpected = topicCount === 5;
       if (!identityMatchesExpected) {
-        issues.push("CommonPrompt Agent header must list exactly five catalog topics.");
+        issues.push("CatalogPrompt Agent header must list exactly five catalog topics.");
       }
     }
   }
@@ -2374,7 +2388,7 @@ function parseSemverFromPromptTitle600(title, promptName) {
   return match ? match[1] : null;
 }
 
-function normalizeCanonicalDriveCandidate600(candidate = {}, promptName = "CommonPrompt") {
+function normalizeCanonicalDriveCandidate600(candidate = {}, promptName = "CatalogPrompt") {
   const title = String(candidate.title || candidate.name || "").trim();
   const id = String(candidate.id || "").trim() || null;
   const url = String(candidate.url || candidate.documentUrl || candidate.canonicalDocumentUrl || "").trim() || null;
@@ -2402,7 +2416,7 @@ function normalizeCanonicalDriveCandidate600(candidate = {}, promptName = "Commo
 }
 
 function buildCanonicalDrivePromptDecision600(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const promptName = String(input.promptName || "CatalogPrompt").trim() || "CatalogPrompt";
   const activePromptVersion = String(input.activePromptVersion || "").trim();
   const folderReadable = input.folderReadable !== false;
   const candidates = Array.isArray(input.driveCandidates) ? input.driveCandidates : [];
@@ -2487,7 +2501,7 @@ function buildCanonicalDrivePromptDecision600(input = {}) {
 }
 
 function buildCanonicalDrivePromptCompatibility600(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
+  const promptName = String(input.promptName || "CatalogPrompt").trim() || "CatalogPrompt";
   const activePromptVersion = String(input.activePromptVersion || "").trim();
   const highestDrivePromptVersion = String(input.highestDrivePromptVersion || input.highestDriveTitleVersion || "").trim();
   const highestDriveTitleVersion = String(input.highestDriveTitleVersion || "").trim();
@@ -2511,8 +2525,8 @@ function buildCanonicalDrivePromptCompatibility600(input = {}) {
 }
 
 function buildPromptUpgradeLifecycle630(input = {}) {
-  const promptName = String(input.promptName || "CommonPrompt").trim() || "CommonPrompt";
-  const manifestPrompt = CANONICAL_PROMPT_MANIFEST_540.prompts[promptName] || null;
+  const promptName = String(input.promptName || "CatalogPrompt").trim() || "CatalogPrompt";
+  const manifestPrompt = CANONICAL_PROMPT_MANIFEST_540.prompts[promptName] || CANONICAL_PROMPT_MANIFEST_540.prompts["CatalogPrompt"] || null;
   const activeRuntimePromptVersion = String(input.activeRuntimePromptVersion || input.activePromptVersion || "").trim();
   const runtimePromptVersionAfterActivation = String(input.runtimePromptVersionAfterActivation || input.runtimePromptVersion || "").trim();
   const canonicalPromptVersion = String(
