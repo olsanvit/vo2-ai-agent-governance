@@ -14,7 +14,7 @@ ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — Mana
    NESBIRAT: live zapasy, upcoming, scheduled budouci terminy
 
 -----------------------------------------------------------
-STARTUP (11 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Managers/Names/Urls soubory, AgentSchedules conflict check, baseline, readiness)
+STARTUP (12 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Managers/Names/Urls soubory, kontrola skills+pokynů+souborů, AgentSchedules conflict check, readiness)
 -----------------------------------------------------------
 
 -----------------------------------------------------------
@@ -37,6 +37,10 @@ SCHEDULED RUN (v tomto poradi):
       Player ratings + individual stats
       H2H update
       TeamForm + PlayerForm (rolling 5 a 10 zapasu)
+    TIER 4 -- kdykoli dostupne:
+      Match conditions (pocasi, stav hriste)
+      MatchBroadcast (TV/streaming, zeme, komentatori)
+      VAR detaily, match narrative, EntityLocalizations, media vazby
 4.  DISCIPLINARNI CHECK -> YC threshold, suspend flag
 5.  ODDS CHECK -> pohyb > 20pct -> integrity flag
 6.  INJURY UPDATE -> PlayerUnavailability
@@ -188,11 +192,23 @@ Povinne kroky v tomto poradi:
    → seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
    - pokud soubor neexistuje nebo je prazdny: preskocit tiše (ne chyba)
    - pouzit jako prehled pro prioritizaci tabulek v behu
-10. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
+9a. Načíst {AgentName}_names.txt z Drive /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
+    → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
+    - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
+9b. Načíst {AgentName}_urls.txt z Drive /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
+    → seznam URL k projití před standardním scrapingem
+    - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
+10. KONTROLA skills, pokynů a souborů:
+    a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.1)
+    c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
+    d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
+    - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
+11. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
     → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
-11. Klasifikovat readiness_status az po overeni DB, prompt a baseline
+12. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
 
 Povinne reportovane stavy (oddelene):
 - db_ping: ok | failed | retry_{N}
@@ -531,6 +547,17 @@ Krok 11 -- Ostatni nalezena data (TIER 3, do 7 dni):
 - zapsat do prislusnych tabulek s ConfidenceScore dle zdroje
 - nikdy nezahodit nalezena data -- viz canonical rule "Nikdy nezahodit data"
 - oznacit v highlights[]: "Krok 11: {N} extra zaznamu"
+
+Krok 12 -- Dalsi informace o zapasu (TIER 4, kdykoli dostupne):
+- podmínky zapasu: pocasi (teplota, srazky, vitr), stav hriste (suche/mokre/zmrzle/umele), viditelnost
+- MatchBroadcast: TV/streaming stanice, zeme vysílání, komentatori
+- VAR detaily: pocet VAR revizi, typy revizi (gol/penalta/cervena karta), finalni rozhodnutí
+- match report/narrative: kratky textovy popis prubehu zapasu (max 500 znaků)
+- EntityLocalizations: lokalizovane nazvy tymu, souteze, venues pro dany jazyk
+- doplnkove medialni vazby: highlights URL, match centre URL, oficialni report
+- zapsat do prislusnych tabulek (MatchConditions, MatchBroadcast, EntityLocalizations)
+- ConfidenceScore dle zdroje; nikdy nepřepisovat Tier 1-3 data touto vrstvou
+- oznacit v highlights[]: "Krok 12: {N} Tier4 zaznamu"
 
 ## Sports Incomplete Records Backfill -- 8.0.0
 

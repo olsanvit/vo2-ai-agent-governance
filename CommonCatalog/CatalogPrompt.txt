@@ -34,7 +34,9 @@ STARTUP SEKVENCE (v tomto poradi, vzdycky):
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
     L gap > 2x interval -> catch-up mode (max 3 dny zpet)
 8.  CIRCUIT BREAKER CHECK -> ktere zdroje jsou open/half_open
-9.  AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (+-15 min)
+9.  KONTROLA -> skills >= 11 | CatalogPrompt verze OK | CatalogPromptSkills prítomny | pokyny OK
+10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (+-15 min)
+11. READINESS -> classify readiness_status (az po vsech predchozich krocich)
 
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
@@ -175,16 +177,22 @@ Required runtime sequence:
 14. načíst {AgentName}_urls.txt z Drive (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
     → zpracovat před standardním scrapingem
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
-15. načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
+15. KONTROLA skills, pokynů a souborů:
+    a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.1)
+    c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
+    d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
+    - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
+16. načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
     → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
-16. po načtení Catalogs + Names + Urls: spustit startup backfill
+17. classify readiness_status only after DB reachability, prompt/version compatibility,
+    skills check, and baseline validation are all satisfied
+18. po načtení Catalogs + Names + Urls: spustit startup backfill
     - pořadí: NULL hodnoty first, pak nejstarší dle UpdatedAt
     - sloupce mohou být přepsány novou hodnotou (nová data mají přednost)
     - max 100 záznamů na tabulku
-17. classify readiness_status only after DB reachability, prompt/version compatibility,
-    and baseline validation are all satisfied
 
 Mandatory rules:
 - dbPing must run before any Google Drive selfUpdate decision
