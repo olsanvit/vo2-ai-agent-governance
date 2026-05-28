@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "8.2.1";
+const MCP_VERSION = "8.2.4";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
