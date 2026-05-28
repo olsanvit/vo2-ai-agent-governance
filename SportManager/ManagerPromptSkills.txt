@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 8.1.0
+SkillsVersion: 8.2.0
 Generated: 2026-05-28
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -22,7 +22,7 @@ PRAVIDLA POUŽITÍ SKILLS
   a reportovat jako capability_missing
 
 =============================================================
-SKILL DIRECTORY (111 skills)
+SKILL DIRECTORY (120 skills)
 =============================================================
 
 -- A. DB & SCHEMA (8) ------------------------------------------
@@ -690,7 +690,7 @@ Inputs: seznam zdrojů používaných agentem
 Outputs: available sources, blocked sources s důvodem, fallback doporučení
 Limitations: nerestartuje circuit breakery; pouze evaluuje stav
 
--- I. IMAGE & MEDIA (5) ----------------------------------------
+-- I. IMAGE & MEDIA (4) ----------------------------------------
 
 ## vo2qnapdb-image-guardian
 Task types: image workflow, SharedImages + EntityImages, QNAP upload
@@ -725,14 +725,6 @@ Description: Uploaduje fotografie stadionů a tréninkových areálů. Asociuje 
 Inputs: VenueGuid, photo URL nebo base64, photo type (exterior/interior/aerial)
 Outputs: SharedImages Guid, EntityImages záznam, potvrzení
 Limitations: max 5 fotografií per venue; pouze schválené veřejné fotografie
-
-## kit-color-extractor
-Task types: barvy dresů, Colors, HEX extrakce z loga/fotky
-Description: Extrahuje dominantní barvy dresů z fotografií nebo log klubu.
-  Generuje HEX kódy pro home a away dresy. Aktualizuje Teams.Colors.
-Inputs: TeamGuid, kit image URL nebo base64
-Outputs: extracted HEX barvy (primary, secondary), Teams.Colors update
-Limitations: přibližná extrakce dle dominantních barev; nebere v úvahu vzory
 
 -- J. ENRICHMENT & BACKFILL (8) --------------------------------
 
@@ -951,3 +943,96 @@ Description: Trackuje výkonnostní metriky agenta across runů: zápasů per ru
 Inputs: AgentName, look-back period (default 30 dní)
 Outputs: performance trend (improving/stable/degrading), SLA compliance per metric
 Limitations: vyžaduje min 10 runů pro benchmark; nové agenty mají insufficient data period
+
+-- N. ADVANCED OPERATIONS (10) -----------------------------------
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací beh bez DB zápisů, simulace
+Description: Řídí DryRun mod pro sport agenty: blokuje INSERT/UPDATE/DELETE, simuluje výstupy
+  s "[DRY_RUN]" prefixem. Calendar eventy se netvoří. Ntfy odesílá s "[DRY_RUN TEST]".
+  save_agent_run_report se provede s IsDryRun=true.
+Inputs: RunMode: dry_run nebo DryRunAllowed: true + dry_run=true parametr
+Outputs: simulované výstupy, run report s IsDryRun=true, závěrečná zpráva "DRY RUN COMPLETE"
+Limitations: DB čtení povoleno; Drive čtení povoleno; veškeré zápisy (DB/Drive/Calendar) blokovány
+
+## match-postponement-handler
+Task types: odložení zápasu, zrušení, Status=postponed/cancelled/rescheduled
+Description: Zpracovává odložení a zrušení zápasů: nastavuje Status=postponed nebo cancelled,
+  ukládá OriginalDate, PostponementReason/CancellationReason. Vytváří MatchEvents
+  (postponement_announced). Náhradní zápas = NOVÝ Matches záznam s RescheduledFromMatchGuid.
+Inputs: MatchGuid, nový status (postponed/cancelled), reason, nové datum (pokud known)
+Outputs: aktualizovaný Matches záznam, MatchEvents záznam, nový náhradní Matches (při reschedule)
+Limitations: NESMAZAT původní záznam; NEZAPOČÍTÁVAT postponed do standings/form/coverage
+
+## international-calendar-manager
+Task types: InternationalCalendar, FIFA/UEFA přestávky, match collection scheduling
+Description: Spravuje InternationalCalendar záznamy: FIFA/UEFA přestávky, affected leagues.
+  Při aktivní přestávce: domácí ligové zápasy nepočítá. Pokud Matches count = 0 pro 7+ dní
+  aktivní ligy → kontrola přestávky. Plánuje Calendar event pro mezinárodní okno.
+Inputs: WindowType (fifa_international/uefa_nations_league/euro_qualifying/...), StartDate, EndDate, AffectedLeagues
+Outputs: InternationalCalendar záznamy, data error flag pokud zápas detekován v přestávce
+Limitations: scheduling match collection pouze mimo okno přestávky; bez konfigurace nelze detekovat
+
+## sport-date-coverage-manager
+Task types: SportDateCoverage, exhausted datumy, automatické znovuotevření, verification status
+Description: Spravuje SportDateCoverage: označuje exhausted (po 5 runech s multi-source verifikací),
+  automaticky znovu otevírá datumy starší 1 roku (IsExhausted=false, IsPendingRecheck=true).
+  Řídí VerificationStatus přechody (pending → evidence_found → exhausted).
+Inputs: SportGuid, TargetDate, výsledek vyhledávání, sources checked, NoMatchCount
+Outputs: aktualizovaný SportDateCoverage záznam, exhausted/reopen/pending_recheck rozhodnutí
+Limitations: vcerejsek NIKDY neoznacovat jako exhausted; exhaust pouze po 5 runech + 2 nezávislé zdroje
+
+## match-preview-generator
+Task types: Match Preview, H2H, forma, nedostupní hráci, ntfy/Calendar description
+Description: Generuje pre-match preview ze 100% historických DB dat: H2H posledních 5 zápasů,
+  forma obou týmů (last 5+10 z TeamForm), nedostupní hráci (PlayerUnavailability, PlayerDiscipline),
+  standings, odds trendy. Výstup jako ntfy nebo Calendar description.
+Inputs: HomeTeamGuid, AwayTeamGuid, MatchDate, CompetitionGuid
+Outputs: formátovaná Preview zpráva, limited_data flag pokud H2H < 2 zápasy
+Limitations: max 24h před zápasem; NIKDY nesebírá live/pre-match data; neukládá jako DB záznam
+
+## player-career-manager
+Task types: PlayerCareer, kariéra hráče, angažmá napříč kluby, career aggregation
+Description: Spravuje PlayerCareer tabulku (jedno angažmá = jeden řádek): vytváří záznamy
+  při přestupu (JoinedDate, TransferType), nastavuje LeftDate + IsCurrentClub=false při odchodu.
+  Agreguje AppearancesTotal, GoalsScored, Assists z PlayerSeasonStats.
+Inputs: PlayerGuid, TeamGuid, TransferType, JoinedDate, LeftDate (volitelně), kompetice
+Outputs: PlayerCareer záznamy (upsert), IsCurrentClub flag aktualizace, career aggregace
+Limitations: max 1 IsCurrentClub=true per PlayerGuid; půjčka (loan_in) = vlastní PlayerCareer řádek
+
+## weekly-digest-reporter
+Task types: weekly/monthly digest, sport souhrn, Drive /Prompts/Reports/
+Description: Generuje týdenní (každých 7 runů nebo každé pondělí) a měsíční (každých 30 dní)
+  digest pro sport agenty: přehled zpracovaných zápasů, coverage progress, errors across runů,
+  cross-agent tasks přidělené/zpracované. Ukládá na Drive, odesílá ntfy na agent-maintenance.
+Inputs: AgentName, period type (weekly/monthly), data z get_agent_run_reports look-back
+Outputs: digest soubor na Drive /Prompts/Reports/{AgentName}/, ntfy summary na agent-maintenance
+Limitations: min 3 runy pro smysluplný weekly digest; bez dat reportuje "insufficient_data"
+
+## anti-bot-fallback-handler
+Task types: anti-bot detekce, 403/429/503, fallback zdroj, sport-specifické scraping
+Description: Detekuje anti-bot signály (HTTP 403, 429, 503, CAPTCHA, prázdný body s 200,
+  redirect na /challenge). Přepíná na secondary → tertiary zdroj. Nikdy neobchází CAPTCHA.
+  Neretryuje blokovanou URL více než 2× za run.
+Inputs: failed URL, HTTP status code, response body indicator, backup source list
+Outputs: selected fallback source, circuit breaker update, ntfy high-priority alert
+Limitations: Selenium fallback jen pokud direct HTTP blokován + Selenium endpoint dostupný; max 10 page loadů
+
+## cross-agent-task-writer
+Task types: cross-agent zápis, Names soubory, Urls soubory, task assignment do Catalog agentů
+Description: Zapisuje úkoly pro Catalog agenty do jejich Names/Urls souborů na Drive (append-only).
+  Manager agent koordinuje Catalog agenty přes tuto skill. Max 50 položek per zápis.
+  Zaznamenává operaci v highlights[]: "Cross-agent task: N items written to {AgentName}_names.txt".
+Inputs: cílový CatalogAgentName, seznam názvů (Names) nebo URL (Urls), typ souboru (names/urls)
+Outputs: append do Drive souboru, highlights[] záznam s počtem zapsaných položek
+Limitations: nesmí přepisovat celý soubor; max 50 položek per zápis; soubor max 500 řádků
+
+## agent-schedule-manager
+Task types: AgentSchedules, denní čas spuštění, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules — ukládá denní plánovaný čas spuštění každého agenta.
+  Na konci každého runu provede UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu načte přehled všech aktivních agentů a detekuje konflikty (±15 min od sebe).
+  Slouží k přehledu "kdo se kdy pouští" a prevenci přetížení v jednu dobu.
+Inputs: AgentName, ScheduledRunTime (time, Europe/Prague), IntervalHours, AgentType (Catalog/Manager)
+Outputs: upsert do AgentSchedules, startup report konfliktů, přehled tabulky agentů
+Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVOJIT upsert při DryRun

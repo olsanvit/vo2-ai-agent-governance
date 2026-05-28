@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.1.0
+SkillsVersion: 8.2.0
 Generated: 2026-05-28
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -24,7 +24,7 @@ PRAVIDLA POUŽITÍ SKILLS
 SKILL DIRECTORY (111 skills)
 =============================================================
 
--- A. DB & SCHEMA (12) -----------------------------------------
+-- A. DB & SCHEMA (9) ------------------------------------------
 
 ## db-schema-guardian
 Task types: schema governance, tabulky, sloupce, indexy, BaseGuid, migrace
@@ -91,14 +91,6 @@ Inputs: tabulka, seznam FK sloupců
 Outputs: seznam dangling FK s Guid a návrhem opravy, SQL fix script
 Limitations: neopravuje automaticky; vždy vyžaduje review
 
-## db-partition-manager
-Task types: table partitioning, velké tabulky, výkon
-Description: Spravuje partitioning velkých tabulek (>1M řádků) dle data nebo entity type.
-  Navrhuje partition strategy a migrační plán pro stávající tabulky.
-Inputs: název tabulky, partition key (CreatedAt / EntityType), počet řádků
-Outputs: partition schema návrh, migration script, estimated performance improvement
-Limitations: vyžaduje maintenance window; nelze provést za běhu agenta
-
 ## db-view-dependency-tracker
 Task types: view dependencies, schema změny, bezpečné migrace
 Description: Mapuje závislosti analytických views na tabulkách a sloupcích.
@@ -106,22 +98,6 @@ Description: Mapuje závislosti analytických views na tabulkách a sloupcích.
 Inputs: název tabulky nebo sloupce ke změně
 Outputs: dependency graph, seznam dotčených views, pořadí rebuild
 Limitations: neanalyzuje dynamické SQL ani stored procedures
-
-## db-sequence-resetter
-Task types: PostgreSQL sequences, PK konflikty po bulk importu
-Description: Po bulk importu resetuje PostgreSQL sekvence na max(id)+1 pro všechny
-  postižené tabulky. Předchází PK conflict errors při dalším vkládání.
-Inputs: seznam tabulek po bulk importu
-Outputs: SQL SETVAL příkazy, potvrzení reset
-Limitations: pouze pro serial/bigserial sloupce; UUID tabulky nepotřebují reset
-
-## db-pgcrypto-manager
-Task types: šifrování, pgcrypto extension, audit šifrovaných sloupců
-Description: Spravuje šifrované sloupce pomocí pgcrypto extension. Ověřuje dostupnost
-  extension, audituje šifrované sloupce, zajišťuje konzistenci encryption.
-Inputs: seznam šifrovaných sloupců, operace (audit/verify)
-Outputs: encryption audit report, stav pgcrypto extension
-Limitations: klíče nikdy nezapisuje do logů; pouze s explicitním souhlasem operátora
 
 -- B. ENTITY & IDENTITY (12) ------------------------------------
 
@@ -222,7 +198,7 @@ Inputs: EntityGuid, hloubka grafu (max 3), EntityType filter
 Outputs: relationship graph, seznam FK violations, doporučení oprav
 Limitations: max hloubka 3 stupně; cyklické grafy přerušuje
 
--- C. DATA COLLECTION (12) -------------------------------------
+-- C. DATA COLLECTION (10) -------------------------------------
 
 ## web-scraper-coordinator
 Task types: web scraping, multi-source, rate limiting, robots.txt
@@ -303,22 +279,6 @@ Description: Používá search engine API pro discovery entity URL a strukturova
 Inputs: search query, EntityType, max results
 Outputs: seznam URL s relevance score, strukturovaná data ze snippetů
 Limitations: max 100 search requests/run; bez API key nelze použít
-
-## document-content-extractor
-Task types: PDF, DOCX, CSV, structured data extraction
-Description: Extrahuje strukturovaná data z dokumentů (PDF tabulky, DOCX text, CSV).
-  Mapuje na DB schema. Ukládá zdroj dokumentu pro attribution.
-Inputs: document URL nebo base64 content, extraction config, target table
-Outputs: extrahovaná data jako JSON, extraction confidence, failed sections
-Limitations: max 50 stránek PDF; DOCX bez VBA; CSV max 10 000 řádků
-
-## media-metadata-harvester
-Task types: EXIF, IPTC, media metadata, image enrichment
-Description: Extrahuje metadata z mediálních souborů (EXIF z fotografií, IPTC tagy).
-  Obohacuje záznamy o datum pořízení, GPS souřadnice, autor, copyright.
-Inputs: image URL nebo base64, fields to extract
-Outputs: extrahovaná metadata jako JSON, GPS souřadnice (pokud dostupné)
-Limitations: pouze pro JPEG/PNG/TIFF; video metadata nepodporuje
 
 -- D. DATA VALIDATION (10) -------------------------------------
 
@@ -469,7 +429,7 @@ Inputs: action type (merge/soft-delete/alias), affected Guids, actor (agent name
 Outputs: AuditLog záznamy, rollback guidance (informativní)
 Limitations: rollback guidance je informativní — nespouští se automaticky
 
--- F. ENRICHMENT & BACKFILL (10) -------------------------------
+-- F. ENRICHMENT & BACKFILL (9) --------------------------------
 
 ## null-field-enricher
 Task types: doplnění NULL hodnot, prioritizovaný backfill
@@ -534,14 +494,6 @@ Description: Objevuje a vytváří chybějící relace mezi entitami (PersonOrga
 Inputs: EntityGuid, relationship types to discover, sources
 Outputs: nové relace vytvořeny, vztahy navržené k review (low confidence)
 Limitations: nevytváří vztahy s ConfidenceScore < 60% bez review
-
-## localization-enricher
-Task types: EntityLocalizations, jazykové varianty, i18n
-Description: Přidává jazykové varianty entit do EntityLocalizations tabulky.
-  Podporuje cs, en, de, sk, pl a další. Využívá Wikipedia API pro překlady.
-Inputs: EntityGuid, cílové jazyky, fields to localize (name, description)
-Outputs: vytvořené EntityLocalizations záznamy per jazyk
-Limitations: pouze pro entity s Wikipedia stránkou; max 5 jazyků per run
 
 ## source-attribution-enricher
 Task types: source attribution, SourceName, SourceUrl, SourceDate
@@ -948,3 +900,60 @@ Description: Na konci každého runu odešle standardizovanou zprávu na agent-r
 Inputs: run výsledek (success/partial/failed), run stats, duration
 Outputs: ntfy zpráva odeslána na agent-runs, message format string
 Limitations: jedna zpráva per run; zahrnuta v limitu 3 ntfy/run
+
+-- N. ADVANCED OPERATIONS (6) -----------------------------------
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací beh, simulace bez DB zápisů
+Description: Řídí DryRun mod: blokuje všechny INSERT/UPDATE/DELETE operace a simuluje výstupy
+  s prefixem "[DRY_RUN]". Povoluje DB čtení a ntfy (s "[DRY_RUN TEST]" prefixem).
+  Zajišťuje, že save_agent_run_report proběhne s IsDryRun = true.
+Inputs: RunMode: dry_run nebo dry_run=true parametr aktivace
+Outputs: simulované výstupy "[DRY_RUN] Would insert N rows", run report s IsDryRun=true
+Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován; DB a Drive čtení povoleno
+
+## data-export-backup-manager
+Task types: export, backup, JSON Lines, Drive /Prompts/Backups/
+Description: Exportuje data z DB do Drive jako backup: týdně Score>=70 tabulky,
+  měsíčně full export všech tabulek. Formát JSON Lines (.jsonl), gzip pro soubory >1MB.
+  Notifikuje přes ntfy po dokončení exportu.
+Inputs: tabulky k exportu, backup type (weekly/monthly/pre-migration), Drive backup složka
+Outputs: .jsonl soubory na Drive /Prompts/Backups/{AgentName}/, ntfy potvrzení
+Limitations: max 10 000 řádků per tabulka; nespouštět pokud db_status != db_reachable
+
+## baseline-catalog-file-manager
+Task types: baseline catalog soubor, Drive Catalogs/, RowCount, LastPopulated aktualizace
+Description: Čte a aktualizuje {AgentName}.txt v Drive /Prompts/Catalogs/
+  (folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi). Načítá přehled tabulek
+  (Score, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
+Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
+Outputs: přečtený katalog (startup), aktualizovaný katalog zapsaný na Drive (end of run)
+Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří nové záznamy tabulek
+
+## cross-agent-task-writer
+Task types: cross-agent zápis, Names soubory, Urls soubory, task assignment jiným agentům
+Description: Zapisuje úkoly pro jiné agenty do jejich Names/Urls souborů na Drive (append-only).
+  Maximálně 50 nových položek per zápis. Zaznamenává operaci v highlights[].
+  Nikdy nepřepisuje celý soubor. Kontroluje limit 500 řádků.
+Inputs: cílový AgentName, seznam názvů (Names) nebo URL (Urls), typ souboru (names/urls)
+Outputs: append do Drive souboru, highlights[] záznam "Cross-agent task: N items written"
+Limitations: max 50 položek per zápis; soubor nesmí překročit 500 řádků; pouze append
+
+## weekly-digest-reporter
+Task types: weekly digest, monthly digest, souhrnný report, Drive /Prompts/Reports/
+Description: Generuje týdenní (každých 7 runů nebo každé pondělí) nebo měsíční (každých 30 dní)
+  digest: přehled entit inserted/updated/failed, stale tabulky, backfill progress,
+  error summary, zdrojová spolehlivost. Ukládá na Drive, odesílá ntfy na agent-maintenance.
+Inputs: AgentName, period type (weekly/monthly), data z get_agent_run_reports
+Outputs: digest soubor na Drive /Prompts/Reports/{AgentName}/, ntfy summary na agent-maintenance
+Limitations: min 5 runů pro smysluplný weekly digest; bez dat reportuje "insufficient_data"
+
+## agent-schedule-manager
+Task types: AgentSchedules, denní čas spuštění, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules — ukládá denní plánovaný čas spuštění každého agenta.
+  Na konci každého runu provede UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu načte přehled všech aktivních agentů a detekuje konflikty (±15 min od sebe).
+  Slouží k přehledu "kdo se kdy pouští" a prevenci přetížení v jednu dobu.
+Inputs: AgentName, ScheduledRunTime (time, Europe/Prague), IntervalHours, AgentType (Catalog/Manager)
+Outputs: upsert do AgentSchedules, startup report konfliktů, přehled tabulky agentů
+Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVOJIT upsert při DryRun
