@@ -187,7 +187,11 @@ Povinne kroky v tomto poradi:
    → seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
    - pokud soubor neexistuje nebo je prazdny: preskocit tiše (ne chyba)
    - pouzit jako prehled pro prioritizaci tabulek v behu
-10. Klasifikovat readiness_status az po overeni DB, prompt a baseline
+10. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
+    → zobrazit přehled všech agentů a jejich plánovaného času
+    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
+    → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
+11. Klasifikovat readiness_status az po overeni DB, prompt a baseline
 
 Povinne reportovane stavy (oddelene):
 - db_ping: ok | failed | retry_{N}
@@ -456,6 +460,7 @@ Automaticke znovuotevreni exhausted datumu:
 16. Catalog update -> Drive /Prompts/Catalogs/{AgentName}.txt
 17. Report + Calendar + Notification:
     a) save_agent_run_report(agentName, sportName, stats, highlights, errors) -- POVINNE
+    a2) agent-schedule-manager upsert (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt)
     b) Vytvorit Calendar event v AIZapisy (get_agent_run_reports pro summary)
     c) send_notification(topic="agent-runs", ntfyUrl, title, message, priority)
 18. Uvolnit lock
@@ -2228,7 +2233,7 @@ Operacni tabulky:
 AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue, AgentTableSync,
 DiscoveryQueue, SourceCircuitBreaker, SourceReliability, SharedImages, EntityImages,
 EntityAliases, EntityRelations, EntityIdentifiers, EntitySources,
-EntityHistory, SportDateCoverage, MatchOdds, PlayerUnavailability
+EntityHistory, SportDateCoverage, MatchOdds, PlayerUnavailability, AgentSchedules
 
 Governance a audit tabulky:
 EntityLineage, ViewRegistry, SnapshotRegistry, PromptGovernanceAudit,
@@ -2237,6 +2242,31 @@ HistoricalSnapshots, HighlightHistory, AnnualReports,
 GlobalSharedEntities, GlobalEntityAliases, GlobalCanonicalMappings,
 SourceReliabilityHistory, ManualReviewDecisions, AgentExecutionReports,
 DataRepairHistory, CanonicalIdentityRegistry, ValidationFailures
+
+## AgentSchedules Table Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS AgentSchedules (
+  Guid              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  AgentName         text NOT NULL UNIQUE,
+  AgentType         text NOT NULL,          -- Catalog | Manager
+  ScheduledRunTime  time NOT NULL,          -- e.g. 08:30:00 (Europe/Prague)
+  Timezone          text NOT NULL DEFAULT 'Europe/Prague',
+  IntervalHours     numeric NOT NULL DEFAULT 24,
+  NextRunAt         timestamptz,
+  LastRunAt         timestamptz,
+  IsActive          boolean DEFAULT true,
+  Notes             text,
+  CreatedAt         timestamptz NOT NULL DEFAULT now(),
+  UpdatedAt         timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Pravidla:
+- Business key: AgentName UNIQUE — každý agent má max 1 záznam
+- Na konci každého runu: UPSERT (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt=now()+IntervalHours)
+- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±15 min okně → log warning)
+- DryRun: UPSERT se neprovede
 
 ## Canonical Precedence Rules
 

@@ -173,11 +173,15 @@ Required runtime sequence:
 14. načíst {AgentName}_urls.txt z Drive (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
     → zpracovat před standardním scrapingem
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
-15. po načtení Catalogs + Names + Urls: spustit startup backfill
+15. načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
+    → zobrazit přehled všech agentů a jejich plánovaného času
+    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
+    → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
+16. po načtení Catalogs + Names + Urls: spustit startup backfill
     - pořadí: NULL hodnoty first, pak nejstarší dle UpdatedAt
     - sloupce mohou být přepsány novou hodnotou (nová data mají přednost)
     - max 100 záznamů na tabulku
-16. classify readiness_status only after DB reachability, prompt/version compatibility,
+17. classify readiness_status only after DB reachability, prompt/version compatibility,
     and baseline validation are all satisfied
 
 Mandatory rules:
@@ -2281,6 +2285,7 @@ Při nejisté identitě: sniž ConfidenceScore
 20. source reliability update
 21. baseline catalog update
 22. save_agent_run_report
+22a. agent-schedule-manager upsert (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt)
 23. calendar event update
 24. send_notification (max 3)
 
@@ -2815,7 +2820,7 @@ Advanced (report absence if not available):
 
 Mandatory (every agent):
 AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue, AgentTableSync,
-DiscoveryQueue, SourceCircuitBreaker, SourceReliability
+DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 
 Universal shared:
 SharedImages, EntityImages, EntityAliases, EntityRelations, EntityIdentifiers,
@@ -2831,6 +2836,31 @@ DuplicateCandidates, ManualReviewDecisions, AgentRuntimeCapabilities,
 EntitySupersessionHistory, HistoricalAggregations, RuntimeLimitations,
 DataRepairHistory, IncrementalRefreshRegistry, CrossDomainRelationships,
 CanonicalIdentityRegistry, ValidationFailures
+
+## AgentSchedules Table Schema
+
+```sql
+CREATE TABLE IF NOT EXISTS AgentSchedules (
+  Guid              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  AgentName         text NOT NULL UNIQUE,
+  AgentType         text NOT NULL,          -- Catalog | Manager
+  ScheduledRunTime  time NOT NULL,          -- e.g. 08:30:00 (Europe/Prague)
+  Timezone          text NOT NULL DEFAULT 'Europe/Prague',
+  IntervalHours     numeric NOT NULL DEFAULT 24,
+  NextRunAt         timestamptz,
+  LastRunAt         timestamptz,
+  IsActive          boolean DEFAULT true,
+  Notes             text,
+  CreatedAt         timestamptz NOT NULL DEFAULT now(),
+  UpdatedAt         timestamptz NOT NULL DEFAULT now()
+);
+```
+
+Pravidla:
+- Business key: AgentName UNIQUE — každý agent má max 1 záznam
+- Na konci každého runu: UPSERT (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt=now()+IntervalHours)
+- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±15 min okně → log warning)
+- DryRun: UPSERT se neprovede
 
 ## Deployment and Infrastructure Notes
 
