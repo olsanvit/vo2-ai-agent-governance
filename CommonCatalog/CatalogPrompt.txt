@@ -1,10 +1,10 @@
 Agent: 8.0.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 8.2.1
+PromptVersion: 8.2.4
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.2.1
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.2.4
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -104,7 +104,7 @@ MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)
 ntfy:         https://ntfy.vo2info.cz      (user: admin)
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-MCP Version:  8.2.1
+MCP Version:  8.2.4
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -184,7 +184,7 @@ Required runtime sequence:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.1)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.4)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -1368,12 +1368,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.2.1
-- SchemaVersion: 8.2.1
-- RuntimeSafetyVersion: 8.2.1
+- GovernanceVersion: 8.2.4
+- SchemaVersion: 8.2.4
+- RuntimeSafetyVersion: 8.2.4
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.2.1
-- PromptVersion: 8.2.1
+- ImageGovernanceVersion: 8.2.4
+- PromptVersion: 8.2.4
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -1479,9 +1479,9 @@ Pravidla:
 
 ## Changelog (zkráceno)
 
-v8.2.1 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
+v8.2.4 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
   agent-schedule-manager skill (111. skill). Startup krok 15: načtení AgentSchedules + conflict check.
-  Run protokol krok 22a: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.2.1.
+  Run protokol krok 22a: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.2.4.
 
 v8.0.0 (2026-05): Drive folder structure governance (Manager, Catalogs, Names, Urls).
   Names soubor: prioritni seznam nazvu entit k dohledani. Urls soubor: seznam URL k projiti.
@@ -1518,7 +1518,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 8.2.1
+PromptVersion: 8.2.4
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -1853,7 +1853,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 8.2.1
+PromptVersion: 8.2.4
 
 Ověřené image nástroje:
 - save_image_base64
@@ -2321,12 +2321,12 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 8.2.1
-SchemaVersion: 8.2.1
-RuntimeSafetyVersion: 8.2.1
+GovernanceVersion: 8.2.4
+SchemaVersion: 8.2.4
+RuntimeSafetyVersion: 8.2.4
 ScoringVersion: 3.0
-ImageGovernanceVersion: 8.2.1
-ProviderGovernanceVersion: 8.2.1
+ImageGovernanceVersion: 8.2.4
+ProviderGovernanceVersion: 8.2.4
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
@@ -3035,7 +3035,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 8.2.1
+- PromptVersion: 8.2.4
 - PromptName: CatalogPrompt
 - CanonicalFileId: 1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -3103,7 +3103,7 @@ Catalog agents and Manager agents are independent — no inheritance between the
 Canonical source document ID: 1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY
 Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
-PromptVersion: 8.2.1
+PromptVersion: 8.2.4
 Generated: 2026-05-27
 Version: 8.0.0
 

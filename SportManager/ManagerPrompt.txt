@@ -2,10 +2,10 @@ Agent: 8.0.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 8.2.1
+PromptVersion: 8.2.4
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.2.1
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.2.4
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -205,7 +205,7 @@ Povinne kroky v tomto poradi:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.1)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.4)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -2164,10 +2164,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.0.0
 
-GovernanceVersion: 8.2.1
-SchemaVersion: 8.2.1
-RuntimeSafetyVersion: 8.2.1
-PromptVersion: 8.2.1
+GovernanceVersion: 8.2.4
+SchemaVersion: 8.2.4
+RuntimeSafetyVersion: 8.2.4
+PromptVersion: 8.2.4
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -2330,9 +2330,9 @@ Pravidla:
 
 ## Changelog
 
-- 8.2.1 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
+- 8.2.4 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
   agent-schedule-manager skill (120. skill). Startup krok 10: načtení AgentSchedules + conflict check.
-  Run protokol krok 17.a2: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.2.1.
+  Run protokol krok 17.a2: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.2.4.
 - 8.0.0 (2026-05-27): Drive folder structure (Names, Urls, Manager). PlayerCareer tabulka kariery hrace. Match conditions (pocasi, stav hriste). Startup Sequence header opraven. (Names, Urls, Manager). Sport agent Names = tymy/souteze/hraci k dohledani. Urls = live score pages, league tables. Canonical Drive ID aktualizovan.
 - 7.3.0 (2026-05-27): Restrukturalizace -- 13 kapitol, odstraneny duplicity,
   legacy sekce slouceny do Appendix. Match Collection Scope prominentne v Ch.1.
