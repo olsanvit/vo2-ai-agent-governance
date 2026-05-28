@@ -41,23 +41,28 @@ STARTUP SEKVENCE (v tomto poradi, vzdycky):
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
 -----------------------------------------------------------
+0.  LOCK             -> pg_try_advisory_lock (pri selhani pokracovat bez locku)
 1.  DISCOVERY        -> nove entity (max 50/run)
-2.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prazdne tabulky
-3.  DATA COLLECTION  -> Score 90-100 first, pak 70-89, 50-69, <50 opportunisticky
+2.  NAMES QUEUE      -> {AgentName}_names.txt -> priority discovery (Score 90+)
+3.  URLS QUEUE       -> {AgentName}_urls.txt  -> scraping pred standardnimi zdroji
+4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prazdne tabulky
+5.  DATA COLLECTION  -> Score 90-100 first, pak 70-89, 50-69, <50 opportunisticky
     L rate limit: 1 req/s scraping, 5 req/s API, max 500 req/run
     L pagination: max 20 stranek/zdroj, cursor ulozit pro pristi run
     L error escalation: Tier1 retry -> Tier2 fallback -> Tier3 partial+ntfy
-4.  DATA VALIDATION  -> ranges, formats, referential integrity
-5.  DEDUPLICATION    -> Exact -> Alias -> Token 80pct -> ExternalID -> manual queue
-6.  BACKFILL         -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
-7.  CONFIDENCE DECAY -> -5 bodu / 30 dni bez overeni
-8.  VIEWS REFRESH    -> CREATE OR REPLACE vsechny analyticke views
-9.  SOURCE RELIABILITY UPDATE -> aktualizovat scores zdroju
-10. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
-11. RUN REPORT       -> save_agent_run_report (vzdy, i pri selhani)
-11a.SCHEDULE UPDATE  -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun
-12. CALENDAR EVENT   -> next scheduled run + maintenance
-13. NOTIFICATION     -> send_notification na agent-runs (max 3 ntfy/run)
+6.  DATA VALIDATION  -> ranges, formats, referential integrity
+7.  DEDUPLICATION    -> Exact -> Alias -> Token 80pct -> ExternalID -> manual queue
+8.  BACKFILL         -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
+9.  CONFIDENCE DECAY -> -5 bodu / 30 dni bez overeni
+10. VIEWS REFRESH    -> CREATE OR REPLACE vsechny analyticke views
+11. SOURCE RELIABILITY UPDATE -> aktualizovat scores zdroju
+12. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
+13. RUN REPORT       -> save_agent_run_report (vzdy, i pri selhani)
+13a.SCHEDULE UPDATE  -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun
+13b.DIGEST CHECK     -> kazdych 7 runu/pondeli = weekly digest; kazdych 30 dni = monthly
+14. CALENDAR EVENT   -> next scheduled run + maintenance
+15. NOTIFICATION     -> send_notification na agent-runs (max 3 ntfy/run)
+16. UNLOCK           -> pg_advisory_unlock
 
 -----------------------------------------------------------
 KLICOVA PRAVIDLA (nikdy neporusovat):
@@ -2276,6 +2281,7 @@ Při nejisté identitě: sniž ConfidenceScore
 
 ## Průběh běhu (Podrobný)
 
+0. získat advisory lock (pg_try_advisory_lock) — při selhání: log warning, pokračovat bez locku
 1. ověř DB (dbPing)
 2. ověř GUID standard
 3. ověř tabulky a schéma
@@ -2286,6 +2292,10 @@ Při nejisté identitě: sniž ConfidenceScore
 8. freshness SLA check
 9. načti existující data (incremental window)
 10. discovery nových entit (max 50)
+10a. Names queue zpracování — {AgentName}_names.txt → přidat do discovery priority queue (Score 90+)
+     - zpracovat před standardním scrapingem; každý zpracovaný název označit jako processed
+10b. Urls queue zpracování — {AgentName}_urls.txt → scraping před standardními zdroji
+     - každou zpracovanou URL označit jako processed
 11. data collection (Score 90-100 first)
     - rate limiting, pagination, anti-bot
 12. data validation (range, format, referential integrity)
@@ -2300,8 +2310,13 @@ Při nejisté identitě: sniž ConfidenceScore
 21. baseline catalog update
 22. save_agent_run_report
 22a. agent-schedule-manager upsert (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt)
+22b. weekly/monthly digest check:
+     - každých 7 runů nebo každé pondělí → spustit weekly-digest-reporter
+     - každých 30 dní → spustit monthly digest
+     - při insufficient data (< 5 runů): přeskočit tiše
 23. calendar event update
 24. send_notification (max 3)
+25. uvolnit advisory lock (pg_advisory_unlock)
 
 ## Canonical Versioning Reference
 
