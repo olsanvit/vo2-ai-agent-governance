@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.2.0
+SkillsVersion: 8.2.1
 Generated: 2026-05-28
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
