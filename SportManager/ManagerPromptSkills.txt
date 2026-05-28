@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 8.0.0
+SkillsVersion: 8.0.1
 Generated: 2026-05-27
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -93,3 +93,30 @@ Description: Kompletní image workflow: validace (MIME, velikost, hash, bezpečn
 Inputs: URL nebo base64 obrázku, EntityGuid, EntityType, ImageType
 Outputs: SharedImages Guid, EntityImages záznam, upload potvrzení
 Limitations: pouze když explicitně vyžadováno; SVG bez scriptů; povolené MIME: png, webp, jpeg, svg+xml
+
+## standings-calculator
+Task types: výpočet tabulek, tiebreaker, Standings upsert
+Description: Přepočítává ligové tabulky po každém zápase. Čte tiebreaker pravidla
+  z Competition.TiebreakerJson (body → GD → GF → H2H → ...) a aplikuje je v správném pořadí.
+  Ukládá Standings záznamy s pozicí, body, W/D/L, GF/GA/GD pro každý tým v sezoně.
+Inputs: CompetitionGuid, SeasonGuid, seznam zápasů ke zpracování
+Outputs: upsert Standings záznamů, tiebreaker log, změny pozic (promoted/relegated flag)
+Limitations: neřeší play-off ani skupinové fáze bez explicitní konfigurace v TiebreakerJson
+
+## player-form-tracker
+Task types: výpočet formy, TeamForm, PlayerForm, rolling stats
+Description: Počítá rolling formu hráčů a týmů (posledních 5 a 10 zápasů).
+  TeamForm: W/D/L, góly, body na zápas, trend (improving/declining/stable).
+  PlayerForm: góly, asistence, rating, minuty — agregace přes MatchLineups + MatchEvents.
+Inputs: EntityGuid (tým nebo hráč), počet posledních zápasů (5 nebo 10), datum výpočtu
+Outputs: upsert TeamForm / PlayerForm záznamu s FormString (např. "WDWLW"), TrendScore
+Limitations: min. 3 zápasy pro výpočet formy; neřeší mezinárodní přestávky jako výpadek
+
+## odds-integrity-monitor
+Task types: sledování odds, integrity flag, pohyb > 20 %, ManualReviewQueue
+Description: Analyzuje pohyb sázkových kurzů mezi opening a closing odds.
+  Při pohybu > 20 % na jakémkoliv výsledku (1/X/2) vytvoří integrity flag a záznam
+  v ManualReviewQueue pro manuální kontrolu. Loguje implied probability pro každý zápas.
+Inputs: MatchGuid, opening odds, closing odds (1/X/2 nebo Over/Under)
+Outputs: integrity flag (true/false), ManualReviewQueue záznam, implied probability záznam
+Limitations: pouze pre-match odds; live odds nesleduje; threshold 20 % konfigurovatelný
