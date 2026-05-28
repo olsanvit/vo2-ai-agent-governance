@@ -14,7 +14,7 @@ ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — Mana
    NESBIRAT: live zapasy, upcoming, scheduled budouci terminy
 
 -----------------------------------------------------------
-STARTUP (10 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Managers/Names/Urls soubory, baseline, readiness)
+STARTUP (11 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Managers/Names/Urls soubory, AgentSchedules conflict check, baseline, readiness)
 -----------------------------------------------------------
 
 -----------------------------------------------------------
@@ -45,7 +45,8 @@ SCHEDULED RUN (v tomto poradi):
 9.  BACKFILL -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
 10. VIEWS REFRESH -> standings, top scorers, form, H2H
 11. CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
-12. RUN REPORT + CALENDAR + NOTIFICATION
+12. RUN REPORT + SCHEDULE UPDATE + CALENDAR + NOTIFICATION
+    (schedule update = AgentSchedules upsert po save_agent_run_report; skip if DryRun)
 
 -----------------------------------------------------------
 KLICOVE TABULKY (Score):
@@ -2299,6 +2300,23 @@ Odpovědi v naplánovaném behu (scheduled run): VŽDY v češtině.
 - error messages v run reportu: česky
 - log výstupy: česky
 Manuální dotazy od operátora: odpovídat v jazyce dotazu.
+
+## Emoji v reportech
+
+Run reporty, ntfy notifikace a calendar eventy MUSÍ používat emoji pro přehlednost:
+- ✅ úspěšná operace / inserted / updated / finished
+- ❌ chyba / failed / blocked / cancelled
+- ⚠️ varování / partial / conflict / integrity flag
+- 📊 statistiky / počty / souhrn / standings
+- ⚽ / 🏀 / 🏒 sport-specifické (viz Ch 1 Sport Emoji)
+- 💾 uloženo / zapsáno do DB
+- 📅 datum / calendar event / scheduled
+- 🔔 notifikace / ntfy
+- 🤖 agent info / identity
+- ⏭️ skip / přeskočeno / exhausted
+- 🔄 sync / refresh / views update
+- 🆕 nový záznam / nový zápas
+Použití: každý nadpis sekce v run reportu musí mít emoji; každý highlights[] řádek musí začínat emoji.
 
 ## EXEC Rule Registry (reference)
 

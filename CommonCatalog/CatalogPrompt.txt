@@ -34,6 +34,7 @@ STARTUP SEKVENCE (v tomto poradi, vzdycky):
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
     L gap > 2x interval -> catch-up mode (max 3 dny zpet)
 8.  CIRCUIT BREAKER CHECK -> ktere zdroje jsou open/half_open
+9.  AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (+-15 min)
 
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
@@ -52,6 +53,7 @@ SCHEDULED RUN (v tomto poradi):
 9.  SOURCE RELIABILITY UPDATE -> aktualizovat scores zdroju
 10. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
 11. RUN REPORT       -> save_agent_run_report (vzdy, i pri selhani)
+11a.SCHEDULE UPDATE  -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun
 12. CALENDAR EVENT   -> next scheduled run + maintenance
 13. NOTIFICATION     -> send_notification na agent-runs (max 3 ntfy/run)
 
@@ -72,7 +74,7 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
 POVINNE TABULKY (kazdy agent):
 -----------------------------------------------------------
 AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue,
-AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability
+AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 
 POVINNE SLOUPCE (kazda tabulka):
 Guid (PK), CreatedAt, UpdatedAt, IsDeleted, ConfidenceScore,
@@ -2513,6 +2515,23 @@ Odpovědi v naplánovaném behu (scheduled run): VŽDY v češtině.
 - error messages v run reportu: česky
 - log výstupy: česky
 Manuální dotazy od operátora: odpovídat v jazyce dotazu.
+
+## Emoji v reportech
+
+Run reporty, ntfy notifikace a calendar eventy MUSÍ používat emoji pro přehlednost:
+- ✅ úspěšná operace / inserted / updated
+- ❌ chyba / failed / blocked
+- ⚠️ varování / partial / conflict
+- 📊 statistiky / počty / souhrn
+- 🔍 discovery / vyhledávání
+- 💾 uloženo / zapsáno do DB
+- 📅 datum / calendar event
+- 🔔 notifikace / ntfy
+- 🤖 agent info / identity
+- ⏭️ skip / přeskočeno
+- 🔄 sync / refresh / update
+- 🆕 nový záznam / nová entita
+Použití: každý nadpis sekce v run reportu musí mít emoji; každý highlights[] řádek musí začínat emoji.
 
 ## Data Contract Versioning
 
