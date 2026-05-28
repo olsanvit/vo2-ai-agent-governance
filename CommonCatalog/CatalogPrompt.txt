@@ -4,7 +4,7 @@ PromptScope: Catalog agents only — Manager agents use ManagerPrompt
 PromptVersion: 8.2.1
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.0.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.2.1
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -104,7 +104,7 @@ MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)
 ntfy:         https://ntfy.vo2info.cz      (user: admin)
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-MCP Version:  8.0.0
+MCP Version:  8.2.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE

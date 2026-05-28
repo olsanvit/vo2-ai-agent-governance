@@ -5,7 +5,7 @@ Alias: [SPORT_ALIAS_OPTIONAL]
 PromptVersion: 8.2.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.0.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.2.1
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
