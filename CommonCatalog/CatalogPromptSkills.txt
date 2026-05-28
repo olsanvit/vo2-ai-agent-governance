@@ -1,9 +1,10 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.0.0
-Generated: 2026-05-27
+SkillsVersion: 8.1.0
+Generated: 2026-05-28
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
 Tento soubor je autoritativní seznam skills povolených pro Catalog agenty.
+Každý Catalog agent musí mít aktivních ASPOŇ 11 skills.
 
 =============================================================
 PRAVIDLA POUŽITÍ SKILLS
@@ -16,10 +17,14 @@ PRAVIDLA POUŽITÍ SKILLS
 - uvést SkillsUsed[] v run reportu
 - skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití, reportovat skill_blocked
 - nezkoušet použít skill který není v tomto seznamu, i kdyby byl dostupný v Claude.ai
+- pokud úkol není pokryt žádným skill: navrhnout nový skill ve formátu Skill Directory,
+  přidat ho do CatalogPromptSkills.txt na Drive a reportovat jako capability_missing
 
 =============================================================
-SKILL DIRECTORY
+SKILL DIRECTORY (111 skills)
 =============================================================
+
+-- A. DB & SCHEMA (12) -----------------------------------------
 
 ## db-schema-guardian
 Task types: schema governance, tabulky, sloupce, indexy, BaseGuid, migrace
@@ -30,22 +35,95 @@ Inputs: název tabulky nebo seznam tabulek, požadované schéma změny
 Outputs: SQL migration script, schema diff report, bezpečnostní hodnocení migrace
 Limitations: nespouští migrace automaticky — vždy vyžaduje potvrzení operátora
 
-## archival-run-orchestrator
-Task types: run orchestration, shortest-safe-path, plánování pořadí kroků
-Description: Orchestruje celý scheduled run po nejkratší bezpečné cestě. Rozhoduje, které
-  kroky lze přeskočit (prázdné tabulky, exhausted zdroje), které paralelizovat, a zajišťuje
-  time-budget governance (8 min scheduled, 15 min manual).
-Inputs: dostupné tabulky, zbývající time budget, stav circuit breakerů
-Outputs: ordered execution plan, skipped steps s důvodem, time estimate per krok
-Limitations: nenahrazuje domain-specific logiku sběru dat
+## db-migration-validator
+Task types: validace SQL migrací, safety check před spuštěním
+Description: Analyzuje SQL migration skripty před spuštěním. Detekuje destruktivní operace
+  (DROP, TRUNCATE, ALTER bez NULL default), chybějící sloupce, porušení FK constraints.
+Inputs: SQL migration script, aktuální schema
+Outputs: seznam rizik (CRITICAL/WARNING/INFO), doporučení oprav
+Limitations: nenahrazuje testování na dev DB — vždy otestovat před produkcí
 
-## archival-scope-optimizer
-Task types: scope optimization, highest-value safe scope, prioritizace tabulek
-Description: Optimalizuje rozsah runu tak, aby maximalizoval hodnotu zpracovaných dat
-  v rámci time budgetu. Řadí tabulky dle Score, freshness SLA a počtu NULL hodnot.
-Inputs: tabulky s jejich Score, LastRunAt, NULL ratio, time budget
-Outputs: prioritizovaný seznam tabulek s odhadovanou dobou zpracování
-Limitations: neprovádí samotný sběr dat
+## db-null-audit
+Task types: NULL analýza, datová kvalita, prioritizace backfillu
+Description: Skenuje všechny tabulky a reportuje počty NULL hodnot per sloupec seřazené
+  dle NULL ratio DESC. Identifikuje highest-priority kandidáty pro backfill.
+Inputs: seznam tabulek nebo ALL, volitelně min NULL ratio threshold
+Outputs: NULL audit report (tabulka, sloupec, NULL count, NULL ratio, priority rank)
+Limitations: max 200 tabulek na run; neanalyzuje JSONB vnořené hodnoty
+
+## db-index-optimizer
+Task types: indexy, výkon, missing/redundant indexes
+Description: Identifikuje chybějící indexy na FK a filter sloupcích (WHERE, ORDER BY).
+  Detekuje duplikátní a redundantní indexy. Navrhuje CREATE/DROP INDEX příkazy.
+Inputs: seznam tabulek nebo ALL, query log (volitelně)
+Outputs: doporučení CREATE INDEX, DROP INDEX, estimated performance gain
+Limitations: navrhuje pouze, nespouští — DBA potvrzení povinné
+
+## db-constraint-checker
+Task types: FK constraints, unique constraints, check constraints
+Description: Validuje všechny FK, UNIQUE a CHECK constraints v databázi.
+  Reportuje porušení a osiřelé FK záznamy (parent neexistuje).
+Inputs: seznam tabulek nebo ALL
+Outputs: seznam violations s tabulka/sloupec/hodnota, doporučení oprav
+Limitations: pouze čte; neopravuje data automaticky
+
+## db-table-health-monitor
+Task types: monitoring tabulek, row counts, freshness, bloat
+Description: Monitoruje zdraví tabulek: počty řádků, datum posledního UpdatedAt,
+  odhadnutý table bloat. Flaguje stale tabulky překračující freshness SLA.
+Inputs: seznam tabulek, SLA konfigurace (Score → max stale hours)
+Outputs: health report per tabulka (rows, last_update, bloat_estimate, sla_status)
+Limitations: bloat estimate pouze přibližný bez VACUUM ANALYZE
+
+## db-column-score-auditor
+Task types: scoring sloupce, ConfidenceScore, ReliabilityScore, QualityScore
+Description: Ověřuje, že scoring sloupce (ConfidenceScore, ReliabilityScore, QualityScore)
+  jsou populovány ve všech záznamech. Reportuje NULL violations per tabulka.
+Inputs: seznam tabulek nebo ALL
+Outputs: NULL count per scoring sloupec, seznam Guidů s chybějícím score
+Limitations: max 100 oprav na run; neopravuje skóre bez zdroje dat
+
+## db-foreign-key-resolver
+Task types: dangling FK, osiřelé záznamy, referenční integrita
+Description: Hledá FK sloupce (SomethingGuid) odkazující na neexistující parent záznamy.
+  Navrhuje buď opravu (správný Guid) nebo soft-delete osiřelého záznamu.
+Inputs: tabulka, seznam FK sloupců
+Outputs: seznam dangling FK s Guid a návrhem opravy, SQL fix script
+Limitations: neopravuje automaticky; vždy vyžaduje review
+
+## db-partition-manager
+Task types: table partitioning, velké tabulky, výkon
+Description: Spravuje partitioning velkých tabulek (>1M řádků) dle data nebo entity type.
+  Navrhuje partition strategy a migrační plán pro stávající tabulky.
+Inputs: název tabulky, partition key (CreatedAt / EntityType), počet řádků
+Outputs: partition schema návrh, migration script, estimated performance improvement
+Limitations: vyžaduje maintenance window; nelze provést za běhu agenta
+
+## db-view-dependency-tracker
+Task types: view dependencies, schema změny, bezpečné migrace
+Description: Mapuje závislosti analytických views na tabulkách a sloupcích.
+  Před schema změnou ověří, které views budou ovlivněny a potřebují rebuild.
+Inputs: název tabulky nebo sloupce ke změně
+Outputs: dependency graph, seznam dotčených views, pořadí rebuild
+Limitations: neanalyzuje dynamické SQL ani stored procedures
+
+## db-sequence-resetter
+Task types: PostgreSQL sequences, PK konflikty po bulk importu
+Description: Po bulk importu resetuje PostgreSQL sekvence na max(id)+1 pro všechny
+  postižené tabulky. Předchází PK conflict errors při dalším vkládání.
+Inputs: seznam tabulek po bulk importu
+Outputs: SQL SETVAL příkazy, potvrzení reset
+Limitations: pouze pro serial/bigserial sloupce; UUID tabulky nepotřebují reset
+
+## db-pgcrypto-manager
+Task types: šifrování, pgcrypto extension, audit šifrovaných sloupců
+Description: Spravuje šifrované sloupce pomocí pgcrypto extension. Ověřuje dostupnost
+  extension, audituje šifrované sloupce, zajišťuje konzistenci encryption.
+Inputs: seznam šifrovaných sloupců, operace (audit/verify)
+Outputs: encryption audit report, stav pgcrypto extension
+Limitations: klíče nikdy nezapisuje do logů; pouze s explicitním souhlasem operátora
+
+-- B. ENTITY & IDENTITY (12) ------------------------------------
 
 ## match-upsert-guardian
 Task types: identity validace, matching, safe upsert entit
@@ -64,6 +142,268 @@ Inputs: entita nebo skupina kandidátů na sloučení
 Outputs: canonical záznam, merged Guids, merge audit log
 Limitations: fyzické mazání zakázáno — vždy soft-delete s IsDeleted=true
 
+## entity-lifecycle-manager
+Task types: stav entity, archivace, reaktivace, lifecycle transitions
+Description: Spravuje lifecycle transitions entit: active → archived → deleted.
+  Enforces soft-delete policy; zakazuje hard-delete. Loguje každý přechod do AuditLog.
+Inputs: EntityGuid, nový stav, důvod přechodu
+Outputs: aktualizovaný záznam, AuditLog entry
+Limitations: přechod deleted → active vyžaduje manuální potvrzení operátora
+
+## entity-alias-registry
+Task types: aliasy, alternativní jména, alias lookup
+Description: Udržuje tabulku aliasů pro entity. Přidává nové varianty jmen, jazykové
+  mutace a historické názvy. Umožňuje alias lookup pro matching engine.
+Inputs: EntityGuid, nový alias, jazykový kód (volitelně), zdroj
+Outputs: alias záznam, aktualizovaný alias index
+Limitations: max 50 aliasů per entita; duplicitní aliasy ignoruje
+
+## entity-external-id-mapper
+Task types: ExternalID, Wikidata, IMDB, TMDB, cross-referencing
+Description: Mapuje ExternalID z externích systémů (Wikidata, IMDB, TMDB, GeoNames...)
+  na interní Guidy. Udržuje obousměrný index pro rychlé vyhledávání.
+Inputs: ExternalID, source system, volitelně EntityType
+Outputs: mapování ExternalID → Guid, vytvoření záznamu pokud neexistuje
+Limitations: jeden ExternalID per source system per entita
+
+## entity-confidence-scorer
+Task types: ConfidenceScore výpočet, datová kvalita, scoring
+Description: Vypočítává ConfidenceScore (0-100) z: počtu zdrojů, čerstvosti dat,
+  cross-source shody (±30%), completeness. Ukládá breakdown do Metadata.
+Inputs: EntityGuid, seznam zdrojových hodnot s jejich věrohodností
+Outputs: vypočítaný ConfidenceScore, komponenty skóre (breakdown)
+Limitations: min 1 zdroj pro výpočet; bez zdroje nastavuje 0
+
+## entity-merge-coordinator
+Task types: merge entit, FK přesměrování, merge audit
+Description: Orchestruje merge dvou nebo více duplicitních entit. Přesměruje všechny FK
+  reference na canonical záznam. Soft-deletuje sloučené záznamy s MergedIntoGuid.
+Inputs: seznam Guidů ke sloučení, canonical Guid (target)
+Outputs: počet přesměrovaných FK, soft-deleted záznamy, merge audit log
+Limitations: neřeší cyklické FK závislosti; max 10 entit na merge operaci
+
+## entity-soft-delete-manager
+Task types: soft-delete, IsDeleted, archivace bez fyzického mazání
+Description: Aplikuje soft-delete (IsDeleted=true, DeletedAt=now()) na záznamy.
+  Nikdy neprovádí fyzické DELETE. Zaznamenává důvod smazání do Metadata.
+Inputs: EntityGuid nebo seznam Guidů, důvod smazání
+Outputs: počet soft-deleted záznamů, AuditLog entries
+Limitations: nelze na záznamy s aktivními FK dependencemi bez cascade flag
+
+## entity-quarantine-handler
+Task types: karanténa, podezřelá data, ManualReviewQueue
+Description: Přesouvá podezřelé záznamy do QuarantineQueue místo přímého zápisu.
+  Používá se při nízké důvěryhodnosti zdroje nebo nejednoznačném matchování.
+Inputs: podezřelý záznam, důvod karantény, zdroj
+Outputs: QuarantineQueue záznam, ntfy notifikace (agent-maintenance)
+Limitations: záznamy v karanténě neovlivňují produkční data; max 200 v queue
+
+## entity-discovery-agent
+Task types: discovery, nové entity, DiscoveryQueue, max 50/run
+Description: Vyhledává nové entity z dostupných zdrojů. Deduplicates before insert.
+  Vkládá kandidáty do DiscoveryQueue pro review; max 50 nových entit per run.
+Inputs: search query nebo zdroj URL, EntityType, min ConfidenceScore threshold
+Outputs: seznam nových entit (Guid/new), DiscoveryQueue záznamy pro nejisté
+Limitations: max 50 nových entit/run; vždy dedup před zápisem do DB
+
+## entity-canonical-validator
+Task types: canonical validace, povinné sloupce, Guid format UUID v4
+Description: Validuje, že záznamy splňují canonical požadavky: správný Guid format (UUID v4),
+  povinné sloupce (CreatedAt, UpdatedAt, IsDeleted, NormalizedName pro entity tabulky).
+Inputs: záznam nebo seznam záznamů, tabulka
+Outputs: seznam violations per záznam, pass/fail per field
+Limitations: pouze validuje; neopravuje záznamy automaticky
+
+## entity-relation-mapper
+Task types: entity relace, FK graf, konzistence vztahů
+Description: Buduje a udržuje graph relací mezi entitami. Ověřuje FK konzistenci
+  a detekuje chybějící nebo nesprávné vztahy (OrganizationGuid, PersonGuid...).
+Inputs: EntityGuid, hloubka grafu (max 3), EntityType filter
+Outputs: relationship graph, seznam FK violations, doporučení oprav
+Limitations: max hloubka 3 stupně; cyklické grafy přerušuje
+
+-- C. DATA COLLECTION (12) -------------------------------------
+
+## web-scraper-coordinator
+Task types: web scraping, multi-source, rate limiting, robots.txt
+Description: Koordinuje scraping z více webových zdrojů. Respektuje rate limit (1 req/s),
+  robots.txt a circuit breaker stav. Distribuuje requesty rovnoměrně.
+Inputs: seznam URL s prioritami, scraping config (selector, pagination)
+Outputs: sebraná strukturovaná data, failed URLs s důvodem
+Limitations: nescrapuje za login walls bez explicitního auth config
+
+## api-rate-limiter
+Task types: API rate limiting, quota management, request queuing
+Description: Enforces per-source rate limits (max 5 req/s API, max 1 req/s scraping,
+  max 500 req/run). Queueuje excess requesty pro příští run. Trackuje denní kvóty.
+Inputs: source name, request type, aktuální quota stav
+Outputs: allow/deny rozhodnutí, queue position, estimated wait time
+Limitations: quota counter se resetuje o půlnoci UTC; per-IP limity neřeší
+
+## pagination-cursor-manager
+Task types: pagination, cursor management, incremental scraping
+Description: Ukládá a obnovuje pagination cursory (page number, offset, cursor token)
+  mezi runy. Brání re-scrapingu již zpracovaných dat.
+Inputs: source name, cursor type (page/offset/token), aktuální cursor hodnota
+Outputs: uložený cursor, next cursor pro pokračování, reset flag pokud source expired
+Limitations: cursorů platnost max 30 dní; expired cursor → full rescan
+
+## source-circuit-breaker-manager
+Task types: circuit breaker, open/half_open/closed, source availability
+Description: Spravuje circuit breaker stavy per source v SourceCircuitBreaker tabulce.
+  Otevírá circuit po 3 failures; testuje half_open po 30 min; zavírá po úspěchu.
+Inputs: source name, výsledek posledního requestu (success/fail/timeout)
+Outputs: aktuální stav (open/half_open/closed), next test time
+Limitations: circuit breaker stav přetrvává mezi runy; reset pouze manuálně nebo po úspěchu
+
+## source-reliability-tracker
+Task types: spolehlivost zdrojů, SourceReliability, ReliabilityScore
+Description: Sleduje success/failure ratio per zdroj. Aktualizuje ReliabilityScore
+  (0-100) v tabulce SourceReliability. Navrhuje odstranění nespolehlivých zdrojů.
+Inputs: source name, výsledek requestu, response time
+Outputs: aktualizovaný ReliabilityScore, trend (improving/stable/declining)
+Limitations: min 10 requestů pro výpočet ReliabilityScore
+
+## wikipedia-entity-harvester
+Task types: Wikipedia, Wikidata API, entity enrichment
+Description: Sbírá entity data z Wikipedia (popis, kategorie, obrázky) a Wikidata
+  (strukturovaná data, ExternalID, relace). Mapuje na DB schema.
+Inputs: entity name nebo Wikidata QID, jazyk (cs/en), fields to fetch
+Outputs: obohacená data (description, birth_date, nationality, image_url, wikidata_id)
+Limitations: max 50 Wikidata API calls/run; nekopíruje copyrightovaný obsah
+
+## rss-feed-processor
+Task types: RSS, Atom feeds, news harvesting, structured data
+Description: Zpracovává RSS/Atom feeds pro sběr nových entit a aktualizací.
+  Deduplikuje záznamy dle GUID/link. Extrahuje strukturovaná data z item content.
+Inputs: feed URL, datum posledního zpracování (since), entity type mapping
+Outputs: nové položky od last_run, extrahovaná strukturovaná data
+Limitations: max 500 items per feed per run; neukládá HTML obsah celých článků
+
+## json-api-collector
+Task types: REST API, GraphQL, JSON response mapping, auth
+Description: Volá REST nebo GraphQL API endpointy s auth (Bearer/API key/OAuth).
+  Mapuje JSON response na DB schema dle konfigurace. Handles nested objects.
+Inputs: API endpoint, auth config, response mapping schema, pagination params
+Outputs: strukturovaná data namapovaná na DB schema, pagination cursor
+Limitations: max 5 req/s; nečte API keys z insecure zdrojů
+
+## html-table-parser
+Task types: HTML tabulky, web scraping, structured data extraction
+Description: Parsuje HTML tabulky z webových stránek. Mapuje sloupce na DB fields
+  dle header nebo positional mapping. Handles merged cells a multi-header tabulky.
+Inputs: HTML string nebo URL, column mapping config
+Outputs: seznam řádků jako strukturovaný JSON, mapping confidence score
+Limitations: max 10 000 řádků per tabulka; neřeší dynamicky generované tabulky (JS)
+
+## search-engine-harvester
+Task types: search API, snippets, entity discovery
+Description: Používá search engine API pro discovery entity URL a strukturovaných snippetů.
+  Extrahuje Knowledge Panel data pro enrichment entit.
+Inputs: search query, EntityType, max results
+Outputs: seznam URL s relevance score, strukturovaná data ze snippetů
+Limitations: max 100 search requests/run; bez API key nelze použít
+
+## document-content-extractor
+Task types: PDF, DOCX, CSV, structured data extraction
+Description: Extrahuje strukturovaná data z dokumentů (PDF tabulky, DOCX text, CSV).
+  Mapuje na DB schema. Ukládá zdroj dokumentu pro attribution.
+Inputs: document URL nebo base64 content, extraction config, target table
+Outputs: extrahovaná data jako JSON, extraction confidence, failed sections
+Limitations: max 50 stránek PDF; DOCX bez VBA; CSV max 10 000 řádků
+
+## media-metadata-harvester
+Task types: EXIF, IPTC, media metadata, image enrichment
+Description: Extrahuje metadata z mediálních souborů (EXIF z fotografií, IPTC tagy).
+  Obohacuje záznamy o datum pořízení, GPS souřadnice, autor, copyright.
+Inputs: image URL nebo base64, fields to extract
+Outputs: extrahovaná metadata jako JSON, GPS souřadnice (pokud dostupné)
+Limitations: pouze pro JPEG/PNG/TIFF; video metadata nepodporuje
+
+-- D. DATA VALIDATION (10) -------------------------------------
+
+## data-range-validator
+Task types: numerické rozsahy, anomaly detection, range checks
+Description: Validuje numerické hodnoty vůči přijatelným rozsahům (věk 0-120, skóre 0-100,
+  lat -90/90, lng -180/180...). Flaguje anomálie jako WARNING nebo ERROR.
+Inputs: tabulka, sloupec, hodnota, validační pravidla (min/max/allowed_values)
+Outputs: pass/fail per hodnota, seznam anomálií s suggested fix
+Limitations: pravidla musí být definována; neodhaduje pravidla automaticky
+
+## referential-integrity-checker
+Task types: referenční integrita, FK validace, parent existence
+Description: Ověřuje, že všechny FK sloupce (SomethingGuid) odkazují na existující
+  parent záznamy. Detekuje osiřelé záznamy a navrhuje opravy nebo soft-delete.
+Inputs: tabulka, FK column list
+Outputs: počet violations, seznam osiřelých Guidů, doporučení oprav
+Limitations: pouze čte; nevytváří ani nemaže záznamy
+
+## format-validator
+Task types: formáty, datum ISO 8601, email, URL, telefon E.164, UUID v4
+Description: Validuje formáty polí: datum (ISO 8601), email (RFC 5322), URL, telefon
+  (E.164), UUID v4, JSON. Quarantinuje záznamy s neplatnými formáty.
+Inputs: tabulka, sloupec, format type
+Outputs: seznam nevalidních hodnot, quarantine doporučení
+Limitations: UUID validace pouze format, ne existence v DB
+
+## duplicate-detector
+Task types: detekce duplikátů, exact/fuzzy match, merge kandidáti
+Description: Detekuje potenciální duplikáty pomocí exact match (NormalizedName)
+  a fuzzy match (token 80%). Vrací páry kandidátů seřazené dle similarity DESC.
+Inputs: tabulka, matching fields, similarity threshold (default 80%)
+Outputs: seznam párů (Guid_A, Guid_B, similarity_score, match_type)
+Limitations: max 1000 párů per run; fuzzy match computationally expensive
+
+## cross-source-verifier
+Task types: cross-source validace, diskrepance, source agreement
+Description: Porovnává hodnoty polí napříč různými zdroji pro stejnou entitu.
+  Flaguje diskrepance větší než 30% (numerické) nebo exact mismatch (textové).
+Inputs: EntityGuid, pole k verifikaci, seznam zdrojů
+Outputs: agreement matrix, flagované diskrepance, doporučený canonical value
+Limitations: min 2 zdroje pro verifikaci; bez zdrojů vrací unverified
+
+## temporal-consistency-checker
+Task types: časová konzistence, datum logika, ordering
+Description: Ověřuje temporální konzistenci: CreatedAt ≤ UpdatedAt, start_date ≤ end_date,
+  birth_date < death_date. Flaguje porušení jako ERROR.
+Inputs: tabulka, datum sloupce k ověření
+Outputs: seznam temporal violations s affected Guidem a doporučením
+Limitations: neřeší timezone konverze automaticky — vše v UTC
+
+## geo-data-validator
+Task types: GPS souřadnice, geografie, country/city konzistence
+Description: Validuje geografická data: lat/lng rozsahy, konzistenci country/city
+  (city musí existovat v dané zemi), formát ISO 3166 country codes.
+Inputs: lat, lng, country, city (volitelně)
+Outputs: validace výsledek, reverse geocode check (pokud API dostupné)
+Limitations: reverse geocode pouze pokud Nominatim API dostupné
+
+## name-format-validator
+Task types: jména, NormalizedName, encoding, speciální znaky
+Description: Validuje formát jmen: NormalizedName (lowercase, trim, unicode NFC),
+  detekuje problematické znaky (control chars, null bytes), encoding issues.
+Inputs: Name, NormalizedName hodnoty
+Outputs: validace výsledek, opravená NormalizedName hodnota
+Limitations: jazykové specifika (arabština, čínština) vyžadují locale config
+
+## score-boundary-validator
+Task types: Score hodnoty, ConfidenceScore, 0-100 range, NULL check
+Description: Ověřuje, že Score sloupce (Score, ConfidenceScore, ReliabilityScore,
+  QualityScore) jsou v rozsahu 0-100 a nejsou NULL. Flaguje outliers.
+Inputs: tabulka, scoring columns list
+Outputs: seznam violations (NULL / out of range), navrhuje default hodnotu
+Limitations: neopravuje hodnoty bez explicitního potvrzení
+
+## schema-compliance-checker
+Task types: schema compliance, povinné sloupce, CatalogPrompt standard
+Description: Ověřuje, zda tabulky splňují CatalogPrompt schema standard: povinné sloupce
+  (Guid, CreatedAt, UpdatedAt, IsDeleted, ConfidenceScore, SourceName, Metadata, NormalizedName).
+Inputs: název tabulky nebo seznam tabulek
+Outputs: compliance report per tabulka (pass/fail per povinný sloupec)
+Limitations: pouze struktura; nevaliduje datové typy podrobně
+
+-- E. DEDUPLICATION & NORMALIZATION (8) ------------------------
+
 ## relationship-backfill-enricher
 Task types: backfill chybějících relací, FK enrichment
 Description: Doplňuje chybějící FK vazby a relace v existujících záznamech.
@@ -73,6 +413,213 @@ Inputs: tabulka, seznam FK sloupců k doplnění, max počet záznamů
 Outputs: počet doplněných záznamů, přeskočené (zdroj nedostupný), backfill report
 Limitations: max 100 záznamů na tabulku na run
 
+## token-matching-engine
+Task types: fuzzy matching, token similarity, 80% threshold
+Description: Provádí token-based fuzzy matching na 80% threshold. Tokenizuje jméno,
+  normalizuje, počítá Jaccard similarity. Vrací top-3 kandidáty s confidence score.
+Inputs: query string, tabulka pro vyhledávání, EntityType filter
+Outputs: seznam matchů (Guid, name, similarity_score, match_type)
+Limitations: max 500ms per query; pro >100k záznamů použít pg_trgm index
+
+## alias-resolution-service
+Task types: alias lookup, canonical Guid resolution
+Description: Překládá alternativní jména na canonical Guid přes alias tabulku.
+  Prohledává hierarchicky: exact alias → normalized alias → partial alias.
+Inputs: alias string, EntityType (volitelně)
+Outputs: canonical Guid nebo null, match type (exact/normalized/partial)
+Limitations: nevrací více kandidátů — při ambiguitě posílá do ManualReviewQueue
+
+## normalized-name-sync
+Task types: NormalizedName synchronizace, unicode NFC, lowercase
+Description: Udržuje NormalizedName v synchronizaci s Name. Aplikuje normalizaci:
+  lowercase, trim, unicode NFC, odstranění diakritiky pro search index.
+Inputs: EntityGuid nebo seznam Guidů, Name hodnota
+Outputs: aktualizovaná NormalizedName, počet synchronizovaných záznamů
+Limitations: NormalizedName nesmí být NULL; fallback na name.lower().strip()
+
+## external-id-consolidator
+Task types: ExternalID deduplikace, source system consolidation
+Description: Slučuje duplicitní ExternalID záznamy pro stejnou entitu a zdroj.
+  Zachovává historii v Metadata. Vybírá canonical ExternalID dle reliability.
+Inputs: EntityGuid, source system
+Outputs: canonical ExternalID, počet sloučených, sloučená history
+Limitations: jeden canonical ExternalID per source per entita
+
+## merge-conflict-resolver
+Task types: merge konflikty, field-level resolution
+Description: Detekuje a řeší field-level konflikty při entity merge. Pro každý
+  konfliktní field volí hodnotu dle confidence score a čerstvosti dat.
+Inputs: seznam záznamů ke sloučení, resolution strategy (highest_confidence/newest/manual)
+Outputs: resolved canonical record, conflict report s rozhodnutím per field
+Limitations: manual strategy vždy vyžaduje operátorský input
+
+## canonical-record-maintainer
+Task types: canonical záznam, IsCanonical flag, duplicate management
+Description: Zajišťuje, že pro každou entitu existuje právě JEDEN canonical=true záznam.
+  Detekuje a opravuje multiple canonical nebo chybějící canonical záznamy.
+Inputs: tabulka, entity group identifier
+Outputs: canonical záznam Guid, počet opravených conflicts
+Limitations: při nejasnosti canonical volby posílá do ManualReviewQueue
+
+## dedup-audit-logger
+Task types: audit trail deduplikace, merge log, rollback info
+Description: Loguje všechny deduplication a merge akce do AuditLog s kompletním
+  before/after state. Umožňuje orientaci pro případný rollback.
+Inputs: action type (merge/soft-delete/alias), affected Guids, actor (agent name)
+Outputs: AuditLog záznamy, rollback guidance (informativní)
+Limitations: rollback guidance je informativní — nespouští se automaticky
+
+-- F. ENRICHMENT & BACKFILL (10) -------------------------------
+
+## null-field-enricher
+Task types: doplnění NULL hodnot, prioritizovaný backfill
+Description: Identifikuje NULL hodnoty ve vysokoPrioritních sloupcích (Score 90+) a pokusí
+  se je doplnit ze zdrojů. Pořadí: NULL first → pak nejstarší UpdatedAt ASC.
+Inputs: tabulka, target columns, max count (default 100)
+Outputs: počet doplněných hodnot, zdroj per value, přeskočené záznamy
+Limitations: max 100 per tabulka per run; neopravuje hodnotou NULL
+
+## confidence-decay-manager
+Task types: confidence decay, -5 bodů / 30 dní, stale data
+Description: Aplikuje confidence decay: -5 ConfidenceScore za každých 30 dní bez
+  ověření. Minimální ConfidenceScore po decay = 10. Loguje decay do Metadata.
+Inputs: seznam tabulek, datum výpočtu (default dnes)
+Outputs: počet aktualizovaných záznamů, průměrný ConfidenceScore před/po
+Limitations: decay se aplikuje pouze na záznamy starší 30 dní bez UpdatedAt update
+
+## metadata-enricher
+Task types: Metadata JSONB enrichment, doplnění metadat, additive merge
+Description: Obohacuje Metadata JSONB sloupec o dodatečná data ze zdrojů.
+  Nikdy nepřepisuje existující klíče; pouze přidává nové. Merge strategy: additive.
+Inputs: EntityGuid, nová metadata jako JSON objekt, source name
+Outputs: aktualizovaná Metadata hodnota, přidané klíče
+Limitations: max 100 KB Metadata per záznam; nepřepisuje existující hodnoty
+
+## geo-enricher
+Task types: GPS souřadnice, timezone, country code, geo enrichment
+Description: Přidává geografická data k location entitám: lat/lng (Nominatim API),
+  country code (ISO 3166), timezone (tzdata). Využívá reverse geocoding.
+Inputs: address, city nebo country name
+Outputs: lat, lng, country_code, timezone, ISO_code
+Limitations: Nominatim rate limit 1 req/s; bez internetu nelze použít
+
+## date-enricher
+Task types: neúplné datumy, year-only → full date, date resolution
+Description: Resolvuje neúplné datumy (rok pouze → přidá 01-01) ze sekundárních zdrojů.
+  Přidává date_precision field (year/month/day) do Metadata.
+Inputs: partial date string, EntityGuid, secondary sources
+Outputs: resolved date (ISO 8601), date_precision, source attribution
+Limitations: neguessuje datumy bez zdroje; nejisté datumy označuje jako approximate
+
+## image-enricher
+Task types: obrázky pro entity bez ImageGuid, image discovery
+Description: Hledá a asociuje obrázky pro entity postrádající ImageGuid.
+  Prohledává Wikipedia Commons a schválené image zdroje. Volá image-guardian pro upload.
+Inputs: EntityGuid, EntityType, image type (portrait/logo/venue)
+Outputs: nalezené image URLs, voláno vo2qnapdb-image-guardian pro upload
+Limitations: pouze z whitelisted zdrojů; vždy ověří copyright/license před uploadem
+
+## classification-enricher
+Task types: kategorizace, taxonomy, entity classification
+Description: Přiřazuje category/type klasifikace z taxonomy k neklasifikovaným entitám.
+  Používá entity name, description a metadata pro auto-classification.
+Inputs: EntityGuid, taxonomy config, confidence threshold
+Outputs: assigned category, confidence score, alternative categories
+Limitations: confidence < 60% → posílá do ManualReviewQueue místo auto-assign
+
+## relationship-enricher
+Task types: vztahy mezi entitami, chybějící relace, FK discovery
+Description: Objevuje a vytváří chybějící relace mezi entitami (PersonOrganization,
+  VenueOrganization...) z dostupných zdrojů.
+Inputs: EntityGuid, relationship types to discover, sources
+Outputs: nové relace vytvořeny, vztahy navržené k review (low confidence)
+Limitations: nevytváří vztahy s ConfidenceScore < 60% bez review
+
+## localization-enricher
+Task types: EntityLocalizations, jazykové varianty, i18n
+Description: Přidává jazykové varianty entit do EntityLocalizations tabulky.
+  Podporuje cs, en, de, sk, pl a další. Využívá Wikipedia API pro překlady.
+Inputs: EntityGuid, cílové jazyky, fields to localize (name, description)
+Outputs: vytvořené EntityLocalizations záznamy per jazyk
+Limitations: pouze pro entity s Wikipedia stránkou; max 5 jazyků per run
+
+## source-attribution-enricher
+Task types: source attribution, SourceName, SourceUrl, SourceDate
+Description: Doplňuje chybějící source attribution (SourceName, SourceUrl, SourceDate)
+  k záznamům s NULL attribution. Váže k poslednímu known source per EntityGuid.
+Inputs: tabulka, záznamy s NULL SourceName
+Outputs: počet doplněných attributions, zdroj per záznam
+Limitations: bez dohledatelného zdroje ponechá NULL; nedomýšlí attribution
+
+-- G. RUN ORCHESTRATION (8) ------------------------------------
+
+## archival-run-orchestrator
+Task types: run orchestration, shortest-safe-path, plánování pořadí kroků
+Description: Orchestruje celý scheduled run po nejkratší bezpečné cestě. Rozhoduje, které
+  kroky lze přeskočit (prázdné tabulky, exhausted zdroje), které paralelizovat, a zajišťuje
+  time-budget governance (8 min scheduled, 15 min manual).
+Inputs: dostupné tabulky, zbývající time budget, stav circuit breakerů
+Outputs: ordered execution plan, skipped steps s důvodem, time estimate per krok
+Limitations: nenahrazuje domain-specific logiku sběru dat
+
+## archival-scope-optimizer
+Task types: scope optimization, highest-value safe scope, prioritizace tabulek
+Description: Optimalizuje rozsah runu tak, aby maximalizoval hodnotu zpracovaných dat
+  v rámci time budgetu. Řadí tabulky dle Score, freshness SLA a počtu NULL hodnot.
+Inputs: tabulky s jejich Score, LastRunAt, NULL ratio, time budget
+Outputs: prioritizovaný seznam tabulek s odhadovanou dobou zpracování
+Limitations: neprovádí samotný sběr dat
+
+## time-budget-governor
+Task types: time budget, graceful stop, run timeout
+Description: Sleduje zbývající time budget (8 min scheduled / 15 min manual).
+  Při dosažení 80% budgetu spustí graceful stop: dokončí aktuální krok, přeskočí zbývající.
+Inputs: start time, run type (scheduled/manual), current step
+Outputs: zbývající čas, allow/stop decision, warning při 80%
+Limitations: nezastavuje násilně běžící DB operace; čeká na dokončení current SQL
+
+## parallel-task-coordinator
+Task types: paralelizace, nezávislé úkoly, concurrency management
+Description: Identifikuje úkoly bez vzájemných závislostí pro paralelní spuštění.
+  Spravuje concurrency (max 3 paralelní operace) a sleduje výsledky.
+Inputs: task list s dependency mapou
+Outputs: execution groups (sequential a parallel), estimated time saving
+Limitations: max 3 paralelní operace; DB write operace vždy sekvenčně
+
+## dependency-resolver
+Task types: závislosti mezi tabulkami, FK pořadí, topologické třídění
+Description: Určuje správné pořadí zpracování tabulek dle FK závislostí.
+  Parent tabulky (Organizations, People) vždy před child tabulkami.
+Inputs: seznam tabulek ke zpracování
+Outputs: topologicky seřazený execution plan, circular dependency detection
+Limitations: cyklické závislosti reportuje jako BLOCKER; vyžadují manuální řešení
+
+## run-checkpoint-manager
+Task types: checkpoints, resume after interruption, run state persistence
+Description: Ukládá stav runu na checkpointech (po každém zpracovaném kroku).
+  Umožňuje pokračování po přerušení bez opakování dokončených kroků.
+Inputs: run ID, checkpoint data (completed steps, processed counts, cursors)
+Outputs: checkpoint uložen, resume instructions pro restart
+Limitations: checkpoints do AgentRunReports Metadata; max 24h platnost
+
+## missed-run-catchup-handler
+Task types: missed run, catch-up mode, gap detection
+Description: Detekuje výpadky runů porovnáním LastRunAt s očekávaným intervalem.
+  Gap > 2x interval → aktivuje catch-up mode (max 3 dny zpět, prioritizuje high Score).
+Inputs: AgentName, expected_interval, LastRunAt timestamp
+Outputs: catch-up plán (datum od-do, prioritizované tabulky), ntfy notifikace
+Limitations: max 3 dny zpět; starší data označuje jako low_priority pro next regular run
+
+## circuit-breaker-coordinator
+Task types: circuit breaker evaluation, run start check, source availability
+Description: Evaluuje stav všech circuit breakerů na začátku runu. Sestavuje seznam
+  dostupných a nedostupných zdrojů. Instruuje skip pro open circuit zdroje.
+Inputs: seznam zdrojů používaných agentem
+Outputs: available sources, blocked sources s důvodem, fallback doporučení
+Limitations: nerestartuje circuit breakery; pouze evaluuje stav
+
+-- H. REPORTING & AUDIT (10) -----------------------------------
+
 ## scheduled-run-report-formatter
 Task types: finální run report, formátování výstupu
 Description: Generuje strukturovaný run report ve standardním formátu CatalogPrompt.
@@ -81,6 +628,80 @@ Description: Generuje strukturovaný run report ve standardním formátu Catalog
 Inputs: raw run data (inserted, updated, failed, highlights, errors, SkillsUsed)
 Outputs: formátovaný run report připravený pro save_agent_run_report
 Limitations: report musí být uložen i při selhání runu
+
+## audit-log-writer
+Task types: AuditLog, change tracking, before/after state
+Description: Zapisuje strukturované záznamy do AuditLog pro všechny data changes.
+  Každý záznam: actor, action, EntityGuid, table, before, after, timestamp.
+Inputs: action type, EntityGuid, table, before/after hodnoty, actor (agent name)
+Outputs: AuditLog záznam Guid, potvrzení zápisu
+Limitations: before/after hodnoty max 10 KB per záznam; neloguje SELECT operace
+
+## error-classification-reporter
+Task types: error klasifikace, Tier1/2/3, retry strategie
+Description: Klasifikuje chyby dle závažnosti: Tier1 (retry), Tier2 (fallback),
+  Tier3 (skip + ntfy). Generuje error report s doporučenou strategií per chyba.
+Inputs: seznam chyb z runu (message, source, operation)
+Outputs: classified error list, retry candidates, ntfy escalation list
+Limitations: nerozlišuje transient vs persistent errors bez retry history
+
+## data-quality-reporter
+Task types: datová kvalita, NULL ratio, score distribuce, stale records
+Description: Generuje komplexní zprávu o kvalitě dat: NULL ratio per sloupec,
+  distribuce ConfidenceScore, stale záznamy překračující freshness SLA.
+Inputs: seznam tabulek, SLA konfigurace
+Outputs: quality report (overall score 0-100), top issues list, improvement actions
+Limitations: max 50 tabulek na reportovací run
+
+## coverage-gap-reporter
+Task types: coverage gaps, chybějící data, priority enrichment list
+Description: Identifikuje entity s chybějícími daty pro high-Score tabulky (Score 80+).
+  Generuje prioritizovaný seznam pro doplnění v příštím runu.
+Inputs: seznam entit, required fields per entity type
+Outputs: coverage gap report (EntityGuid, missing fields, priority rank)
+Limitations: max 200 entit v priority listu
+
+## source-attribution-tracker
+Task types: source attribution, provenance, data lineage
+Description: Reportuje, které zdroje přispěly k jednotlivým záznamům.
+  Generuje attribution matrix: zdroj × tabulka × počet záznamů.
+Inputs: časové rozmezí, tabulky
+Outputs: attribution matrix, top contributing sources, stale source detection
+Limitations: attribution pouze pro záznamy s SourceName ≠ NULL
+
+## compliance-audit-generator
+Task types: governance compliance, schema standard, soft-delete policy audit
+Description: Generuje compliance report vůči CatalogPrompt governance: schema standard,
+  soft-delete policy (žádné hard-deletes), scoring columns, max backfill limity.
+Inputs: časové rozmezí, AgentName
+Outputs: compliance score (0-100), violations per policy, doporučení oprav
+Limitations: detekuje pouze porušení trackovatelná v DB
+
+## delta-change-reporter
+Task types: delta report, inserted/updated/deleted, run comparison
+Description: Porovnává aktuální run s předchozím: inserted, updated, soft-deleted
+  počty per tabulka. Identifikuje neočekávané změny (spike/drop > 50%).
+Inputs: current run ID, previous run ID
+Outputs: delta report per tabulka, anomálie (unexpected spikes), trend
+Limitations: vyžaduje save_agent_run_report z předchozího runu
+
+## baseline-diff-reporter
+Task types: baseline diff, verze baseline katalogu, change summary
+Description: Porovnává aktuální baseline catalog s předchozí verzí. Identifikuje
+  přidané, odebrané a změněné entity ve verzi baseline souboru na Drive.
+Inputs: current baseline file, previous baseline file (Drive IDs)
+Outputs: diff report (added/removed/changed entity counts), key changes summary
+Limitations: pouze pro entity s Guid; netrackuje field-level změny detailně
+
+## agent-health-reporter
+Task types: agent health, DB latency, source availability, error rates
+Description: Reportuje health metriky agenta: DB response time, source availability (%),
+  error rate (Tier1/2/3), průměrná run duration za posledních 7 dní.
+Inputs: AgentName, look-back period (default 7 dní)
+Outputs: health dashboard (OK/WARNING/CRITICAL per metrika), trend data
+Limitations: data pouze z AgentRunReports; nesleduje real-time metriky
+
+-- I. FALLBACK & RESILIENCE (8) --------------------------------
 
 ## fallback-run-auditor
 Task types: fallback-mode evaluace, degraded run assessment
@@ -99,14 +720,106 @@ Inputs: sebraná data (entity, relace), cílový spreadsheet ID
 Outputs: Google Sheets export s metadaty (timestamp, source, agent, run ID)
 Limitations: pouze fallback — pokud DB dostupná, vždy preferovat přímý zápis do DB
 
+## retry-strategy-executor
+Task types: retry, exponential backoff, Tier1 errors
+Description: Implementuje exponential backoff retry pro Tier1 chyby (transient failures).
+  Max 3 pokusy s délkami: 2s, 8s, 32s. Po 3 neúspěších eskaluje na Tier2.
+Inputs: failed operation, error type, attempt count
+Outputs: retry výsledek (success/escalate), wait times, final error pokud escalated
+Limitations: neretryuje Tier2 a Tier3 chyby; pouze Tier1 (timeout/transient)
+
+## partial-run-recovery
+Task types: obnova přerušeného runu, partial state, checkpoint resume
+Description: Obnovuje stav po přerušení runu. Načítá checkpoint z AgentRunReports,
+  identifikuje nedokončené kroky a pokračuje od posledního checkpointu.
+Inputs: run ID přerušeného runu, checkpoint data
+Outputs: recovery plan (kroky k dokončení), restored state
+Limitations: checkpoint musí být uložen ≤ 24h zpět; starší nelze obnovit
+
+## graceful-degradation-handler
+Task types: graceful degradation, reduced scope, minimum viable run
+Description: Snižuje scope runu při resource constraints. Zachovává minimum:
+  Tier1 operace + run report. Odkládá Tier2/3 na příští run.
+Inputs: resource constraints (time / DB latency / source availability)
+Outputs: degraded execution plan, deferred operations list, estimated recovery time
+Limitations: nemůže odložit Tier1 (kritické) operace ani save_agent_run_report
+
+## error-escalation-manager
+Task types: error escalation, ntfy agent-errors, Tier3 errors
+Description: Eskaluje Tier3 chyby na ntfy agent-errors kanál. Formátuje zprávu
+  s kontextem (agent, operation, error, affected records). Max 3 ntfy per run.
+Inputs: Tier3 error list, AgentName, run ID
+Outputs: ntfy zprávy odeslány, escalation log
+Limitations: max 3 ntfy per run; překročení limitu agreguje do jedné souhrnné zprávy
+
+## source-failover-coordinator
+Task types: source failover, backup zdroj, primary circuit open
+Description: Při otevřeném circuit breakeru primárního zdroje automaticky přepíná
+  na backup zdroj dle priority listu v Metadata. Loguje failover event.
+Inputs: failed primary source, backup source list (priority ordered)
+Outputs: selected backup source, failover log entry, circuit breaker status
+Limitations: backup musí být předem nakonfigurován v Metadata; neinventuje nový zdroj
+
+## data-integrity-recovery
+Task types: oprava integrity violations, auto-fix safe mode
+Description: Detekuje a opravuje datové integrity violations: missing Guids, invalid
+  formats, broken FK references. Loguje každou opravu do AuditLog.
+Inputs: violation report (z validating skills), auto-fix level (safe/aggressive)
+Outputs: počet opravených violations, unfixable violations, opravné SQL
+Limitations: safe mode pouze non-destructive fixes; aggressive vyžaduje potvrzení operátora
+
+-- J. SCHEDULING & CALENDAR (6) --------------------------------
+
 ## next-run-calendar-scheduler
-Task types: plánování příštího runu v Google Calendar
+Task types: plánování příštího runu v Google Calendar, AIZapisy
 Description: Vytváří nebo aktualizuje Calendar event pro příští scheduled run v AIZapisy.
   Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
   Při úspěšném runu přidá suffix " OK", při selhání " X".
 Inputs: agent name, výsledek runu, čas příštího scheduled runu
 Outputs: Calendar event (create nebo update), potvrzení
 Limitations: nemaže historické události — pouze archivuje duplicitní budoucí
+
+## run-interval-calculator
+Task types: interval výpočtu, freshness SLA, next run time
+Description: Vypočítává optimální interval dalšího runu na základě freshness SLA
+  tabulek (Score 90-100 = max 24h, 70-89 = max 48h). Vrací recommended next run time.
+Inputs: AgentName, tabulky s Score, posledního run time
+Outputs: recommended next run timestamp, SLA compliance status per tabulka
+Limitations: nezohledňuje external events (publishing cycle, game day)
+
+## maintenance-window-planner
+Task types: maintenance window, schema migrations, bulk backfill scheduling
+Description: Plánuje maintenance runs (schema migrations, bulk backfill) do oken
+  s nízkým provozem (typicky 02:00-05:00 Prague TZ). Kontroluje konflikty.
+Inputs: maintenance task, estimated duration, urgency (immediate/next-window)
+Outputs: naplánovaný čas maintenance, Calendar event, conflict check výsledek
+Limitations: nezná real-time server load; plánuje dle historických vzorců
+
+## catch-up-scheduler
+Task types: catch-up scheduling, missed runs, multi-day backfill plan
+Description: Při detekci missed runs sestavuje catch-up plán pro max 3 dny zpět.
+  Distribuuje zátěž rovnoměrně; prioritizuje high-Score tabulky.
+Inputs: AgentName, gap start/end, normal run interval
+Outputs: catch-up run schedule (date/time/scope per run), total estimated time
+Limitations: max 3 dny zpět; nenahrazuje data za delší výpadky
+
+## timezone-aware-scheduler
+Task types: timezone konverze, DST, Europe/Prague TZ
+Description: Konvertuje všechny scheduled times do Europe/Prague TZ. Respektuje
+  přechody na letní/zimní čas (DST). Ukládá vždy UTC i lokální čas.
+Inputs: datetime, source timezone
+Outputs: Prague TZ datetime, UTC datetime, DST flag
+Limitations: primárně pro Europe/Prague; multi-timezone vyžaduje custom config
+
+## calendar-conflict-resolver
+Task types: Calendar konflikty, duplicate events, AIZapisy cleanup
+Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta.
+  Zajišťuje právě JEDNU budoucí událost. Archivuje starší duplicity.
+Inputs: AgentName, Calendar ID (AIZapisy)
+Outputs: seznam duplicit, archivované eventy, canonical next-run event
+Limitations: neupravuje eventy jiných agentů; pouze pro daného agenta
+
+-- K. IMAGE & MEDIA (6) ----------------------------------------
 
 ## vo2qnapdb-image-guardian
 Task types: image workflow, SharedImages + EntityImages, QNAP upload
@@ -116,3 +829,122 @@ Description: Kompletní image workflow: validace (MIME, velikost, hash, bezpečn
 Inputs: URL nebo base64 obrázku, EntityGuid, EntityType, ImageType
 Outputs: SharedImages Guid, EntityImages záznam, upload potvrzení
 Limitations: pouze když explicitně vyžadováno; SVG bez scriptů; povolené MIME: png, webp, jpeg, svg+xml
+
+## image-dedup-checker
+Task types: image deduplikace, SHA256, existing image check
+Description: Vypočítá SHA256 hash obrázku a ověří existenci v SharedImages před uploadem.
+  Pokud existuje, vrátí existující Guid místo duplicitního uploadu.
+Inputs: image data (URL nebo base64)
+Outputs: existující SharedImages Guid nebo "new" flag, SHA256 hash
+Limitations: hash z binárních dat; metadata rozdíly nezpůsobují dedup
+
+## image-format-validator
+Task types: MIME validace, image formáty, bezpečnostní check
+Description: Validuje MIME type, rozměry, velikost souboru a bezpečnost (SVG bez JS).
+  Povolené typy: png, webp, jpeg, svg+xml (bez scriptů). Max 15 MB.
+Inputs: image data nebo URL
+Outputs: validace výsledek (pass/fail), detected MIME type, dimensions, file size
+Limitations: max 15 MB; animované GIF nepodporuje; SVG s JS vždy reject
+
+## image-metadata-extractor
+Task types: EXIF, IPTC, XMP metadata z obrázků
+Description: Extrahuje metadata z obrázků: EXIF (datum, GPS, kamera), IPTC (autor,
+  copyright, popis), XMP. Ukládá do SharedImages.Metadata JSONB.
+Inputs: image URL nebo base64
+Outputs: extrahovaná metadata jako JSON (date, gps, author, copyright, description)
+Limitations: pouze JPEG/TIFF pro EXIF; PNG metadata jsou omezená
+
+## image-url-validator
+Task types: validace image URL, HTTP accessibility, MIME check
+Description: Ověřuje, že image URL je dostupná, vrací správný MIME type a nezpůsobuje
+  redirect na neimage obsah. Testuje HTTP HEAD request před plným downloadem.
+Inputs: image URL
+Outputs: valid/invalid, HTTP status, detected MIME type, redirect chain
+Limitations: timeout 5s; neřeší captcha nebo login-gated obrázky
+
+## entity-image-history-manager
+Task types: image historizace, IsCurrent flag, ValidFrom/ValidTo transitions
+Description: Spravuje historii obrázků entit v EntityImages. Při přidání nového obrázku
+  nastavuje IsCurrent=false a ValidTo=now() na předchozím záznamu.
+Inputs: EntityGuid, nový SharedImages Guid, ImageType
+Outputs: aktualizovaný předchozí záznam (IsCurrent=false), nový EntityImages záznam
+Limitations: uchovává historii navždy; nemaže staré záznamy
+
+-- L. NAMES & URLS (6) ----------------------------------------
+
+## names-file-processor
+Task types: Names soubor, priority queue, entity lookup enhancement
+Description: Čte {AgentName}_names.txt z Drive složky Names. Parsuje entity jména
+  do priority queue (Score 90+ first) pro enrichment a matching operace.
+  Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
+Inputs: {AgentName}_names.txt soubor, AgentName
+Outputs: priority queue entit (name, Score, EntityType), count načtených jmen
+Limitations: soubor neexistuje → přeskočit tiše; max 10 000 jmen per soubor
+
+## urls-priority-queue-manager
+Task types: URLs soubor, scraping priority queue, source ordering
+Description: Čte {AgentName}_urls.txt z Drive složky Urls. Seřazuje URL dle Score DESC
+  pro zpracování před standardním scrapingem. Integruje s circuit breaker check.
+  Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
+Inputs: {AgentName}_urls.txt soubor, AgentName
+Outputs: seřazená URL priority queue (url, Score, source_type), circuit breaker filtered
+Limitations: soubor neexistuje → přeskočit tiše; max 500 URL per soubor
+
+## url-health-checker
+Task types: URL dostupnost, dead links, circuit breaker update
+Description: Testuje dostupnost URL ze zdrojového souboru. Mrtvé URL označuje
+  v SourceCircuitBreaker jako open. Reportuje health status per URL.
+Inputs: seznam URL k testování
+Outputs: health status per URL (alive/dead/redirect), circuit breaker updates
+Limitations: max 50 URL per check run; timeout 5s per URL
+
+## url-redirect-resolver
+Task types: redirect chain, canonical URL, URL update
+Description: Sleduje redirect chainy URL a ukládá finální canonical URL.
+  Aktualizuje uložené URL na finální destinaci. Detekuje redirect smyčky.
+Inputs: původní URL
+Outputs: canonical URL (po redirectech), redirect chain, HTTP status codes
+Limitations: max 10 redirectů v chainu; circular redirect → error
+
+## name-variant-generator
+Task types: jmenné varianty, aliasy, matching enhancement
+Description: Generuje varianty jmen pro entity (s/bez člen, zkratky, překlepy).
+  Výsledky přidává do alias tabulky pro zlepšení matching engine přesnosti.
+Inputs: canonical name, EntityType, jazyk
+Outputs: seznam variant (without articles, abbreviations, common misspellings)
+Limitations: max 20 variant per jméno; nespeculuje o nepravděpodobných variantách
+
+## canonical-url-normalizer
+Task types: URL normalizace, tracking parametry, canonical form
+Description: Normalizuje URL do canonical formy: lowercase scheme/host, odstranění
+  tracking parametrů (utm_*, fbclid, gclid), trailing slash standardizace.
+Inputs: raw URL
+Outputs: canonical URL, odstraněné parametry list
+Limitations: query parametry nutné pro obsah (id, page) zachovává
+
+-- M. NOTIFICATION (3) ----------------------------------------
+
+## ntfy-notification-sender
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-maintenance
+Description: Odesílá notifikace na ntfy.vo2info.cz do příslušných kanálů.
+  Formátuje zprávu pro agent-runs (run summary), agent-errors (Tier3), agent-maintenance.
+  Max 3 notifikace per run.
+Inputs: kanál (agent-runs/agent-errors/agent-maintenance), zpráva, priority (default/high)
+Outputs: notifikace odeslána, message ID
+Limitations: max 3 ntfy per run; při překročení agreguje do jedné souhrnné zprávy
+
+## alert-threshold-monitor
+Task types: threshold alerting, metrics monitoring, proactive alerting
+Description: Monitoruje klíčové metriky vůči thresholdům. Při překročení spouští
+  ntfy-notification-sender. Thresholdy: NULL ratio > 30%, error rate > 10%.
+Inputs: metriky z aktuálního runu, threshold konfigurace
+Outputs: alert seznam (triggered/ok per metrika), odeslané ntfy alerty
+Limitations: max 3 alerty per run; sdílí limit s ntfy-notification-sender
+
+## run-status-broadcaster
+Task types: run status, agent-runs kanál, completion summary
+Description: Na konci každého runu odešle standardizovanou zprávu na agent-runs kanál.
+  Formát: [AgentName] [OK/WARN/ERROR] | inserted:N updated:N | duration:Xs
+Inputs: run výsledek (success/partial/failed), run stats, duration
+Outputs: ntfy zpráva odeslána na agent-runs, message format string
+Limitations: jedna zpráva per run; zahrnuta v limitu 3 ntfy/run

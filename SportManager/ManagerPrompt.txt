@@ -179,9 +179,12 @@ Povinne kroky v tomto poradi:
    - version_mismatch (-> selfUpdate z Drive)
    - prompt_upgrade_applied
 7. Zkontrolovat existenci alespon 25 baseline entit
-8. Nacist /Prompts/Manager/ManagerPromptSkills.txt → skill registry
+8. Nacist ManagerPromptSkills.txt z Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ) → skill registry
+   - agent musi mit aktivnich ASPON 11 skills
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
-9. Nacist /Prompts/Managers/{AgentName}.txt → seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
+   - pokud ukol neni pokryt: navrhnout novy skill, pridat do ManagerPromptSkills.txt na Drive
+9. Nacist {AgentName}.txt z Drive /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+   → seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
    - pokud soubor neexistuje nebo je prazdny: preskocit tiše (ne chyba)
    - pouzit jako prehled pro prioritizaci tabulek v behu
 10. Klasifikovat readiness_status az po overeni DB, prompt a baseline
@@ -243,18 +246,21 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Drive Agent Folder Structure -- 8.0.0
+## Google Drive Agent Folder Structure -- 8.1.0
 
-Kazdy sport agent ma v Google Drive /Prompts/ pristup k temto slozky:
+Kazdy sport agent ma v Google Drive pristup k temto slozkam:
 
-- /Prompts/Catalogs/{AgentName}.txt  -- tabulky DB s Score, RowCount, LastPopulated
-- /Prompts/Managers/{AgentName}.txt  -- seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
+- Managers/{AgentName}.txt  -- seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
+  Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
   Format: Score|TableName|RowCount|LastPopulated, jedna tabulka na radek
-- /Prompts/Names/{AgentName}_names.txt -- seznam nazvu tymu/soutezi/hracu k prioritnimu dohledani
+- Names/{AgentName}_names.txt -- seznam nazvu tymu/soutezi/hracu k prioritnimu dohledani
+  Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
   Format: jeden nazev na radek | Max 500 polozek | Priority = Score 90+
-- /Prompts/Urls/{AgentName}_urls.txt  -- seznam URL k projiti (live score pages, league tables...)
+- Urls/{AgentName}_urls.txt  -- seznam URL k projiti (live score pages, league tables...)
+  Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
   Format: jedna URL na radek | Max 500 polozek | Zpracovat pred standardnim scrapingem
-- /Prompts/Manager/                  -- prompt soubory pro Manager agenty domeny
+- Root folder (ManagerPrompt.txt, ManagerPromptSkills.txt):
+  Drive folder ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Postup pri startu:
 1. Nacist Managers soubor (/Prompts/Managers/{AgentName}.txt) -> prehled vlastnich DB tabulek agenta
@@ -1677,26 +1683,35 @@ Pravidla:
 - Webhook token nikdy nelog do DB ani highlights[]
 - Zpracovavej max 100 radku z jednoho payloadu; vetsi davky odmitni (HTTP 413)
 
-## Skill Directory -- 8.0.0
+## Skill Directory -- 8.1.0
 
-Detailní Skill Directory je v samostatném souboru:
-  /Prompts/Manager/ManagerPromptSkills.txt
+Detailní Skill Directory (111 skills) je v samostatném souboru:
+  ManagerPromptSkills.txt — Drive folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Načíst při startu (po DB ping, před discovery).
+Agent musí mít aktivních ASPOŇ 11 skills.
 Pokud soubor chybí: pokračovat bez skills, reportovat capability_missing pro každý chybějící skill.
+Pokud úkol není pokryt žádným skill: navrhnout nový skill (zejména sport-specific),
+  přidat ho do ManagerPromptSkills.txt na Drive a reportovat jako capability_missing.
 
-Rychlý přehled dostupných skills:
+Rychlý přehled klíčových skills (viz ManagerPromptSkills.txt pro kompletní seznam 111):
 
 | Task type | Skill |
 |---|---|
 | Schema governance, tabulky, sloupce, indexy, BaseGuid, migrace | db-schema-guardian |
 | Identity validace, matching, safe upsert zápasů a entit | match-upsert-guardian |
 | Sběr zápasů z Flashscore-like zdrojů | flashscore-match-harvester |
+| Výpočet tabulek + tiebreaker | standings-calculator |
+| Rolling forma hráčů a týmů | player-form-tracker |
+| Odds integrity monitoring > 20% | odds-integrity-monitor |
 | Finální run report | scheduled-run-report-formatter |
 | Fallback-mode evaluace | fallback-run-auditor |
 | Export do Google Sheets (fallback) | sheet-fallback-mapper |
 | Plánování příštího runu v Google Calendar | next-run-calendar-scheduler |
 | Image workflow (pouze když explicitně vyžadováno) | vo2qnapdb-image-guardian |
+| Tier1 post-match pipeline | tier1-pipeline-executor |
+| Tier2 plánování | tier2-pipeline-scheduler |
+| Transfer záznamy | player-transfer-processor |
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada se může lišit.
 Autoritativní seznam + popisy: ManagerPromptSkills.txt
@@ -2245,6 +2260,15 @@ DataRepairHistory, CanonicalIdentityRegistry, ValidationFailures
 - 7.2.0: Konsolidace post-7.1.0 -- remove Slack, unify VO2QNAPDBAI identity,
   align prompt/server handoff language.
 - 7.1.0 a starsi: viz archived versions v Drive.
+
+## Jazykové pravidlo
+
+Odpovědi v naplánovaném behu (scheduled run): VŽDY v češtině.
+- run report: česky
+- ntfy notifikace: česky
+- error messages v run reportu: česky
+- log výstupy: česky
+Manuální dotazy od operátora: odpovídat v jazyce dotazu.
 
 ## EXEC Rule Registry (reference)
 
