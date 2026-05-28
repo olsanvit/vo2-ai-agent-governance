@@ -1368,11 +1368,11 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.0.0
-- SchemaVersion: 8.0.0
-- RuntimeSafetyVersion: 8.0.0
+- GovernanceVersion: 8.2.1
+- SchemaVersion: 8.2.1
+- RuntimeSafetyVersion: 8.2.1
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.0.0
+- ImageGovernanceVersion: 8.2.1
 - PromptVersion: 8.2.1
 
 Breaking change is:
@@ -2321,12 +2321,12 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 8.0.0
-SchemaVersion: 8.0.0
-RuntimeSafetyVersion: 8.0.0
+GovernanceVersion: 8.2.1
+SchemaVersion: 8.2.1
+RuntimeSafetyVersion: 8.2.1
 ScoringVersion: 3.0
-ImageGovernanceVersion: 8.0.0
-ProviderGovernanceVersion: 8.0.0
+ImageGovernanceVersion: 8.2.1
+ProviderGovernanceVersion: 8.2.1
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note

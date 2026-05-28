@@ -2164,9 +2164,9 @@ Rules:
 
 ## Compatibility Matrix -- 8.0.0
 
-GovernanceVersion: 8.0.0
-SchemaVersion: 8.0.0
-RuntimeSafetyVersion: 8.0.0
+GovernanceVersion: 8.2.1
+SchemaVersion: 8.2.1
+RuntimeSafetyVersion: 8.2.1
 PromptVersion: 8.2.1
 
 Breaking change:
