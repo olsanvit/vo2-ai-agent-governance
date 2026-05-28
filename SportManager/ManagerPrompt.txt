@@ -20,10 +20,12 @@ STARTUP (12 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Manager
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
 -----------------------------------------------------------
-1.  STARTUP checks (db, prompt, catalog, missed run, circuit breaker)
-2.  VYBER ZAPASY -> vcerejsek (NIKDY exhausted) + 10 historickych not-exhausted
+1.  STARTUP checks (db, prompt, skills, catalog, missed run, circuit breaker)
+2.  INTERNATIONAL CALENDAR -> aktivni prestavka? -> preskocit afektovane souteze
+3.  NAMES QUEUE  -> {AgentName}_names.txt -> resolve tymy/hrace -> priority queue
+4.  VYBER ZAPASY -> vcerejsek (NIKDY exhausted) + 10 historickych not-exhausted
     -> ihned: hledat nove zapasy pro kazde datum co nejsou v DB (fetch + compare + insert)
-3.  POST-MATCH PIPELINE (pro kazdy zapas):
+5.  POST-MATCH PIPELINE (pro kazdy zapas):
     TIER 1 -- okamzite:
       HomeScore, AwayScore, Status, WinnerTeamGuid
       MatchEvents bulk_insert (goly, karty, stridani)
@@ -41,16 +43,19 @@ SCHEDULED RUN (v tomto poradi):
       Match conditions (pocasi, stav hriste)
       MatchBroadcast (TV/streaming, zeme, komentatori)
       VAR detaily, match narrative, EntityLocalizations, media vazby
-4.  DISCIPLINARNI CHECK -> YC threshold, suspend flag
-5.  ODDS CHECK -> pohyb > 20pct -> integrity flag
-6.  INJURY UPDATE -> PlayerUnavailability
-7.  TRANSFER WINDOW CHECK -> IsCurrentlyOpen? Squad update povolen?
-8.  SEASON LIFECYCLE -> nova/ukoncena sezona?
-9.  BACKFILL -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
-10. VIEWS REFRESH -> standings, top scorers, form, H2H
-11. CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
-12. RUN REPORT + SCHEDULE UPDATE + CALENDAR + NOTIFICATION
+6.  DISCIPLINARNI CHECK -> YC threshold, suspend flag
+7.  ODDS CHECK -> pohyb > 20pct -> integrity flag
+8.  INJURY UPDATE -> PlayerUnavailability
+9.  TRANSFER WINDOW CHECK -> IsCurrentlyOpen? Squad update povolen?
+9a. PLAYER CAREER UPDATE -> po transferu: PlayerCareer upsert (JoinedDate/LeftDate, IsCurrentClub)
+10. SEASON LIFECYCLE -> nova/ukoncena sezona?
+11. BACKFILL -> max 100/tabulka (vcetne MatchConditions, MatchBroadcast, EntityLocalizations)
+12. VIEWS REFRESH -> standings, top scorers, form, H2H
+13. CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
+13a.DIGEST CHECK -> kazdych 7 runu/pondeli = weekly; kazdych 30 dni = monthly
+14. RUN REPORT + SCHEDULE UPDATE + CALENDAR + NOTIFICATION
     (schedule update = AgentSchedules upsert po save_agent_run_report; skip if DryRun)
+15. UNLOCK -> uvolnit advisory lock
 
 -----------------------------------------------------------
 KLICOVE TABULKY (Score):
@@ -463,6 +468,11 @@ Automaticke znovuotevreni exhausted datumu:
 4.  Spocitat limity podle DataScore nebo FinalScore ze Sports tabulky
 5.  Overit tabulky, sloupce, indexy, coverage tabulku
 6.  Znovu otevrit exhausted datumy s ExhaustedAt > 1 rok
+6a. InternationalCalendar check -> aktivni FIFA/UEFA/federacni prestavka pro dany sport/ligu?
+    -> pokud aktivni prestavka: preskocit ligove zapasy pro afektovane souteze
+    -> zapsat do highlights[]: "Prestavka aktivni: {WindowType} do {EndDate}"
+6b. Names queue zpracování -> {AgentName}_names.txt -> resolve tymy/souteze/hrace -> priority queue
+    -> kazdy zpracovany nazev oznacit jako processed; nezpracovane ponechat pro pristi run
 7.  Vybrat 11 cilovych datumu (vcerejsek + 10 historickych not-exhausted)
     -> Ihned pro kazde vybrane datum: hledat nove zapasy ktere nejsou v DB (fetch + compare + insert)
     -> Backfill novych: NULL hodnoty first, pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
@@ -471,10 +481,19 @@ Automaticke znovuotevreni exhausted datumu:
 10. Odds check -> pohyb > 20pct -> integrity flag
 11. Injury update -> PlayerUnavailability
 12. Transfer window check -> IsCurrentlyOpen?
+12a.PlayerCareer update -> po detekci transferu/prestupu/odchodu:
+    -> upsert PlayerCareer (JoinedDate/LeftDate, TransferType, IsCurrentClub)
+    -> agregovat AppearancesTotal, GoalsScored, Assists z PlayerSeasonStats
+    -> max 1 IsCurrentClub=true per PlayerGuid
 13. Season lifecycle check -> nova/ukoncena sezona?
-14. Backfill -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou (Tier 4)
+14. Backfill -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt
+    -> zahrnout Tier 4 tabulky: MatchConditions, MatchBroadcast, EntityLocalizations
 15. Views refresh -> standings, top scorers, form, H2H
 16. Catalog update -> Drive /Prompts/Catalogs/{AgentName}.txt
+16a.Weekly/monthly digest check:
+    -> kazdych 7 runu nebo kazde pondeli -> weekly-digest-reporter
+    -> kazdych 30 dni -> monthly digest
+    -> insufficient data (< 3 runy): preskocit tiše
 17. Report + Calendar + Notification:
     a) save_agent_run_report(agentName, sportName, stats, highlights, errors) -- POVINNE
     a2) agent-schedule-manager upsert (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt)
