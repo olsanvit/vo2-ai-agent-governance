@@ -650,13 +650,14 @@ Outputs: Google Sheets export s metadaty (timestamp, source, agent, run ID, datu
 Limitations: pouze fallback — pokud DB dostupná, vždy preferovat přímý zápis do DB
 
 ## next-run-calendar-scheduler
-Task types: plánování příštího runu v Google Calendar, AIZapisy
-Description: Vytváří nebo aktualizuje Calendar event pro příští scheduled run v AIZapisy.
+Task types: plánování příštího runu v Google Calendar, AI Managers
+Description: Vytváří Calendar event pro příští scheduled run v kalendáři "AI Managers".
+  Před vytvořením: list_events → smazat starý event se stejným AgentName → vytvořit nový.
   Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
-  Při úspěšném runu přidá suffix " OK" + počet zpracovaných zápasů, při selhání " X".
-Inputs: agent name, výsledek runu, počet zpracovaných zápasů, čas příštího scheduled runu
-Outputs: Calendar event (create nebo update), potvrzení
-Limitations: nemaže historické události — pouze archivuje duplicitní budoucí
+  Při úspěšném runu suffix " ✅" + počet zpracovaných zápasů, při selhání " ❌".
+Inputs: agent name, výsledek runu, počet zpracovaných zápasů, čas příštího scheduled runu (NextRunAt)
+Outputs: Calendar event vytvořen v "AI Managers", potvrzení
+Limitations: pouze kalendář "AI Managers"; nemaže historické eventy (jen budoucí duplicity)
 
 ## time-budget-governor
 Task types: time budget, graceful stop, run timeout

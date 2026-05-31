@@ -723,18 +723,19 @@ Limitations: safe mode pouze non-destructive fixes; aggressive vyžaduje potvrze
 -- J. SCHEDULING & CALENDAR (6) --------------------------------
 
 ## next-run-calendar-scheduler
-Task types: plánování příštího runu v Google Calendar, AIZapisy
-Description: Vytváří nebo aktualizuje Calendar event pro příští scheduled run v AIZapisy.
+Task types: plánování příštího runu v Google Calendar, AI Catalogs
+Description: Vytváří Calendar event pro příští scheduled run v kalendáři "AI Catalogs".
+  Před vytvořením: list_events → smazat starý event se stejným AgentName → vytvořit nový.
   Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
-  Při úspěšném runu přidá suffix " OK", při selhání " X".
-Inputs: agent name, výsledek runu, čas příštího scheduled runu
-Outputs: Calendar event (create nebo update), potvrzení
-Limitations: nemaže historické události — pouze archivuje duplicitní budoucí
+  Při úspěšném runu suffix " ✅", při selhání " ❌".
+Inputs: agent name, výsledek runu, čas příštího scheduled runu (NextRunAt)
+Outputs: Calendar event vytvořen v "AI Catalogs", potvrzení
+Limitations: pouze kalendář "AI Catalogs"; nemaže historické eventy (jen budoucí duplicity)
 
 ## run-interval-calculator
 Task types: interval výpočtu, freshness SLA, next run time
 Description: Vypočítává optimální interval dalšího runu na základě freshness SLA
-  tabulek (Score 90-100 = max 24h, 70-89 = max 48h). Vrací recommended next run time.
+  tabulek (Score >= 90.000 = max 24h, >= 70.000 = max 48h). Vrací recommended next run time.
 Inputs: AgentName, tabulky s Score, posledního run time
 Outputs: recommended next run timestamp, SLA compliance status per tabulka
 Limitations: nezohledňuje external events (publishing cycle, game day)
@@ -764,11 +765,12 @@ Outputs: Prague TZ datetime, UTC datetime, DST flag
 Limitations: primárně pro Europe/Prague; multi-timezone vyžaduje custom config
 
 ## calendar-conflict-resolver
-Task types: Calendar konflikty, duplicate events, AIZapisy cleanup
-Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta.
-  Zajišťuje právě JEDNU budoucí událost. Archivuje starší duplicity.
-Inputs: AgentName, Calendar ID (AIZapisy)
-Outputs: seznam duplicit, archivované eventy, canonical next-run event
+Task types: Calendar konflikty, duplicate events, AI Catalogs cleanup
+Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta
+  v kalendáři "AI Catalogs". list_events → smazat starší duplicitní budoucí eventy.
+  Zajišťuje právě JEDNU budoucí událost per agent.
+Inputs: AgentName, calendar="AI Catalogs"
+Outputs: seznam duplicit, smazané eventy, canonical next-run event
 Limitations: neupravuje eventy jiných agentů; pouze pro daného agenta
 
 -- K. IMAGE & MEDIA (6) ----------------------------------------
