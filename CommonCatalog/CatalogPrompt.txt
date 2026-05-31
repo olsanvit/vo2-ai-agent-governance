@@ -192,6 +192,21 @@ Required runtime sequence:
    prompt_upgrade_required | prompt_upgrade_blocked | prompt_upgrade_applied
 7. if agent version == MCP_VERSION: continue without Google Drive startup version lookup
 8. if agent version != MCP_VERSION: read canonical Google Drive CatalogPrompt and perform selfUpdate
+   selfUpdate flow:
+   a) search_files(query="CatalogPrompt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+   b) read_file_content(fileId=<found id>) → extract PromptVersion from body
+   c) verify: canonical PromptVersion >= agent version (no downgrade)
+   d) activate: apply fetched prompt as active runtime prompt
+   e) record: prompt_status = prompt_upgrade_applied, log in highlights[]
+   f) ntfy (topic: agent-runs): "{AgentName} 🔄 prompt upgradován {old} → {new}"
+
+   prompt_upgrade_blocked fallback (Drive nedostupný nebo fetch selhal):
+   → pokračovat s aktuální verzí promptu (nesnižovat verzi)
+   → prompt_status = prompt_upgrade_blocked
+   → log warning: "selfUpdate blocked — pokračuji s verzí {agentVersion}"
+   → zahrnout do errors[], ale run NEBLOKOVAT (agent může pokračovat se starou verzí)
+   → send ntfy (topic: agent-errors): "{AgentName} ⚠️ prompt upgrade blocked"
+
 9. after successful selfUpdate, continue in same governed run path
 10. after baseline existence checks, continue to Baseline Entity Validation Before Views
 11. načíst CatalogPromptSkills.txt z Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ) → skill registry
@@ -282,7 +297,9 @@ Co dělat při prvním runu (v tomto pořadí):
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit score sloupce (numeric(6,3)) ve všech existujících tabulkách
 4. Vytvořit prázdné Drive soubory pokud neexistují:
-   create_file({AgentName}.txt v Catalogs, {AgentName}_names.txt v Names, {AgentName}_urls.txt v Urls)
+   create_file(title="{AgentName}.txt",       parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent="")
+   create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
+   create_file(title="{AgentName}_urls.txt",  parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT agresivní enrichment — pouze schema init a základní discovery (max 10 entit)
 7. Uložit run report s runMode = "first_run", success = schema_ready (ne fully_successful)
@@ -1204,41 +1221,53 @@ Pravidla:
 
 ## Google Calendar Integration — 8.4.0
 
+Kalendář: "AI Catalogs" (použít calendar ID kalendáře s tímto názvem)
+
+Deduplikace před vytvořením eventu:
+1. list_events(calendarName="AI Catalogs", query="{AgentName}", timeMin=now())
+2. Pokud existuje budoucí event se stejným AgentName v title → smazat starý (delete_event), pak vytvořit nový
+3. Pokud žádný neexistuje → vytvořit přímo
+
 Events to create automatically:
 
 1. Next scheduled run (create at end of every run):
    - title: "{AgentName} — scheduled run"
-   - start: next expected run time, duration: 30 minutes
+   - calendar: "AI Catalogs"
+   - start: next expected run time (dle AgentSchedules.NextRunAt), duration: 30 minutes
 
 2. Maintenance window (when backfill queue > 500 records):
    - title: "{AgentName} 🔧 maintenance — {TableName}"
+   - calendar: "AI Catalogs"
 
 3. Manual review deadline (when ManualReviewQueue > 10 items):
    - title: "{AgentName} 👁 review queue — {count} položek"
+   - calendar: "AI Catalogs"
    - start: tomorrow 10:00 Prague time
 
 4. Catch-up run (when missed run detected):
    - title: "{AgentName} ⏰ catch-up run"
+   - calendar: "AI Catalogs"
    - start: now + 5 minutes
 
 5. Prompt upgrade reminder:
    - title: "{AgentName} 🔄 prompt upgrade available"
+   - calendar: "AI Catalogs"
 
 Calendar rules:
-- check for duplicate event before creating (search by title + date)
+- vždy použít calendar "AI Catalogs" — nikdy jiný
+- deduplikuj před vytvořením (list_events → smazat starý → vytvořit nový)
 - do not create events when db_status == db_unreachable
-- calendar failures must not abort run — log and continue
+- calendar failures must not abort run — log capability_missing("calendar"), continue
 - delete outdated future run events when creating new one for same agent
 
 ## AIZapisy — naplánovaný běh — 8.4.0
 
 Pravidla:
-- Vždy existuje PRÁVĚ JEDNA budoucí událost pro tento Agent
-- Název události = hodnota AgentName (např. "SportAgent_Football")
-- Při úspěšném běhu: suffix " OK" na konci názvu
-- Při neúspěšném běhu: suffix " X" (volitelně)
-- Po každém běhu aktualizovat Doplňkové pokyny na aktuální runtime prompt
-- Duplicitní budoucí události smazat / archivovat
+- Vždy existuje PRÁVĚ JEDNA budoucí událost pro tento Agent v kalendáři "AI Catalogs"
+- Název události = hodnota AgentName (např. "Catalog of People, Personalities...")
+- Při úspěšném běhu: suffix " ✅" na konci názvu
+- Při neúspěšném běhu: suffix " ❌" na konci názvu
+- Duplicitní budoucí události smazat před vytvořením nové
 
 ## Google Sheets Export Fallback — 8.4.0
 

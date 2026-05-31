@@ -187,7 +187,15 @@ Povinné kroky v tomto pořadí:
 5. Detekovat agent version z runtime prompt header (PromptVersion)
 6. Klasifikovat prompt_status:
    - version_match
-   - version_mismatch (-> selfUpdate z Drive)
+   - version_mismatch (-> selfUpdate z Drive):
+     a) search_files(query="ManagerPrompt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+     b) read_file_content(fileId=<found id>) → extract PromptVersion z body
+     c) verify: canonical PromptVersion >= agent version (no downgrade)
+     d) activate: apply fetched prompt as active runtime prompt
+     e) prompt_status = prompt_upgrade_applied, log + ntfy "🔄 prompt upgradován {old} → {new}"
+     prompt_upgrade_blocked fallback (Drive nedostupný nebo fetch selhal):
+     → pokračovat s aktuální verzí, prompt_status = prompt_upgrade_blocked
+     → log warning, run NEBLOKOVAT, send ntfy "⚠️ prompt upgrade blocked"
    - prompt_upgrade_applied
 7. Zkontrolovat existenci alespon 25 baseline entit
 8. Nacist ManagerPromptSkills.txt z Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ) → skill registry
@@ -2245,48 +2253,71 @@ Cyklistika: bicyclist | Obecne: sports_medal
 
 ## Google Calendar Integration -- Sports -- 8.4.0
 
-Udalosti vytvorit automaticky:
+Kalendář: "AI Managers" (použít calendar ID kalendáře s tímto názvem)
 
-1. Matchday processing reminder (po standings update):
+Deduplikace před vytvořením eventu:
+1. list_events(calendarName="AI Managers", query="{AgentName}", timeMin=now())
+2. Pokud existuje budoucí event se stejným AgentName v title → smazat starý (delete_event), pak vytvořit nový
+3. Pokud žádný neexistuje → vytvořit přímo
+
+Udalosti vytvorit automaticky (vždy do kalendáře "AI Managers"):
+
+1. Next scheduled run (create at end of every run):
+   - title: "{AgentName} — scheduled run"
+   - calendar: "AI Managers"
+   - start: next expected run time (dle AgentSchedules.NextRunAt), duration: 30 minutes
+
+2. Matchday processing reminder (po standings update):
    - title: "{Competition} kolo {N} -- zpracovat vysledky"
+   - calendar: "AI Managers"
    - start: matchday date + 1 den, 07:00 Prague
    - duration: 30 minut
    - description: "Zpracovat vysledky kola {N}: {matchCount} zapasu. Zdroj: {sourceUrl}"
 
-2. Season start:
+3. Season start:
    - title: "{Competition} start sezony {seasonName}"
+   - calendar: "AI Managers"
    - start: first match date - 1 den
    - description: "Inicializovat: {teamCount} tymu, {matchCount} zapasu. Transfer window closes: {date}"
 
-3. Season end:
+4. Season end:
    - title: "{Competition} konec sezony {seasonName}"
+   - calendar: "AI Managers"
    - start: last match date + 1 den
    - description: "Uzavrit sezonu. Vitez: TBD. Promoted: TBD. Relegated: TBD."
 
-4. Transfer window close:
+5. Transfer window close:
    - title: "{Competition} prestupni okno zavira"
+   - calendar: "AI Managers"
    - start: window close date, 23:00
    - description: "Po tomto datu neaktualizovat Squads bez manuálniho potvrzeni."
 
-5. International break:
+6. International break:
    - title: "FIFA/UEFA prestávka -- {competition} nehraje"
+   - calendar: "AI Managers"
    - start: break start date, end: break end date
    - description: "{nDays} dni bez zapasu. Vyuzit pro backfill a maintenance."
 
-6. Player suspension:
+7. Player suspension:
    - title: "{PlayerName} -- trest ({competition})"
+   - calendar: "AI Managers"
    - start: first suspended match date (all-day)
    - description: "Automaticky trest za {yellowCount}. zlutou kartu. Tym: {teamName}"
+
+Calendar rules:
+- vždy použít calendar "AI Managers" — nikdy jiný
+- deduplikuj před vytvořením (list_events → smazat starý → vytvořit nový)
+- do not create events when db_status == db_unreachable
+- calendar failures must not abort run — log capability_missing("calendar"), continue
 
 ## Kalendar AIZapisy -- naplanovany beh
 
 Pravidla:
-- Vzdy existuje PRAVE JEDNA budouci udalost pro tento Agent
-- Nazev udalosti = hodnota Agent
-- Pri uspesnem behu: suffix " OK" na konci nazvu
-- Pri neuspesnem behu: suffix " X" (volitelne)
-- Po kazdem behu aktualizovat Doplnkove pokyny na aktualni runtime prompt
-- Duplicitni budouci udalosti smazat / archivovat
+- Vzdy existuje PRAVE JEDNA budouci udalost pro tento Agent v kalendári "AI Managers"
+- Nazev udalosti = hodnota AgentName (napr. "Football_PremierLeague")
+- Pri uspesnem behu: suffix " ✅" na konci nazvu
+- Pri neuspesnem behu: suffix " ❌" na konci nazvu
+- Duplicitni budouci udalosti smazat pred vytvorenim nove
 
 =============================================================
 CHAPTER 17: COMPLIANCE & SAFETY
