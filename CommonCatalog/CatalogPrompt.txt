@@ -26,12 +26,12 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
 5.  NAMES -> nacist {AgentName}_names.txt z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
-    L neexistuje -> preskocit tiše
-    FORMAT: jeden nazev na radek, zadne hlavicky ani metadata
+    L neexistuje -> vytvorit prazdny soubor (parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
+    FORMAT: "EntityName | coverage=X% | ..." — plni OPERATOR, agent jen aktualizuje coverage
 6.  URLS -> nacist {AgentName}_urls.txt z Drive /Prompts/Urls/
     Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
-    L neexistuje -> preskocit tiše
-    FORMAT: jedna URL na radek, zadne hlavicky ani metadata
+    L neexistuje -> vytvorit prazdny soubor (parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+    FORMAT: "URL | coverage=X% | ..." — plni OPERATOR, agent jen aktualizuje coverage
     BACKFILL (ihned po 4+5+6): NULL hodnoty first, pak nejstarsi dle UpdatedAt;
     sloupce mohou byt prepsat novou hodnotou (nove data maji prednost)
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
@@ -884,41 +884,46 @@ Catalogs/:
 - Pokud soubor neexistuje: přeskočit tiše, vytvořit po prvním úspěšném běhu
 
 Names/:
-- Agent načte /Prompts/Names/{AgentName}_names.txt při startu
-- Soubor obsahuje seznam konkrétních názvů entit k prioritnímu vyhledání
-- Formát: POUZE jeden název na řádek, UTF-8 — ŽÁDNÉ hlavičky, metadata, sekce ani komentáře
-  Správně:   Anna
-             Jakub
-             John
-  Špatně:    Purpose: priority queue
-             - Anna | Priority=high | Reason=...
+- Soubor plní OPERÁTOR — agent nesmí přidávat nové řádky ani mazat existující
+- Každý řádek = jedna entita zadaná operátorem k prioritnímu zpracování
+- Agent načte soubor při startu a zpracuje každou entitu jako Score 90+ prioritu
+- Formát řádku (operátor píše jen název, agent doplňuje coverage):
+    EntityName | coverage=0%
+  Po zpracování agent aktualizuje coverage procentuálně (kolik dat bylo nalezeno):
+    Anna       | coverage=85% | tables=5/8 | lastProcessed=2026-05-31
+    Jakub      | coverage=60% | tables=4/8 | lastProcessed=2026-05-31
+    John       | coverage=100% | tables=8/8 | lastProcessed=2026-05-31
+- Coverage = procentuální odhad pokrytí dat pro danou entitu napříč spravovanými tabulkami
+- Pokud soubor neexistuje: agent ho vytvoří prázdný (bez obsahu):
+    create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
+- Aktualizace coverage po každém runu:
+    update_file_content(fileId=<id>, textContent=<same lines with updated coverage>)
+- NEMAŽ řádky — i zpracovaná entita zůstává v souboru (operátor ji odebere sám)
 - Prázdný soubor = žádné prioritní names → pokračovat standardní discovery
-- Nalezené entity z Names souboru zpracovat jako Score 90+ prioritu
-- Při vytváření: create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent=<names>)
-- Při aktualizaci: update_file_content(fileId=<id>, textContent=<updated names>)
-- Po zpracování: odmazat zpracované položky ze souboru (update_file_content s prázdným nebo zkráceným obsahem)
 
 Urls/:
-- Agent načte /Prompts/Urls/{AgentName}_urls.txt při startu
-- Soubor obsahuje seznam URL, které má agent projít pro sběr dat
-- Formát: POUZE jedna URL na řádek, UTF-8 — ŽÁDNÉ hlavičky, metadata, sekce ani komentáře
-  Správně:   https://www.fda.gov/
-             https://www.who.int/
-  Špatně:    Purpose: seed URLs
-             - https://www.fda.gov/ | FDA | confirmed
-- Každou URL projít max 1× za run (dedup pomocí hash URL)
-- URL z Urls souboru zpracovat před standardním web scrapingem (vyšší priorita)
+- Soubor plní OPERÁTOR — agent nesmí přidávat nové řádky ani mazat existující
+- Každý řádek = jedna URL zadaná operátorem ke zpracování před standardním scrapingem
+- Formát řádku (operátor píše jen URL, agent doplňuje coverage):
+    https://www.fda.gov/
+  Po zpracování agent aktualizuje coverage — kolik dat z URL bylo extrahováno:
+    https://www.fda.gov/      | coverage=70% | entities=12 | lastProcessed=2026-05-31
+    https://www.who.int/      | coverage=45% | entities=7  | lastProcessed=2026-05-31
+- Coverage = procentuální odhad pokrytí dat nalezených na dané URL
+- Pokud soubor neexistuje: agent ho vytvoří prázdný:
+    create_file(title="{AgentName}_urls.txt", parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
+- Aktualizace coverage po každém runu:
+    update_file_content(fileId=<id>, textContent=<same lines with updated coverage>)
+- NEMAŽ řádky — i zpracovaná URL zůstává v souboru (operátor ji odebere sám)
 - Rate limiting platí stejně jako pro ostatní zdroje (1 req/s scraping)
 - Pokud URL vrátí 4xx/5xx: zaznamenat do errors[], přeskočit, nepřestat
-- Při vytváření: create_file(title="{AgentName}_urls.txt", parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent=<urls>)
-- Při aktualizaci: update_file_content(fileId=<id>, textContent=<updated urls>)
-- Po zpracování: odmazat zpracované URL ze souboru (update_file_content)
 
 Pravidla pro Names a Urls soubory:
 - Číst vždy na začátku runu (po DB ping, před discovery)
-- Pokud soubor neexistuje: přeskočit tiše (ne chyba)
-- Pokud soubor existuje ale je prázdný: přeskočit tiše
+- Pokud soubor neexistuje: vytvořit prázdný (ne chyba, ne přeskočit)
+- Pokud soubor existuje ale je prázdný: přeskočit tiše (žádné priority)
 - Maximálně 500 položek na soubor; větší soubory zpracuj po 500 a ulož cursor
+- Agent NIKDY nepřidává nové řádky — pouze aktualizuje coverage na existujících
 - Výsledky z Names/Urls vždy zaznamenat v highlights[] běhu
 - Katalog Drive aktualizovat po zpracování Names/Urls
 
