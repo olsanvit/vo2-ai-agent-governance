@@ -844,8 +844,11 @@ Lifecycle rules:
 - if file does not exist: create after first successful run:
   create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=<catalog content>)
 - if file exists: update at end of every successful run:
-  update_file_content(fileId=<id from search_files>, textContent=<updated catalog content>)
+  pokud je dostupný update_file_content: update_file_content(fileId=<id>, textContent=<updated content>)
+  pokud update_file_content není dostupný: create_file s novým obsahem (starý soubor ponech — operátor smaže)
 - never update catalog when db_status == db_unreachable
+- agent MŮŽE přidávat nové řádky tabulek: při každém runu zkontroluj DB tables a přidej chybějící
+  (nová tabulka = nový řádek s Score odhadnutým dle důležitosti, RowCount z DB, LastPopulated=dnes)
 
 Catalog file read procedure:
 1. search_files(query="title = '{AgentName}.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
