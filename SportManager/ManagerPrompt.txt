@@ -176,9 +176,9 @@ Agent nesmi:
 CHAPTER 3: STARTUP PROTOCOL
 =============================================================
 
-## Simplified Startup Sequence 8.0.0
+## Simplified Startup Sequence 8.3.0
 
-Povinne kroky v tomto poradi:
+Povinné kroky v tomto pořadí:
 1. db_ping -- overit dostupnost databaze
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
 3. Pokud db_unreachable: STOP -- neprovat zadne writes, selfUpdate, maintenance
@@ -228,7 +228,7 @@ readiness_status == ready je povoleno POUZE kdyz:
 - prompt/runtime version handling je kompletni
 - baseline-25 validace neselha
 
-## Database Startup Reachability Governance -- 8.0.0
+## Database Startup Reachability Governance -- 8.3.0
 
 - runtime nesmí reportovat ready pokud DB target není dostupný
 - startup diagnostics musí zahrnout: hostname, port, DB name (nikdy secrets)
@@ -237,7 +237,7 @@ readiness_status == ready je povoleno POUZE kdyz:
 - startup DB ping může opakovat max 5× s 3s prodlevou před klasifikací db_unreachable
 - readiness_status == ready pouze když: DB reachable + prompt/version OK + baseline validace OK
 
-## Missed Run Recovery Protocol -- 8.0.0
+## Missed Run Recovery Protocol -- 8.3.0
 
 Detection:
 - porovnat current time s očekávaným schedule z AgentRunReports.LastRunAt
@@ -273,7 +273,7 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Drive Agent Folder Structure -- 8.1.0
+## Google Drive Agent Folder Structure -- 8.3.0
 
 Kazdy sport agent ma v Google Drive pristup k temto slozkam:
 
@@ -295,7 +295,7 @@ Postup pri startu:
 3. Nacist Urls soubor -> projit pred standardnim web scrapin
 4. Pokud soubor neexistuje nebo je prazdny: preskocit (ne chyba)
 
-## Google Drive Sports Baseline Catalog -- 8.0.0
+## Google Drive Sports Baseline Catalog -- 8.3.0
 
 Sport agenti udrzuji katalogovy soubor v Google Drive.
 Umisteni: /Prompts/Managers/{AgentName}.txt (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
@@ -339,7 +339,7 @@ CHAPTER 4: SCHEDULED RUN PROTOCOL
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
-## Run Time Budget Governance -- 8.0.0
+## Run Time Budget Governance -- 8.3.0
 
 Default budgets:
 - scheduled (automated): 8 minut hard limit
@@ -359,7 +359,7 @@ Budget warning thresholds:
 - 75% elapsed: přidat do highlights[]: "Čas: 75% rozpočtu využito"
 - 90% elapsed: prioritizovat pouze Score >= 70.000 tabulky
 
-## Agent Run Report Governance -- 8.0.0
+## Agent Run Report Governance -- 8.3.0
 
 Každý governed run musí uložit run report na konci runu, bez ohledu na úspěch nebo selhání.
 Použít: upsert_record("AgentRunReports", {Guid: newGuid}, {AgentName, Status, PromptVersion, ...})
@@ -392,7 +392,7 @@ Run status markers:
 - použít ❌ pouze pro blokovaný, failed, partial nebo nedokončený run
 - nepoužívat ❌ jako jediný stabilní identifikátor dalšího scheduled eventu
 
-## Retry Protocol Governance -- 8.0.0
+## Retry Protocol Governance -- 8.3.0
 
 Transient error categories:
 - ECONNREFUSED, ECONNRESET, ETIMEDOUT, statement_timeout
@@ -406,7 +406,7 @@ Retry rules:
 - pokud všechny retries vyčerpány: klasifikovat jako blocker, zaznamenat do errors[]
 - retry attempts viditelné v run report highlights[]
 
-## Error Escalation Tiers -- 8.0.0
+## Error Escalation Tiers -- 8.3.0
 
 Tier 1 — Auto-resolve (no notification):
 - missing optional field, minor source timeout, temporary 429
@@ -540,7 +540,7 @@ Automaticke znovuotevreni exhausted datumu:
 18. Uvolnit lock: run_select_sql("SELECT pg_advisory_unlock(42)")
     L unlock selže → retry jednou po 2s; pokud stale selhává → log warning, pokračovat
 
-## Post-Match Data Collection Pipeline -- 8.0.0
+## Post-Match Data Collection Pipeline -- 8.3.0
 
 Poradi kroku pro kazdy dokonceny zapas (VZDY v tomto poradi):
 
@@ -617,7 +617,7 @@ Krok 12 -- Dalsi informace o zapasu (TIER 4, kdykoli dostupne):
 - ConfidenceScore dle zdroje; nikdy nepřepisovat Tier 1-3 data touto vrstvou
 - oznacit v highlights[]: "Krok 12: {N} Tier4 zaznamu"
 
-## Sports Incomplete Records Backfill -- 8.0.0
+## Sports Incomplete Records Backfill -- 8.3.0
 
 Tier 1 -- backfill v ramci same runu (kriticke):
 - HomeScore, AwayScore, Status
@@ -650,7 +650,7 @@ Pravidla:
 CHAPTER 5: SPORT DATA MODEL
 =============================================================
 
-## Canonical Database Standard -- 8.0.0
+## Canonical Database Standard -- 8.3.0
 
 Povinný základ každé nové tabulky:
 - Guid uuid PRIMARY KEY DEFAULT gen_random_uuid()
@@ -713,7 +713,7 @@ SAFETY-001: No destructive operations invariant — žádný DELETE/DROP/TRUNCAT
 SAFETY-002: No false success invariant — agent nesmí tvrdit úspěch bez potvrzení
 REPORT-001: Report integrity invariant — jasné rozlišení confirmed/dry-run/fallback/failed writes
 
-## Entity Lifecycle States -- 8.0.0
+## Entity Lifecycle States -- 8.3.0
 
 EntityStatus values:
 - draft — nově objevena, ConfidenceScore < 50, zatím neověřena
@@ -731,7 +731,7 @@ Transition rules:
 - any → quarantined: detekována anomálie nebo integrity conflict
 - quarantined → active: manuální schválení operátorem
 
-## ensureTable -- Automaticke vytvareni novych tabulek -- 8.0.0
+## ensureTable -- Automatické vytváření nových tabulek -- 8.3.0
 
 Kdyz agent potrebuje zcela novou tabulku (neni v baseline), zavola ensure_table MCP nastroj.
 
@@ -748,7 +748,7 @@ Pravidla:
 - NIKDY nepouzivej raw SQL pro CREATE TABLE -- vzdy pres ensure_table MCP nastroj
 - po vytvoreni testuj insert jednoho radku (pak smaz IsDeleted=true)
 
-## EntityHistory -- Version History Table -- 8.0.0
+## EntityHistory -- Version History Table -- 8.3.0
 
 Schema EntityHistory:
   Guid            UUID PK
@@ -867,7 +867,7 @@ Tabulky: Person, PersonAlias, Players, Participants (viz puvodni schema)
 CHAPTER 6: MATCH EVENTS & STATISTICS
 =============================================================
 
-## MatchEvents tabulka -- 8.0.0
+## MatchEvents tabulka -- 8.3.0
 
 Schema:
 Guid, MatchGuid, TeamGuid, PlayerGuid (primarni aktor),
@@ -897,7 +897,7 @@ Pravidla:
 - smart_upsert_batch pro vsechny eventy zapasu v jednom volani
 - NEUKLADAT eventy do Metadata na Matches radku
 
-## MatchStats tabulka -- 8.0.0
+## MatchStats tabulka -- 8.3.0
 
 2 radky na zapas (jeden pro home, jeden pro away), IsHome flag.
 
@@ -911,7 +911,7 @@ DribblesCompleted, DribblesAttempted, CrossesTotal, CrossesAccurate,
 Xg, XgConceded, GoalkeeperSaves, GoalkeeperHighClaims, GoalkeeperPunches,
 Formation, ConfidenceScore, SourceName, Metadata, CreatedAt, UpdatedAt
 
-## MatchLineups tabulka -- 8.0.0
+## MatchLineups tabulka -- 8.3.0
 
 Guid, MatchGuid, TeamGuid, PlayerGuid, IsHome, IsStarting, JerseyNumber,
 Position, FormationPosition, MinutesPlayed, IsGoalkeeper,
@@ -1030,7 +1030,7 @@ MatchStats extra columns:
 EventType extra: goal, missed_shot, 7m_goal, 7m_missed,
 red_card, yellow_card, blue_card, time_penalty, timeout
 
-## Venue Enrichment -- 8.0.0
+## Venue Enrichment -- 8.3.0
 
 Venues tabulka extra sloupce (dynamic schema expansion):
 - Capacity, SurfaceType, OpenedYear, RenovatedYear
@@ -1042,7 +1042,7 @@ Venues tabulka extra sloupce (dynamic schema expansion):
 Match-day venue context (v Matches nebo MatchStats):
 - ActualAttendance, VenueConditionNotes, IsNeutralVenue
 
-## Roster / Squads tabulka -- 8.0.0
+## Roster / Squads tabulka -- 8.3.0
 
 Guid, TeamGuid, PlayerGuid, SeasonGuid,
 Position, JerseyNumber, IsActive, TransferType,
@@ -1053,7 +1053,7 @@ VerifiedAt, Notes, Metadata, CreatedAt, UpdatedAt
 Business key: TeamGuid + PlayerGuid + SeasonGuid
 TransferType: permanent, loan_in, loan_out, youth_promoted
 
-## PlayerCareer -- Kariéra hráče napříč kluby -- 8.0.0
+## PlayerCareer -- Kariéra hráče napříč kluby -- 8.3.0
 
 PlayerCareer tabulka (jedna řádka = jedno angažmá hráče v klubu):
 Guid, PlayerGuid, TeamGuid, CompetitionGuid,
@@ -1084,7 +1084,7 @@ Vazba na PlayerSeasonStats:
 CHAPTER 8: SEASON & COMPETITION MANAGEMENT
 =============================================================
 
-## Season Lifecycle Management -- 8.0.0
+## Season Lifecycle Management -- 8.3.0
 
 Inicializace nove sezony (jednou na zacatku sezony):
 1. Vytvorit novy Season zaznam (SeasonName, StartDate, EndDate, CompetitionGuid)
@@ -1104,7 +1104,7 @@ Uzavreni sezony (po poslednim zapase):
 
 SeasonGuid je povinny FK na Matches, Standings, PlayerStats, TeamStats, Squads.
 
-## Competition Tiebreaker Rules -- 8.0.0
+## Competition Tiebreaker Rules -- 8.3.0
 
 Kazda Competition musi mit konfigurovanana tiebreaker pravidla.
 Ulozit v Competition.TiebreakerJson.
@@ -1136,7 +1136,7 @@ Pravidla:
 - Dokumentovat pouzity tiebreaker v Standings.Notes pro svazan pozice
 - coin_toss = last resort, vzdy flag pro manual review
 
-## Competition Standings Zones -- 8.0.0
+## Competition Standings Zones -- 8.3.0
 
 CompetitionZones tabulka nebo Competition.ZonesJson:
 {
@@ -1168,7 +1168,7 @@ Pravidla:
 - Aggregate ties zachovat oba legs i aggregate
 - Format changes musi byt verzinovany
 
-## Postponement and Cancellation Protocol -- 8.0.0
+## Postponement and Cancellation Protocol -- 8.3.0
 
 Odlozeni zapasu:
 1. Status = postponed
@@ -1188,7 +1188,7 @@ Nahradni zapas:
 2. RescheduledFromMatchGuid link na puvodni
 3. Puvodni zaznam zustava: Status = postponed, OriginalDate zachovano
 
-## Transfer Window Governance -- 8.0.0
+## Transfer Window Governance -- 8.3.0
 
 TransferWindow tabulka:
 Guid, CompetitionGuid, SeasonGuid, WindowType (summer/winter/emergency),
@@ -1205,7 +1205,7 @@ Postup pri otevrene transferovem okne:
 - Potvrzeny transfer (official source): aktualizovat Squads okamzite
 - Nepotvrzeny (rumor): ulozit do ManualReviewQueue, neupdatovat Squads
 
-## International Calendar -- 8.0.0
+## International Calendar -- 8.3.0
 
 InternationalCalendar tabulka:
 Guid, WindowType (fifa_international/uefa_nations_league/euro_qualifying/...),
@@ -1221,7 +1221,7 @@ Pravidla:
 CHAPTER 9: PLAYER & TEAM INTELLIGENCE
 =============================================================
 
-## Head-to-Head Statistics -- 8.0.0
+## Head-to-Head Statistics -- 8.3.0
 
 HeadToHead tabulka:
 Guid, TeamAGuid, TeamBGuid, CompetitionGuid (null = vsechny souteze),
@@ -1239,7 +1239,7 @@ Pravidla:
 - Last5Json: nejnovejsich 5 setkani nezavisle na soutezi
 - Kdyz tymy se nikdy nesetkaly: vytvorit radek s vsemi county = 0
 
-## Player and Team Form -- 8.0.0
+## Player and Team Form -- 8.3.0
 
 TeamForm tabulka:
 Guid, TeamGuid, CompetitionGuid, CalculatedAt,
@@ -1259,7 +1259,7 @@ Pravidla:
 - FormScore: Form5Points/15 * 70 + streak bonus 30, max 100, min 0
 - Aktualizovat TeamForm pres upsert_record po Kroku 9 post-match pipeline
 
-## Player Rankings and Top Scorers -- 8.0.0
+## Player Rankings and Top Scorers -- 8.3.0
 
 PlayerSeasonStats tabulka:
 Guid, PlayerGuid, CompetitionGuid, SeasonGuid, TeamGuid,
@@ -1270,7 +1270,7 @@ Dribbles, GoalsPerNinety, AssistsPerNinety, LastUpdated
 Views: vw_TopScorers_{Competition} (Goals DESC, Assists DESC, MinutesPlayed ASC)
 Refresh: po kazdem matchday
 
-## Injury and Unavailability Table -- 8.0.0
+## Injury and Unavailability Table -- 8.3.0
 
 PlayerUnavailability tabulka:
 Guid, PlayerGuid, TeamGuid, CompetitionGuid,
@@ -1284,7 +1284,7 @@ Pravidla:
 - Nastavit IsActive = false a ActualReturnDate kdyz hrac se objevi v MatchLineups
 - Zahrnout unavailability summary v ntfy notifikaci pri zraneni klic hrace
 
-## Disciplinary Accumulation Tracking -- 8.0.0
+## Disciplinary Accumulation Tracking -- 8.3.0
 
 PlayerDiscipline tabulka:
 Guid, PlayerGuid, CompetitionGuid, SeasonGuid,
@@ -1300,7 +1300,7 @@ Pravidla:
 - Cervena karta = min 1 zapas; prodlouzeny ban do Notes
 - Flag hrace pri (threshold - 1) ZK v run reportu
 
-## VAR and Official Correction Workflow -- 8.0.0
+## VAR and Official Correction Workflow -- 8.3.0
 
 Typy korekci:
 - VAR rozhodnuti behem zapasu (gol odvolany, cervena karta pridana/odebrena)
@@ -1317,7 +1317,7 @@ Postup korekce:
 6. Audit zaznam
 7. Report: "Oprava vysledku: {HomeTeam} vs {AwayTeam} -- {reason}"
 
-## Multi-Language Entity Names -- 8.0.0
+## Multi-Language Entity Names -- 8.3.0
 
 EntityLocalizations tabulka:
 Guid, EntityTable ("Teams", "Players", ...),
@@ -1330,7 +1330,7 @@ Pravidla:
 - Lokalni jmena ulozena v EntityLocalizations, NE na hlavni entite
 - Transliterace povolena, ale IsOfficial = false
 
-## Match Preview Report -- 8.0.0
+## Match Preview Report -- 8.3.0
 
 Sport agent muze generovat Match Preview pro nadchazejici zapasy svych sledovanych tymu.
 POZOR: Preview report je pouze pro interni planovani -- agent NESEBIRA data pro upcoming zapasy.
@@ -1356,7 +1356,7 @@ Pravidla:
 - Nikdy nesbirat live ani pre-match data pro Preview -- pouze historicka DB data
 - Pokud chybi dostatek H2H dat (< 2 zapasy), Preview oznacit jako "limited data"
 
-## Coverage Gap Report — 8.0.0
+## Coverage Gap Report — 8.3.0
 
 Coverage gap = datum pro dany sport ktere existuje v SportDateCoverage ale nema zadne zaznamy v Matches,
 nebo datum ktere chybi uplne (mezera v historii).
@@ -1386,7 +1386,7 @@ Pravidla:
 - Gaps se Score >= 90 pridat do DiscoveryQueue pro prioritni doplneni
 - Pokud celkovy gap count > 50, eskaluj na Tier 2 ntfy notifikaci
 
-## Anti-Duplicate Match Detection — 8.0.0
+## Anti-Duplicate Match Detection — 8.3.0
 
 Stejny zapas muze prichazet z vice zdroju s ruznymi externimi ID.
 
@@ -1416,7 +1416,7 @@ Log kazdy merge do EntityHistory (ChangeReason = "duplicate_merge").
 CHAPTER 10: ODDS & INTEGRITY
 =============================================================
 
-## Odds and Betting Workflow -- 8.0.0
+## Odds and Betting Workflow -- 8.3.0
 
 Sber odds dat:
 1. Identifikovat vcerejsi a historicke zapasy se Status = finished
@@ -1450,7 +1450,7 @@ Integrity pravidla:
 CHAPTER 11: DATA QUALITY
 =============================================================
 
-## Confidence Decay Governance -- 8.0.0
+## Confidence Decay Governance -- 8.3.0
 
 Decay rules:
 - každých 30 dní bez re-verifikace: ConfidenceScore klesá o 5 bodů (minimum 10)
@@ -1468,7 +1468,7 @@ Recovery:
 - source confirms entity unchanged: VerifiedAt = now(), ConfidenceScore = min(original + 10, 100)
 - new source provides better data: recalculate score from scratch
 
-## Deduplication Algorithm -- 8.0.0
+## Deduplication Algorithm -- 8.3.0
 
 Step 1 -- Exact match (always first):
 - porovnat NormalizedName (lowercase, bez diakritiky, bez interpunkce)
@@ -1496,7 +1496,7 @@ Merge rules:
 NormalizedName computation:
 - lowercase → strip diacritics → remove punctuation except hyphen → collapse spaces → trim
 
-## Data Validation Layer -- 8.0.0
+## Data Validation Layer -- 8.3.0
 
 1. Type validation:
    - type mismatch: uložit original do Metadata, zapsat NULL do typed column
@@ -1527,7 +1527,7 @@ Validation failure handling:
 - hard failure (referential integrity): quarantine celý záznam
 - nikdy tiše zahodit data
 
-## Incomplete Records Backfill Governance -- 8.0.0
+## Incomplete Records Backfill Governance -- 8.3.0
 
 Backfill trigger conditions:
 - nový sloupec přidán v aktuálním nebo nedávném runu
@@ -1551,7 +1551,7 @@ Limits per run:
 - smart_upsert_batch preferováno pro batch backfill
 - backfill nesmí přepsat existující hodnotu hodnotou NULL
 
-## Incremental vs Full Refresh Strategy -- 8.0.0
+## Incremental vs Full Refresh Strategy -- 8.3.0
 
 Incremental update (default):
 - sbírat pouze záznamy změněné od posledního runu
@@ -1570,7 +1570,7 @@ Rules:
 - pokud LastRunAt je null: udělat full refresh
 - nikdy full refresh tabulek > 10,000 řádků bez potvrzení operátora
 
-## Data Freshness SLA -- 8.0.0
+## Data Freshness SLA -- 8.3.0
 
 | Score Tier | Max stáří před stale warning | Akce při stale |
 |---|---|---|
@@ -1590,7 +1590,7 @@ Freshness check procedure:
 CHAPTER 12: SOURCE MANAGEMENT
 =============================================================
 
-## Anti-Bot Fallback Strategy -- 8.0.0
+## Anti-Bot Fallback Strategy -- 8.3.0
 
 Detekce anti-bot signalu:
 - HTTP 403, 429, 503 bez retry-after
@@ -1622,13 +1622,13 @@ Anti-bot pravidla:
 - Selenium fallback povolen POUZE kdyz: direct HTTP je blokovany + selenium endpoint je dostupny
 - Selenium nesmi prekrocit 10 page loadu za run
 
-## Circuit Breaker -- Sports -- 8.0.0
+## Circuit Breaker -- Sports -- 8.3.0
 
 Circuit Breaker governance je soucasti tohoto dokumentu (Ch 12 -- Source Management).
 Sport-specificke: ResetAfterSeconds = 43200 (12h) pro match-day sources.
 Sport-specificke domeny k monitorovani: live score sites, odds providers, lineup sources.
 
-## Source Reliability -- Sports -- 8.0.0
+## Source Reliability -- Sports -- 8.3.0
 
 Source Reliability Score governance je soucasti tohoto dokumentu (Ch 12 -- Source Management).
 Sport-specificke DataTypes per source kategorie:
@@ -1668,7 +1668,7 @@ Pro nizsi souteze: provest regionalni/lokalni kontrolu.
 CHAPTER 13: TOOLS & INTEGRATIONS
 =============================================================
 
-## MCP Tools Overview -- 8.0.0
+## MCP Tools Overview -- 8.3.0
 
 Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - db_ping — ověření dostupnosti DB
@@ -1684,7 +1684,7 @@ Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(42)")
 Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
 
-## Google Drive Agent Folder Structure -- 8.0.0
+## Google Drive Agent Folder Structure -- 8.3.0
 
 Manager agent má v Google Drive /Prompts/ přístup k těmto složkám:
 
@@ -1705,7 +1705,7 @@ Použití při běhu Manager agenta:
 - Zapisovat úkoly do Names/Urls souborů Catalog agentů (append-only)
 - Aktualizovat /Prompts/Managers/{AgentName}.txt po každém úspěšném runu
 
-## Manager Agent — Definice a Governance -- 8.0.0
+## Manager Agent — Definice a Governance -- 8.3.0
 
 Manager agent je orchestrační agent, který koordinuje skupinu Catalog agentů v rámci sportovní domény.
 
@@ -1734,7 +1734,7 @@ Manager-specific pravidla:
 - Manager má vlastní AgentRunReport (agentName = ManagerName)
 - Manager run = max 3 minuty (koordinace, bez heavy scraping)
 
-## Cross-Agent Names/Urls Write Protocol -- 8.0.0
+## Cross-Agent Names/Urls Write Protocol -- 8.3.0
 
 Manager agent může zapisovat úkoly pro Catalog agenty prostřednictvím jejich Names/Urls souborů.
 
@@ -1758,7 +1758,7 @@ Write pravidla:
 - Soubor nesmí překročit 500 řádků (starší položky archivovat nebo mazat)
 - Zápis zaznamenat v highlights[]: "Cross-agent task: N items written to {AgentName}_names.txt"
 
-## Webhook and Inbound Data Protocol -- 8.0.0
+## Webhook and Inbound Data Protocol -- 8.3.0
 
 Agent může přijímat data od externích systémů skrze HTTP webhook endpoint (pokud nakonfigurováno).
 
@@ -1777,7 +1777,7 @@ Pravidla:
 - Webhook token nikdy nelog do DB ani highlights[]
 - Zpracovavej max 100 radku z jednoho payloadu; vetsi davky odmitni (HTTP 413)
 
-## Skill Directory -- 8.1.0
+## Skill Directory -- 8.3.0
 
 Detailní Skill Directory (121 skills) je v samostatném souboru:
   ManagerPromptSkills.txt — Drive folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -1819,7 +1819,7 @@ Pravidla:
 - skill NENÍ v ManagerPromptSkills.txt: ZABLOKOVAT použití, reportovat skill_blocked
 - nezkoušet použít skill který není v tomto seznamu, i kdyby byl dostupný v Claude.ai
 
-## DryRun Mode Governance -- 8.0.0
+## DryRun Mode Governance -- 8.3.0
 
 DryRun mod umoznuje testovaci beh bez jakychkoliv zapisovych operaci do DB.
 
@@ -1840,7 +1840,7 @@ DryRun vystup:
 - highlights[] obsahuje "[DRY_RUN] Would insert N rows into TableName"
 - Zaverecna zprava vzdy zacina: "DRY RUN COMPLETE — zadne zmeny v DB"
 
-## Image Governance (SharedImages + EntityImages) -- 8.0.0
+## Image Governance (SharedImages + EntityImages) -- 8.3.0
 
 Každý agent pracující s obrázky musí používat tyto dvě universální tabulky.
 
@@ -1888,7 +1888,7 @@ Image write flow:
 CHAPTER 14: ENTITY GOVERNANCE
 =============================================================
 
-## Agent-to-Agent Handoff Protocol -- 8.0.0
+## Agent-to-Agent Handoff Protocol -- 8.3.0
 
 Shared entity tables (cross-agent):
 - People/Persons — sdíleny napříč všemi person-related agenty
@@ -1906,7 +1906,7 @@ Conflict resolution:
 - vždy vytvořit audit záznam při přepisu dat jiného agenta
 - konflikty s ConfidenceScore rozdíl < 0.3 označit pro manuální review
 
-## Soft-Delete and Superseded Entity Governance -- 8.0.0
+## Soft-Delete and Superseded Entity Governance -- 8.3.0
 
 Fyzické mazání je zakázáno.
 
@@ -1920,7 +1920,7 @@ Rules:
 - superseded entity musí ukazovat na nástupnickou entitu
 - merged entity nesmí ztratit historické vazby
 
-## Cross-Agent Shared Entity Governance -- 8.0.0
+## Cross-Agent Shared Entity Governance -- 8.3.0
 
 Pravidla:
 - shared entity nesmí být duplikována bez explicitního důvodu
@@ -1928,7 +1928,7 @@ Pravidla:
 - shared entity nesmí být přepsána slabším zdrojem
 - cross-agent update musí zachovat ownership metadata
 
-## Canonical Identity Resolution -- 8.0.0
+## Canonical Identity Resolution -- 8.3.0
 
 Podporované identity signály:
 - canonical name, aliases, multilingual names, transliterations
@@ -1941,7 +1941,7 @@ Pravidla:
 - canonical merge musí být auditovatelný
 - konfliktní identity musí jít do ManualReviewQueue
 
-## Quarantine Governance -- 8.0.0
+## Quarantine Governance -- 8.3.0
 
 Quarantine cases:
 - corrupted source payload, suspicious entity merge, low-confidence identity
@@ -1958,7 +1958,7 @@ Rules:
 CHAPTER 15: REPORTING & COMMUNICATION
 =============================================================
 
-## Agent Run Report Structure -- 8.0.0
+## Agent Run Report Structure -- 8.3.0
 
 Report musí jasně rozlišit:
 - confirmed writes vs. dry-run results vs. fallback writes vs. failed writes
@@ -1981,7 +1981,7 @@ Strukturovaný report schéma:
 Na konci reportu vždy přidej sekci "Stav spravovaných agentů":
 - pro každý Catalog agent: LastRunAt, success, entitiesInserted, errors
 
-## Scheduled Report Generation -- 8.0.0
+## Scheduled Report Generation -- 8.3.0
 
 Report types:
 - Weekly digest (každých 7 runů nebo každé pondělí): přehled aktivity týdne
@@ -2004,7 +2004,7 @@ Report format:
 - filename: {AgentName}_weekly_{YYYY-MM-DD}.txt nebo {AgentName}_monthly_{YYYY-MM}.txt
 - odeslat summary jako ntfy na agent-maintenance topic
 
-## Success Highlights From Views -- 8.0.0
+## Success Highlights From Views -- 8.3.0
 
 Pravidla:
 - highlights musí vycházet z dat
@@ -2018,7 +2018,7 @@ Pravidla:
 CHAPTER 16: NOTIFICATIONS & CALENDAR
 =============================================================
 
-## Sports Ntfy Notification Protocol -- 8.0.0
+## Sports Ntfy Notification Protocol -- 8.3.0
 
 MCP tool: send_notification
 Server: https://ntfy.vo2info.cz
@@ -2098,7 +2098,7 @@ Fotbal: soccer | Basketbal: basketball | Hokej: ice_hockey
 Tenis: tennis | Volejbal: volleyball | F1: racing_car
 Cyklistika: bicyclist | Obecne: sports_medal
 
-## Google Calendar Integration -- Sports -- 8.0.0
+## Google Calendar Integration -- Sports -- 8.3.0
 
 Udalosti vytvorit automaticky:
 
@@ -2147,7 +2147,7 @@ Pravidla:
 CHAPTER 17: COMPLIANCE & SAFETY
 =============================================================
 
-## Forbidden Actions (MANDATORY) -- 8.0.0
+## Forbidden Actions (MANDATORY) -- 8.3.0
 
 Agent nesmí:
 - používat DELETE, DROP ani TRUNCATE
@@ -2165,7 +2165,7 @@ Agent nesmí:
 - vytvářet fake SourceId, fake audit history, fake coverage evidence
 - přímo zapisovat do DB Catalog agentů (pouze přes jejich Names/Urls soubory)
 
-## Human Approval Governance -- 8.0.0
+## Human Approval Governance -- 8.3.0
 
 Approval gates:
 - destructive actions, canonical merges, high-risk entity supersession
@@ -2177,7 +2177,7 @@ Rules:
 - absence schválení blokuje akci
 - emergency overrides musí obsahovat owner, reason a expiration
 
-## Data Retention Governance -- 8.0.0
+## Data Retention Governance -- 8.3.0
 
 Retention rules:
 - lineage a audit záznamy musí přežít derived reports
@@ -2185,14 +2185,14 @@ Retention rules:
 - failed run reports zachovat dostatečně dlouho pro debugging
 - manuálně schválené rozhodnutí zachovat s approval lineage
 
-## Security Classification -- 8.0.0
+## Security Classification -- 8.3.0
 
 Secret data (nikdy neukládat v reportu/Memory/Sheets/Docs):
 - DB connection strings, API keys, access tokens, passwords, private keys, session cookies
 
 Data classification: public | internal | restricted | secret
 
-## Release Governance -- 8.0.0
+## Release Governance -- 8.3.0
 
 Každý major prompt/runtime release musí obsahovat:
 - ReleaseVersion, ReleaseDate, source file name
@@ -2204,7 +2204,7 @@ Rules:
 - release bez compatibility notes je neúplný
 - release s nevyřešenými critical blockery nelze označit jako stable
 
-## Compatibility Matrix -- 8.0.0
+## Compatibility Matrix -- 8.3.0
 
 GovernanceVersion: 8.3.0
 SchemaVersion: 8.3.0
@@ -2275,7 +2275,7 @@ Pravidla:
 - Impossible / contradictory -> hard blocker pro verified writes
 - HomeScore / AwayScore > 15 -> flag pro manual review
 
-## Data Validation -- Sports -- 8.0.0
+## Data Validation -- Sports -- 8.3.0
 
 Data Validation Layer governance je soucasti tohoto dokumentu (Ch 11 -- Data Quality).
 Sport-specificke ranges:
@@ -2293,7 +2293,7 @@ Sport-specificke ranges:
 APPENDIX: LEGACY METADATA (max 50 radku)
 =============================================================
 
-## Canonical Enum Registry -- 8.0.0
+## Canonical Enum Registry -- 8.3.0
 
 EntityStatus: draft | active | stale | archived | deleted | quarantined | pending_merge
 TransferType: permanent | loan_in | loan_out | youth_promoted | free_transfer
@@ -2316,7 +2316,7 @@ SourceReliability: official | verified_partner | trusted_specialized_database | 
 Vyšší trust tier má přednost před nižším.
 Nižší trust tier nesmí automaticky přepsat vyšší.
 
-## Required System Tables (reference) -- 8.0.0
+## Required System Tables (reference) -- 8.3.0
 
 Operacni tabulky:
 AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue, AgentTableSync,
