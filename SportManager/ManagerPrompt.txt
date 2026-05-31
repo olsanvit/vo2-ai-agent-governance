@@ -1072,7 +1072,7 @@ Pravidla:
 - Při přestupu: nastavit LeftDate + IsCurrentClub=false na starém, vytvořit nový řádek
 - Půjčka (loan_in): vytvoří vlastní PlayerCareer řádek s TransferType = loan_in
 - Po návratu z půjčky: LeftDate na půjčce, reaktivovat původní angažmá nebo vytvořit nové
-- HistoricalScore = kompletnost historické kariéry (0-100)
+- HistoricalScore = kompletnost historické kariéry (0.000-100.000)
 - Při prvním platnění: vytvořit PlayerCareer záznamy z Squads zpětně
 
 Vazba na PlayerSeasonStats:
@@ -1245,7 +1245,7 @@ TeamForm tabulka:
 Guid, TeamGuid, CompetitionGuid, CalculatedAt,
 Form5 (retezec: "WWDLW", nejnovejsi prvni), Form10,
 Form5Points, Form10Points, Form5GoalsScored, Form5GoalsConceded,
-Form5CleanSheets, FormScore (0-100), Streak ("W3", "L2", "D1"),
+Form5CleanSheets, FormScore (0.000-100.000), Streak ("W3", "L2", "D1"),
 LastMatchDate, LastUpdated
 
 PlayerForm tabulka:
@@ -1256,7 +1256,7 @@ GoalsLast5, AssistsLast5, MinutesLast5, RatingLast5, FormScore, LastUpdated
 Pravidla:
 - Prepocitat po kazdem novem dokoncene zapase
 - Form5 retezec: W=vyhry, D=remiza, L=prohry, nejnovejsi na indexu 0
-- FormScore: Form5Points/15 * 70 + streak bonus 30, max 100, min 0
+- FormScore: Form5Points/15 * 70 + streak bonus 30, max 100.000, min 0.000
 - Aktualizovat TeamForm pres upsert_record po Kroku 9 post-match pipeline
 
 ## Player Rankings and Top Scorers -- 8.3.0
@@ -1453,7 +1453,7 @@ CHAPTER 11: DATA QUALITY
 ## Confidence Decay Governance -- 8.3.0
 
 Decay rules:
-- každých 30 dní bez re-verifikace: ConfidenceScore klesá o 5 bodů (minimum 10)
+- každých 30 dní bez re-verifikace: ConfidenceScore klesá o 5.000 bodů (minimum 10.000)
 - VerifiedAt column tracks last verification timestamp
 - decay applications during backfill pass: select up to 100 records WHERE VerifiedAt < now() - interval '30 days' AND ConfidenceScore > 10
 - new score: ConfidenceScore - (5 * floor(days_since_verification / 30))
@@ -2446,5 +2446,5 @@ Refresh: po kazdem matchday. Pouzivat CREATE OR REPLACE.
 Guid, MatchGuid, BroadcasterName, Country (ISO 3166-1 alpha-2),
 BroadcastType (live_tv/streaming/radio/pay_per_view/free),
 StreamUrl, KickoffLocalTime, Notes, SourceName, CreatedAt
-Score priority: 20-30 (collect opportunistically)
+Score priority: 20.000-30.000 (collect opportunistically)
 
