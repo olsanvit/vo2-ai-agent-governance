@@ -22,7 +22,7 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
     L neexistuje -> vytvorit po prvnim uspesnem runu:
       create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=...)
-    FORMAT: Score | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
+    FORMAT: Score(3des.) | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
 5.  NAMES -> nacist {AgentName}_names.txt z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
@@ -820,21 +820,21 @@ TableCount: {count}
 
 --- BASELINE TABLES ---
 Score | TableName | Description | RowCount | LastPopulated
-100 | CoreEntityTable | Primary entity table | 1520 | 2026-05-31
- 90 | EntityAliases | Aliases for entities | 340 | 2026-05-30
- 70 | Sources | Data sources | 85 | 2026-05-29
+91.156 | CoreEntityTable | Primary entity table | 1520 | 2026-05-31
+83.420 | EntityAliases | Aliases for entities | 340 | 2026-05-30
+71.008 | Sources | Data sources | 85 | 2026-05-29
 ```
 
 DŮLEŽITÉ: Soubor obsahuje POUZE tabulky (DB table names), NE individuální záznamy/entity.
 - Správně: řádek = jedna DB tabulka se Score, RowCount, LastPopulated
 - Špatně: řádek = konkrétní entita (Solar, Copper, Smith...) nebo narrative text
 
-Score field (0–100) — data collection priority per table:
-- 90–100: critical — blocks readiness if empty
-- 70–89: high — populated every run
-- 50–69: medium — populated when source available
-- 30–49: low — populated opportunistically
-- 0–29: archive/reference — maintenance runs only
+Score field (0.000–100.000, 3 desetinná místa) — data collection priority per table:
+- 90.000–100.000: critical — blocks readiness if empty
+- 70.000–89.999: high — populated every run
+- 50.000–69.999: medium — populated when source available
+- 30.000–49.999: low — populated opportunistically
+- 0.000–29.999: archive/reference — maintenance runs only
 
 RowCount = current row count from DB (SELECT COUNT(*) WHERE IsDeleted IS NOT TRUE)
 LastPopulated = ISO8601 date of last run that wrote data to this table
