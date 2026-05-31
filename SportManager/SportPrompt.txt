@@ -1,3 +1,9 @@
+*** DEPRECATED — SUPERSEDED ***
+Tento soubor byl nahrazen ManagerPrompt.txt (v8.x) v rámci refaktorizace v8.0.0.
+Kanonický governance prompt pro Manager agenty: SportManager/ManagerPrompt.txt
+Tento soubor NEPOUZIVAT jako aktivní prompt — slouží pouze jako archivní reference.
+*** DEPRECATED — SUPERSEDED ***
+
 Agent: 6.11.2 [SPORT_NAME] Data Manager
 
 Alias: [SPORT_ALIAS_OPTIONAL]

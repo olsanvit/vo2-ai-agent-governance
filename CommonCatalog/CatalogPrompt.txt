@@ -1,10 +1,10 @@
-Agent: 8.2.4 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 8.3.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 8.2.4
+PromptVersion: 8.3.0
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.2.4
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.3.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -46,28 +46,41 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
 -----------------------------------------------------------
-0.  LOCK             -> run_select_sql("SELECT pg_try_advisory_lock(42)") (pri selhani pokracovat bez locku)
-1.  DISCOVERY        -> nove entity (max 50/run)
-2.  NAMES QUEUE      -> {AgentName}_names.txt -> priority discovery (Score 90+)
-3.  URLS QUEUE       -> {AgentName}_urls.txt  -> scraping pred standardnimi zdroji
-4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prazdne tabulky
-5.  DATA COLLECTION  -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
+0.  LOCK    -> run_select_sql("SELECT pg_try_advisory_lock(42)")
+             L selhání → pokračovat bez locku, log warning "lock_failed" do highlights[]
+1.  DISCOVERY -> nove entity (max 50/run)
+2.  NAMES QUEUE -> {AgentName}_names.txt → priority discovery (Score >= 90.000)
+             L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
+3.  URLS QUEUE  -> {AgentName}_urls.txt → scraping před standardními zdroji
+             L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
+4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prázdné tabulky
+5.  DATA COLLECTION -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
     L rate limit: 1 req/s scraping, 5 req/s API, max 500 req/run
-    L pagination: max 20 stranek/zdroj, cursor ulozit pro pristi run
-    L error escalation: Tier1 retry -> Tier2 fallback -> Tier3 partial+ntfy
-6.  DATA VALIDATION  -> ranges, formats, referential integrity
-7.  DEDUPLICATION    -> Exact -> Alias -> Token 80pct -> ExternalID -> manual queue
-8.  BACKFILL         -> max 100/tabulka, NULL hodnoty first -> pak nejstarsi dle UpdatedAt; sloupce mohou byt prepsat novou hodnotou
-9.  CONFIDENCE DECAY -> -5 bodu / 30 dni bez overeni
-10. VIEWS REFRESH    -> CREATE OR REPLACE vsechny analyticke views
-11. SOURCE RELIABILITY UPDATE -> aktualizovat scores zdroju
+    L pagination: max 20 stránek/zdroj, cursor uložit pro příští run
+    L error escalation: Tier1 retry → Tier2 fallback → Tier3 partial+ntfy
+    L všechny zdroje selhaly → success=false, blockerCategory="source_unavailable", pokračovat k reportu
+6.  DATA VALIDATION -> ranges, formats, referential integrity
+7.  DEDUPLICATION   -> Exact → Alias → Token 80% → ExternalID → manual queue
+8.  BACKFILL        -> max 100/tabulka, NULL hodnoty first → pak nejstarší dle UpdatedAt
+             L tabulka write selže → log do errors[], přeskočit tabulku, pokračovat další
+9.  CONFIDENCE DECAY -> -5.000 bodů / 30 dní bez ověření
+             L DB write selže → log do errors[], přeskočit decay, pokračovat
+10. VIEWS REFRESH   -> CREATE OR REPLACE všechny analytické views
+             L view selže → log warning do errors[], pokračovat (views nejsou blocker runu)
+11. SOURCE RELIABILITY UPDATE -> aktualizovat scores zdrojů
 12. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
-13. RUN REPORT       -> upsert_record("AgentRunReports", ...) (vzdy, i pri selhani)
-13a.SCHEDULE UPDATE  -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun
-13b.DIGEST CHECK     -> kazdych 7 runu/pondeli = weekly digest; kazdych 30 dni = monthly
-14. CALENDAR EVENT   -> next scheduled run + maintenance
-15. NOTIFICATION     -> send_notification na agent-runs (max 3 ntfy/run) [viz INFRASTRUKTURA]
-16. UNLOCK           -> run_select_sql("SELECT pg_advisory_unlock(42)")
+             L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
+13. RUN REPORT -> upsert_record("AgentRunReports", ...) (vždy, i při selhání)
+             L DB down → zaznamenat selhání v textu odpovědi, pokračovat
+13a.SCHEDULE UPDATE -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun — NON-BLOCKING
+             L selže → log warning, pokračovat
+13b.DIGEST CHECK -> každých 7 runů/pondělí = weekly; každých 30 dní = monthly
+14. CALENDAR EVENT -> next scheduled run + maintenance
+             L Calendar nedostupný → log capability_missing("calendar"), pokračovat
+15. NOTIFICATION -> send_notification na agent-runs (max 3 ntfy/run)
+             L ntfy nedostupný → log capability_missing("ntfy"), pokračovat
+16. UNLOCK  -> run_select_sql("SELECT pg_advisory_unlock(42)")
+             L selhání → retry jednou po 2s; pokud stále selhává → log warning, pokračovat
 
 -----------------------------------------------------------
 KLICOVA PRAVIDLA (nikdy neporusovat):
@@ -112,7 +125,7 @@ MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)
 ntfy:         https://ntfy.vo2info.cz      (user: admin)
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-MCP Version:  8.2.4
+MCP Version:  8.3.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -192,7 +205,7 @@ Required runtime sequence:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.2.4)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.3.0)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -371,28 +384,28 @@ Pravidla:
 "UpdatedAt" timestamptz NOT NULL DEFAULT now(),
 "Emoji" text NOT NULL DEFAULT '',
 "Colors" text NOT NULL DEFAULT '',
-"FinalScore" numeric NULL,
-"DataScore" numeric NULL,
-"QualityScore" numeric NULL,
-"ConfidenceScore" numeric NULL,
-"PopularityScore" numeric NULL,
-"CoverageScore" numeric NULL,
-"FreshnessScore" numeric NULL,
-"ReliabilityScore" numeric NULL,
-"CompletenessScore" numeric NULL,
-"ConsistencyScore" numeric NULL,
-"ImportanceScore" numeric NULL,
-"PriorityScore" numeric NULL,
-"TrendScore" numeric NULL,
-"ActivityScore" numeric NULL,
-"EngagementScore" numeric NULL,
-"AccuracyScore" numeric NULL,
-"ValidationScore" numeric NULL,
-"SourceScore" numeric NULL,
-"RiskScore" numeric NULL,
-"AnomalyScore" numeric NULL,
-"HistoricalScore" numeric NULL,
-"AiScore" numeric NULL
+"FinalScore" numeric(6,3) NULL,
+"DataScore" numeric(6,3) NULL,
+"QualityScore" numeric(6,3) NULL,
+"ConfidenceScore" numeric(6,3) NULL,
+"PopularityScore" numeric(6,3) NULL,
+"CoverageScore" numeric(6,3) NULL,
+"FreshnessScore" numeric(6,3) NULL,
+"ReliabilityScore" numeric(6,3) NULL,
+"CompletenessScore" numeric(6,3) NULL,
+"ConsistencyScore" numeric(6,3) NULL,
+"ImportanceScore" numeric(6,3) NULL,
+"PriorityScore" numeric(6,3) NULL,
+"TrendScore" numeric(6,3) NULL,
+"ActivityScore" numeric(6,3) NULL,
+"EngagementScore" numeric(6,3) NULL,
+"AccuracyScore" numeric(6,3) NULL,
+"ValidationScore" numeric(6,3) NULL,
+"SourceScore" numeric(6,3) NULL,
+"RiskScore" numeric(6,3) NULL,
+"AnomalyScore" numeric(6,3) NULL,
+"HistoricalScore" numeric(6,3) NULL,
+"AiScore" numeric(6,3) NULL
 ```
 
 Zkrácený zápis `+ všechny povinné scoring sloupce podle server.js` vždy znamená kompletní sadu všech 22 scoring sloupců.
@@ -1414,12 +1427,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.2.4
-- SchemaVersion: 8.2.4
-- RuntimeSafetyVersion: 8.2.4
+- GovernanceVersion: 8.3.0
+- SchemaVersion: 8.3.0
+- RuntimeSafetyVersion: 8.3.0
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.2.4
-- PromptVersion: 8.2.4
+- ImageGovernanceVersion: 8.3.0
+- PromptVersion: 8.3.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -1525,9 +1538,9 @@ Pravidla:
 
 ## Changelog (zkráceno)
 
-v8.2.4 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
+v8.3.0 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
   agent-schedule-manager skill (111. skill). Startup krok 15: načtení AgentSchedules + conflict check.
-  Run protokol krok 22a: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.2.4.
+  Run protokol krok 22a: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.3.0.
 
 v8.0.0 (2026-05): Drive folder structure governance (Manager, Catalogs, Names, Urls).
   Names soubor: prioritni seznam nazvu entit k dohledani. Urls soubor: seznam URL k projiti.
@@ -1563,7 +1576,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 8.2.4
+PromptVersion: 8.3.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -1898,7 +1911,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 8.2.4
+PromptVersion: 8.3.0
 
 Ověřené image nástroje:
 - save_image_base64
@@ -2366,17 +2379,17 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 8.2.4
-SchemaVersion: 8.2.4
-RuntimeSafetyVersion: 8.2.4
+GovernanceVersion: 8.3.0
+SchemaVersion: 8.3.0
+RuntimeSafetyVersion: 8.3.0
 ScoringVersion: 3.0
-ImageGovernanceVersion: 8.2.4
-ProviderGovernanceVersion: 8.2.4
+ImageGovernanceVersion: 8.3.0
+ProviderGovernanceVersion: 8.3.0
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 8.2.4 je governance dokument pro Catalog agenty.
+CatalogPrompt 8.3.0 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -2763,7 +2776,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 8.2.4
+- canonical document body exposes PromptVersion == 8.3.0
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -3080,7 +3093,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 8.2.4
+- PromptVersion: 8.3.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: 1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -3139,7 +3152,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 8.2.4) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 8.3.0) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -3148,7 +3161,7 @@ Catalog agents and Manager agents are independent — no inheritance between the
 Canonical source document ID: 1PrTRbf0yiBb7_ShC1LR1TVb0CoIA8FAShafr1jVvhwY
 Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
-PromptVersion: 8.2.4
+PromptVersion: 8.3.0
 Generated: 2026-05-28
 
 
@@ -3445,7 +3458,7 @@ Exception: debug/developer/manual runs may use English when explicitly requested
 
 ## Final Note
 
-Tento soubor je CatalogPrompt 8.2.4 — konsolidovaná restrukturalizace z 9701 řádků původního souboru.
+Tento soubor je CatalogPrompt 8.3.0 — konsolidovaná restrukturalizace z 9701 řádků původního souboru.
 
 Klíčové změny oproti původnímu souboru:
 - Odstraněno: Slack alerting sekce, legacy release metadata < 7.0, duplicitní pravidla
