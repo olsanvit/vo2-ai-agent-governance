@@ -182,6 +182,7 @@ Povinne kroky v tomto poradi:
 1. db_ping -- overit dostupnost databaze
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
 3. Pokud db_unreachable: STOP -- neprovat zadne writes, selfUpdate, maintenance
+   Run report do DB nelze ulozit → zaznamenat selhání v textu odpovědi, poslat ntfy urgent
 4. Detekovat MCP_VERSION z running runtime
 5. Detekovat agent version z runtime prompt header (PromptVersion)
 6. Klasifikovat prompt_status:
@@ -810,7 +811,7 @@ ConsistencyScore, ImportanceScore, PriorityScore, TrendScore, ActivityScore,
 EngagementScore, AccuracyScore, ValidationScore, SourceScore,
 RiskScore, AnomalyScore, HistoricalScore, AiScore
 
-Vsechny score sloupce: rozsah 0.00 az 100.00 (numeric nebo double precision)
+Vsechny score sloupce: rozsah 0.000 az 100.000 (3 desetinna mista, numeric(6,3))
 
 ## Person / Player / Participant model
 
@@ -1477,7 +1478,7 @@ NormalizedName computation:
 
 2. Range validation:
    - Year fields: 1800 ≤ year ≤ current year + 2
-   - Score/Confidence: 0–100
+   - Score/Confidence: 0.000–100.000 (3 decimal places, numeric(6,3))
    - Percentage fields (suffix Pct): 0–100
    - Count/Total fields: value ≥ 0
 

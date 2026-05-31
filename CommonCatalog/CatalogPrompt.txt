@@ -14,10 +14,12 @@ ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
 STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive soubory, KONTROLA krok 9, AgentSchedules krok 10, readiness):
 -----------------------------------------------------------
 1.  DB PING -> db_status = db_reachable | db_unreachable (jediný DB check)
-    L db_unreachable -> STOP + ntfy urgent + calendar event
+    L db_unreachable -> STOP + ntfy urgent (topic: agent-errors) + calendar event
+       Žádné zápisy, žádný Drive catalog update, žádné schema změny.
+       Run report do DB nelze uložit → zaznamenat selhání v textu odpovědi agenta.
 2.  PROMPT VERSION -> porovnat s Google Drive + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
-3.  FRESHNESS CHECK -> stale tabulky dle SLA (Score 90-100 = max 24h)
+3.  FRESHNESS CHECK -> stale tabulky dle SLA (Score >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
     L neexistuje -> vytvorit po prvnim uspesnem runu:
@@ -49,7 +51,7 @@ SCHEDULED RUN (v tomto poradi):
 2.  NAMES QUEUE      -> {AgentName}_names.txt -> priority discovery (Score 90+)
 3.  URLS QUEUE       -> {AgentName}_urls.txt  -> scraping pred standardnimi zdroji
 4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prazdne tabulky
-5.  DATA COLLECTION  -> Score 90-100 first, pak 70-89, 50-69, <50 opportunisticky
+5.  DATA COLLECTION  -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
     L rate limit: 1 req/s scraping, 5 req/s API, max 500 req/run
     L pagination: max 20 stranek/zdroj, cursor ulozit pro pristi run
     L error escalation: Tier1 retry -> Tier2 fallback -> Tier3 partial+ntfy
@@ -72,7 +74,8 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
 -----------------------------------------------------------
 - Nikdy hard-delete -- vzdy soft delete (IsDeleted = true)
 - Nikdy nezahodit data -- neznamy sloupec = upsert_record ho vytvori
-- Vzdy ulozit run report -- i pri plnem selhani
+- Vzdy ulozit run report -- i pri plnem selhani; pokud DB down: report nelze ulozit do DB,
+  zaznamenat selhání v textu odpovědi agenta a poslat ntfy s detaily chyby
 - Max 3 ntfy/run -- nespamovat
 - Max 100 backfill zaznamu/tabulka/run
 - Max 50 novych entit/run pres discovery
@@ -153,7 +156,7 @@ Score Interpretation Contract:
 - CoverageScore: completeness of available data slice
 - HistoricalScore: trust in historical depth and archive stability
 - ValidationScore: confidence required validation rules passed
-- All scores: 0-100 scale
+- All scores: 0.000–100.000 scale (3 decimal places, stored as numeric(6,3) in DB)
 
 =============================================================
 CHAPTER 3: STARTUP PROTOCOL
@@ -576,7 +579,7 @@ NormalizedName computation:
 
 2. Range validation:
    - Year fields: 1800 ≤ year ≤ current year + 2
-   - Score/Confidence: 0–100 (integer) or 0.0–1.0 where specified
+   - Score/Confidence: 0.000–100.000 (3 decimal places, numeric(6,3))
    - Percentage fields (suffix Pct): 0–100
    - Count/Total fields: value ≥ 0
 
@@ -648,11 +651,11 @@ Rules:
 
 | Score Tier | Max age before stale warning | Action when stale |
 |---|---|---|
-| 90–100 | 24 hours | report stale_data warning, collect in next run |
-| 70–89 | 3 days | report stale_data notice |
-| 50–69 | 7 days | note in highlights |
-| 30–49 | 30 days | note in maintenance report only |
-| 0–29 | 90 days | no warning |
+| 90.000–100.000 | 24 hours | report stale_data warning, collect in next run |
+| 70.000–89.999  | 3 days | report stale_data notice |
+| 50.000–69.999  | 7 days | note in highlights |
+| 30.000–49.999  | 30 days | note in maintenance report only |
+| 0.000–29.999   | 90 days | no warning |
 
 Freshness check procedure:
 1. read LastPopulated from baseline catalog for each table
@@ -713,15 +716,15 @@ Rules:
 
 Table SourceReliability:
 - Guid, Domain, TotalChecks, CorrectChecks, IncorrectChecks
-- ReliabilityScore (numeric 5,2): CorrectChecks / TotalChecks * 100
+- ReliabilityScore (numeric 6,3): CorrectChecks / TotalChecks * 100 (3 decimal places)
 - LastCheckedAt, DataTypes (jsonb), Notes, UpdatedAt
 
 ConfidenceScore multiplier based on ReliabilityScore:
-- 90–100: × 1.0 (no reduction)
-- 70–89: × 0.9
-- 50–69: × 0.75
-- 30–49: × 0.5
-- 0–29: × 0.25 (+ auto-quarantine for Score < 10)
+- 90.000–100.000: × 1.0 (no reduction)
+- 70.000–89.999: × 0.9
+- 50.000–69.999: × 0.75
+- 30.000–49.999: × 0.5
+- 0.000–29.999: × 0.25 (+ auto-quarantine for Score < 10.000)
 
 Update procedure:
 - when second source confirms a value: CorrectChecks++
