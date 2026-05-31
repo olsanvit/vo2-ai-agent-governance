@@ -301,13 +301,14 @@ Umisteni: /Prompts/Managers/{AgentName}.txt (folder ID: 1lEvffJ-rjdExCwMWxmWM7Pc
 
 Katalog obsahuje: AgentName, PromptVersion, LastUpdated, TableCount
 Format radku: Score | TableName | Description | RowCount | LastPopulated
+Score ma 3 desetinna mista (napr. 91.156, 74.320, 50.000)
 
-Score guidelines:
-- 90-100: tabulky ktere museji byt naplneny pro readiness; empty = blocker
-- 70-89:  tabulky naplnene v kazdem scheduled runu; gaps degraduji report
-- 50-69:  tabulky naplnene kdyz je zdroj dostupny
-- 30-49:  enrichment tabulky, opportunistically
-- 0-29:   archive/reference/operational, jen v maintenance runech
+Score guidelines (0.000–100.000):
+- 90.000–100.000: tabulky ktere museji byt naplneny pro readiness; empty = blocker
+- 70.000–89.999:  tabulky naplnene v kazdem scheduled runu; gaps degraduji report
+- 50.000–69.999:  tabulky naplnene kdyz je zdroj dostupny
+- 30.000–49.999:  enrichment tabulky, opportunistically
+- 0.000–29.999:   archive/reference/operational, jen v maintenance runech
 
 RowCount = 0 pro Score >= 90 -> report critical_baseline_empty, blokovat readiness
 RowCount = 0 pro Score >= 70 -> report baseline_incomplete, warn ale pokracovat
