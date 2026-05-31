@@ -578,7 +578,7 @@ Description: Generuje strukturovaný run report ve standardním formátu Catalog
   Zahrnuje: startup sekci, discovery, data collection, výsledky, errors, highlights,
   SkillsUsed[], capability_missing[], duration.
 Inputs: raw run data (inserted, updated, failed, highlights, errors, SkillsUsed)
-Outputs: formátovaný run report připravený pro save_agent_run_report
+Outputs: formátovaný run report připravený pro upsert_record("AgentRunReports", ...)
 Limitations: report musí být uložen i při selhání runu
 
 ## audit-log-writer
@@ -635,7 +635,7 @@ Description: Porovnává aktuální run s předchozím: inserted, updated, soft-
   počty per tabulka. Identifikuje neočekávané změny (spike/drop > 50%).
 Inputs: current run ID, previous run ID
 Outputs: delta report per tabulka, anomálie (unexpected spikes), trend
-Limitations: vyžaduje save_agent_run_report z předchozího runu
+Limitations: vyžaduje upsert_record("AgentRunReports", ...) z předchozího runu
 
 ## baseline-diff-reporter
 Task types: baseline diff, verze baseline katalogu, change summary
@@ -694,7 +694,7 @@ Description: Snižuje scope runu při resource constraints. Zachovává minimum:
   Tier1 operace + run report. Odkládá Tier2/3 na příští run.
 Inputs: resource constraints (time / DB latency / source availability)
 Outputs: degraded execution plan, deferred operations list, estimated recovery time
-Limitations: nemůže odložit Tier1 (kritické) operace ani save_agent_run_report
+Limitations: nemůže odložit Tier1 (kritické) operace ani upsert_record("AgentRunReports", ...)
 
 ## error-escalation-manager
 Task types: error escalation, ntfy agent-errors, Tier3 errors
@@ -907,7 +907,7 @@ Limitations: jedna zpráva per run; zahrnuta v limitu 3 ntfy/run
 Task types: DryRun mode, testovací beh, simulace bez DB zápisů
 Description: Řídí DryRun mod: blokuje všechny INSERT/UPDATE/DELETE operace a simuluje výstupy
   s prefixem "[DRY_RUN]". Povoluje DB čtení a ntfy (s "[DRY_RUN TEST]" prefixem).
-  Zajišťuje, že save_agent_run_report proběhne s IsDryRun = true.
+  Zajišťuje, že upsert_record("AgentRunReports", ...) proběhne s IsDryRun = true.
 Inputs: RunMode: dry_run nebo dry_run=true parametr aktivace
 Outputs: simulované výstupy "[DRY_RUN] Would insert N rows", run report s IsDryRun=true
 Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován; DB a Drive čtení povoleno

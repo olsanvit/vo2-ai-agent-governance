@@ -84,7 +84,7 @@ SCHEDULED RUN (v tomto poradi):
              L Calendar nedostupný → log capability_missing("calendar"), pokračovat
 15. NOTIFICATION -> send_notification na agent-runs (max 3 ntfy/run)
              L ntfy nedostupný → log capability_missing("ntfy"), pokračovat
-16. UNLOCK  -> run_select_sql("SELECT pg_advisory_unlock(42)")
+16. UNLOCK  -> run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)")
              L selhání → retry jednou po 2s; pokud stále selhává → log warning, pokračovat
 
 -----------------------------------------------------------
@@ -120,7 +120,7 @@ Audit:    upsert_record("AgentRunReports", ...) -- save report
 Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-maintenance)
 Drive:    read_file_content, create_file, update_file_content, search_files  [Google Drive MCP]
 Calendar: create_event, list_events, delete_event  [Google Calendar MCP]
-Lock:     run_select_sql("SELECT pg_try_advisory_lock(42)") / pg_advisory_unlock(42)
+Lock:     run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)") / pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)
 
 -----------------------------------------------------------
 INFRASTRUKTURA:
@@ -917,8 +917,8 @@ Run report (není dedikovaný tool — použij):
 - run_select_sql("SELECT * FROM AgentRunReports WHERE AgentName='...' ORDER BY CreatedAt DESC LIMIT 10") — get reports
 
 Advisory lock (přes run_select_sql):
-- LOCK:   run_select_sql("SELECT pg_try_advisory_lock(42)")
-- UNLOCK: run_select_sql("SELECT pg_advisory_unlock(42)")
+- LOCK:   run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)")
+- UNLOCK: run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)")
 
 Notification (send_notification MCP tool v server.js):
 - send_notification(topic, title, message, priority, tags) → ntfy.vo2info.cz
@@ -2454,7 +2454,7 @@ Při nejisté identitě: sniž ConfidenceScore
 
 ## Průběh běhu (Podrobný)
 
-0. získat advisory lock (run_select_sql("SELECT pg_try_advisory_lock(42)")) — při selhání: log warning, pokračovat bez locku
+0. získat advisory lock (run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)")) — při selhání: log warning, pokračovat bez locku
 1. ověř DB (db_ping)
 2. ověř GUID standard
 3. ověř tabulky a schéma
@@ -2489,7 +2489,7 @@ Při nejisté identitě: sniž ConfidenceScore
      - při insufficient data (< 5 runů): přeskočit tiše
 23. calendar event update
 24. send_notification (max 3) [MCP tool v server.js]
-25. uvolnit advisory lock (run_select_sql("SELECT pg_advisory_unlock(42)"))
+25. uvolnit advisory lock (run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)"))
 
 ## Canonical Versioning Reference
 
