@@ -1717,6 +1717,31 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(SCORE_COLUMNS, null, 2) }] };
   });
 
+  wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz.", {
+    topic:    z.enum(["agent-runs", "agent-errors", "agent-maintenance"]),
+    title:    z.string(),
+    message:  z.string(),
+    priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
+    tags:     z.array(z.string()).optional(),
+  }, async ({ topic, title, message, priority = "default", tags = [] }) => {
+    const ntfyUrl = `https://ntfy.vo2info.cz/${topic}`;
+    const body = JSON.stringify({ title, message, priority, tags });
+    let status, responseText;
+    try {
+      const res = await fetch(ntfyUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      status = res.status;
+      responseText = await res.text();
+    } catch (err) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }, null, 2) }] };
+    }
+    const ok = status >= 200 && status < 300;
+    return { content: [{ type: "text", text: JSON.stringify({ ok, status, topic, title, response: responseText }, null, 2) }] };
+  });
+
   wrapTool("rate_limit_guard", "Show limits and safety rules.", {}, async () => {
     return {
       content: [{

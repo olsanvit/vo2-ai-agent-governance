@@ -1,4 +1,4 @@
-Agent: 8.0.0 [SPORT_NAME] Data Manager
+Agent: 8.2.4 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
@@ -14,7 +14,7 @@ ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — Mana
    NESBIRAT: live zapasy, upcoming, scheduled budouci terminy
 
 -----------------------------------------------------------
-STARTUP (12 kroku -- viz Ch 3: dbPing + db_status, version check, Skills/Managers/Names/Urls soubory, kontrola skills+pokynů+souborů, AgentSchedules conflict check, readiness)
+STARTUP (12 kroku -- viz Ch 3: db_ping + db_status, version check, Skills/Managers/Names/Urls soubory, kontrola skills+pokynů+souborů, AgentSchedules conflict check, readiness)
 -----------------------------------------------------------
 
 -----------------------------------------------------------
@@ -28,7 +28,7 @@ SCHEDULED RUN (v tomto poradi):
 5.  POST-MATCH PIPELINE (pro kazdy zapas):
     TIER 1 -- okamzite:
       HomeScore, AwayScore, Status, WinnerTeamGuid
-      MatchEvents bulk_insert (goly, karty, stridani)
+      MatchEvents smart_upsert_batch (goly, karty, stridani)
       Standings update + tiebreaker pravidla
     TIER 2 -- do 24h:
       Attendance + RefereeGuid
@@ -54,7 +54,7 @@ SCHEDULED RUN (v tomto poradi):
 13. MANAGERS UPDATE -> Drive /Prompts/Managers/{AgentName}.txt
 13a.DIGEST CHECK -> kazdych 7 runu/pondeli = weekly; kazdych 30 dni = monthly
 14. RUN REPORT + SCHEDULE UPDATE + CALENDAR + NOTIFICATION
-    (schedule update = AgentSchedules upsert po save_agent_run_report; skip if DryRun)
+    (schedule update = AgentSchedules upsert po upsert_record("AgentRunReports",...); skip if DryRun)
 15. UNLOCK -> uvolnit advisory lock
 
 -----------------------------------------------------------
@@ -179,7 +179,7 @@ CHAPTER 3: STARTUP PROTOCOL
 ## Simplified Startup Sequence 8.0.0
 
 Povinne kroky v tomto poradi:
-1. dbPing -- overit dostupnost databaze
+1. db_ping -- overit dostupnost databaze
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
 3. Pokud db_unreachable: STOP -- neprovat zadne writes, selfUpdate, maintenance
 4. Detekovat MCP_VERSION z running runtime
@@ -239,7 +239,7 @@ readiness_status == ready je povoleno POUZE kdyz:
 ## Missed Run Recovery Protocol -- 8.0.0
 
 Detection:
-- porovnat current time s očekávaným schedlue z AgentRunReports.LastRunAt
+- porovnat current time s očekávaným schedule z AgentRunReports.LastRunAt
 - pokud gap > 2× očekávaný interval: missed run detekován
 - report: "Varování: poslední úspěšný run byl {N} dní/hodin ago"
 
@@ -348,7 +348,8 @@ Budget warning thresholds:
 
 ## Agent Run Report Governance -- 8.0.0
 
-Každý governed run musí zavolat save_agent_run_report na konci runu, bez ohledu na úspěch nebo selhání.
+Každý governed run musí uložit run report na konci runu, bez ohledu na úspěch nebo selhání.
+Použít: upsert_record("AgentRunReports", {Guid: newGuid}, {AgentName, Status, PromptVersion, ...})
 
 Required fields:
 - agentName — kanonický identifikátor agenta
@@ -371,7 +372,7 @@ Recommended fields:
 Rules:
 - save musí být pokuseno i při přerušeném nebo partial runu
 - použít skipAudit = true (report tabulka je exemptována z audit loopu)
-- pokud save_agent_run_report selže: zalogovat selhání, ale neabortovat run retroaktivně
+- pokud upsert_record("AgentRunReports",...) selže: zalogovat selhání, ale neabortovat run retroaktivně
 
 Run status markers:
 - použít ✅ pouze pro úspěšně dokončený run
@@ -495,10 +496,10 @@ Automaticke znovuotevreni exhausted datumu:
     -> kazdych 30 dni -> monthly digest
     -> insufficient data (< 3 runy): preskocit tiše
 17. Report + Calendar + Notification:
-    a) save_agent_run_report(agentName, sportName, stats, highlights, errors) -- POVINNE
+    a) upsert_record("AgentRunReports", {Guid:...}, {AgentName, SportName, Stats, Highlights, Errors}) -- POVINNE
     a2) agent-schedule-manager upsert (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt)
-    b) Vytvorit Calendar event v AIZapisy (get_agent_run_reports pro summary)
-    c) send_notification(topic="agent-runs", ntfyUrl, title, message, priority)
+    b) Vytvorit Calendar event v AIZapisy (run_select_sql na AgentRunReports pro summary)
+    c) send_notification(topic="agent-runs", title, message, priority) [MCP tool v server.js]
 18. Uvolnit lock
 
 ## Post-Match Data Collection Pipeline -- 8.0.0
@@ -517,7 +518,7 @@ Krok 2 -- Match events (TIER 1, okamzite po result):
 - zlute karty s PlayerGuid a minutou
 - cervene karty a druhe zlute
 - stridani (PlayerIn + PlayerOut, minuta) -- 2 radky: substitution_out + substitution_in
-- bulk_insert vsechny eventy v jednom volani
+- smart_upsert_batch vsechny eventy v jednom volani
 
 Krok 3 -- Docházka a rozhodci (TIER 2, do 24h):
 - oficial attendance
@@ -557,7 +558,7 @@ Krok 9 -- Form update (TIER 3, do 7 dni):
 
 Krok 10 -- Standings update (TIER 1 pro ligove zapasy, do 24h):
 - prepocitat standings po tomto zapase
-- bulk_update Standings pro oba tymy
+- smart_upsert_batch Standings pro oba tymy
 - aplikovat tiebreaker pravidla z Competition.TiebreakerJson
 
 Krok 11 -- Ostatni nalezena data (TIER 3, do 7 dni):
@@ -694,19 +695,19 @@ Transition rules:
 
 ## ensureTable -- Automaticke vytvareni novych tabulek -- 8.0.0
 
-Kdyz agent potrebuje zcela novou tabulku (neni v baseline), zavola createTable MCP nastroj.
+Kdyz agent potrebuje zcela novou tabulku (neni v baseline), zavola ensure_table MCP nastroj.
 
 Jak funguje:
 - server.js overi, zda tabulka existuje (information_schema.tables)
 - pokud ne, provede CREATE TABLE s BaseGuid sloupci (Guid PK, CreatedAt, UpdatedAt, IsDeleted)
 - dalsi sloupce predane v parametru columns se pridaji pri vytvoreni
-- po vytvoreni je tabulka ihned dostupna pro upsertRecord
+- po vytvoreni je tabulka ihned dostupna pro upsert_record
 - agent dokumentuje novou tabulku v highlights[] a aktualizuje Catalog Drive soubor
 
 Pravidla:
 - nazev tabulky vzdy PascalCase, plural (Players, MatchEvents, Standings)
 - novou tabulku vzdy zahrn do Baseline Catalog souboru na Google Drive
-- NIKDY nepouzivej raw SQL pro CREATE TABLE -- vzdy pres createTable MCP nastroj
+- NIKDY nepouzivej raw SQL pro CREATE TABLE -- vzdy pres ensure_table MCP nastroj
 - po vytvoreni testuj insert jednoho radku (pak smaz IsDeleted=true)
 
 ## EntityHistory -- Version History Table -- 8.0.0
@@ -855,7 +856,7 @@ EventType hodnoty (univerzalni):
 Pravidla:
 - 1 MatchEvents radek = 1 diskretni udalost
 - Stridani = 2 radky: substitution_out (odchazejici) + substitution_in (prichazejici)
-- bulk_insert pro vsechny eventy zapasu v jednom volani
+- smart_upsert_batch pro vsechny eventy zapasu v jednom volani
 - NEUKLADAT eventy do Metadata na Matches radku
 
 ## MatchStats tabulka -- 8.0.0
@@ -1049,7 +1050,7 @@ CHAPTER 8: SEASON & COMPETITION MANAGEMENT
 
 Inicializace nove sezony (jednou na zacatku sezony):
 1. Vytvorit novy Season zaznam (SeasonName, StartDate, EndDate, CompetitionGuid)
-2. Registrovat tymy (Squads bulk_insert)
+2. Registrovat tymy (Squads smart_upsert_batch)
 3. Inicializovat Standings radky (Points=0, Played=0, ...)
 4. Importovat fixture list (Status=scheduled)
 5. Archivovat predchozi sezonu do HistoricalSnapshots
@@ -1218,7 +1219,7 @@ Pravidla:
 - Prepocitat po kazdem novem dokoncene zapase
 - Form5 retezec: W=vyhry, D=remiza, L=prohry, nejnovejsi na indexu 0
 - FormScore: Form5Points/15 * 70 + streak bonus 30, max 100, min 0
-- Aktualizovat TeamForm pres upsertRecord po Kroku 9 post-match pipeline
+- Aktualizovat TeamForm pres upsert_record po Kroku 9 post-match pipeline
 
 ## Player Rankings and Top Scorers -- 8.0.0
 
@@ -1385,7 +1386,7 @@ Sber odds dat:
 3. Parsovat do kanonickeho formatu: {bookmaker, marketType, homeOdds, drawOdds, awayOdds, timestamp, source}
 4. Detekovat pohyb odds (closing vs opening pres implied probability)
 5. Flag suspicious pohyb (>20% implied probability shift) jako integrity warning
-6. Ulozit bulk_insert do MatchOdds
+6. Ulozit smart_upsert_batch do MatchOdds
 7. NESBIRAT odds pro upcoming nebo live zapasy
 
 Odds pravidla:
@@ -1499,7 +1500,7 @@ Backfill procedure (per run):
 1. identifikovat tabulky s nedávno přidanými sloupci (query SchemaMigrations)
 2. vybrat max 100 řádků, pořadí: NULL hodnoty first (IS NULL DESC), pak nejstarší dle UpdatedAt ASC
 3. pokusit se získat chybějící data ze zdroje
-4. aktualizovat přes upsertRecord s načtenými poli
+4. aktualizovat přes upsert_record s načtenými poli
    - sloupce mohou být přepsány novou hodnotou (nová data mají přednost)
    - nikdy nepřepsat hodnotou NULL (pokud zdroj vrátí NULL, hodnotu neměnit)
 5. pokud zdroj nedostupný: ponechat NULL (ne prázdný string), DataCompleteness = "partial"
@@ -1509,7 +1510,7 @@ Backfill procedure (per run):
 Limits per run:
 - maximum 100 záznamů na tabulku
 - nejprve kritická tabulka (nejvyšší entity Score)
-- bulk_update preferováno pro batch backfill
+- smart_upsert_batch preferováno pro batch backfill
 - backfill nesmí přepsat existující hodnotu hodnotou NULL
 
 ## Incremental vs Full Refresh Strategy -- 8.0.0
@@ -1631,16 +1632,19 @@ CHAPTER 13: TOOLS & INTEGRATIONS
 
 ## MCP Tools Overview -- 8.0.0
 
-Povinné MCP nástroje pro Manager agenta:
-- dbPing — ověření dostupnosti DB
-- getRecord / queryRecords — čtení z DB
-- upsertRecord / bulk_insert / bulk_update — zápis do DB
-- createTable — vytvoření nové tabulky (ensureTable)
-- save_agent_run_report — uložení run reportu (POVINNÉ)
-- get_agent_run_reports — čtení run reportů spravovaných agentů
-- read_google_drive_file / write_google_drive_file — Drive I/O
-- send_notification — ntfy notifikace
-- create_calendar_event / update_calendar_event — Google Calendar
+Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
+- db_ping — ověření dostupnosti DB
+- run_select_sql — čtení z DB (SELECT + advisory lock/unlock)
+- upsert_record — zápis jednoho záznamu
+- smart_upsert_batch — bulk zápis (max 500 záznamů)
+- soft_delete_record — soft delete
+- ensure_table — vytvoření nové tabulky
+- upsert_record("AgentRunReports",...) — uložení run reportu (POVINNÉ)
+- run_select_sql("SELECT * FROM AgentRunReports...") — čtení run reportů
+- send_notification [MCP tool v server.js] — ntfy notifikace
+- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(42)")
+- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(42)")
+Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
 
 ## Google Drive Agent Folder Structure -- 8.0.0
 
@@ -1649,7 +1653,7 @@ Manager agent má v Google Drive /Prompts/ přístup k těmto složkám:
 Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Podsložky:
-- /Prompts/Manager/           — Prompt soubory pro Manager agenty
+- /Prompts/Managers/          — Prompt soubory pro Manager agenty
 - /Prompts/Managers/{AgentName}.txt — Seznam vlastních DB tabulek agenta (Score, RowCount, LastPopulated)
                                 Format: Score|TableName|RowCount|LastPopulated, jedna tabulka na řádek
 - /Prompts/Catalogs/{AgentName}.txt — Katalogový soubor tabulek Catalog agenta
@@ -1659,7 +1663,7 @@ Podsložky:
 
 Použití při běhu Manager agenta:
 - Načíst /Prompts/Managers/{AgentName}.txt → přehled vlastních DB tabulek agenta
-- Číst run reporty (get_agent_run_reports)
+- Číst run reporty (run_select_sql na AgentRunReports)
 - Zapisovat úkoly do Names/Urls souborů Catalog agentů (append-only)
 - Aktualizovat /Prompts/Managers/{AgentName}.txt po každém úspěšném runu
 
@@ -1672,7 +1676,7 @@ Rozdíl od Catalog agenta:
 - Manager agent: koordinuje Catalog agenty, přiděluje úkoly, agreguje reporty, řeší konflikty
 
 Co Manager agent dělá:
-1. Číst run reporty spravovaných Catalog agentů (get_agent_run_reports)
+1. Číst run reporty spravovaných Catalog agentů (run_select_sql na AgentRunReports)
 2. Identifikovat entity které žádný Catalog agent ještě nezpracoval
 3. Zapisovat prioritní úkoly do Names souborů Catalog agentů
 4. Zapisovat URL zdrojů do Urls souborů Catalog agentů
@@ -1724,7 +1728,7 @@ Inbound webhook flow:
 1. Externi system POST-ne JSON payload na agentovy endpoint
 2. Agent overi HMAC signature (X-Webhook-Signature header) nebo API key
 3. Agent parsuje payload, mapuje na kanonicky schema
-4. Provede upsertRecord normalne jako pri scrapu
+4. Provede upsert_record normalne jako pri scrapu
 5. Zaznamena do AuditLog: source = "webhook", externalId z payloadu
 6. Odesle potvrzeni (HTTP 200) do 5 sekund
 
@@ -1737,7 +1741,7 @@ Pravidla:
 
 ## Skill Directory -- 8.1.0
 
-Detailní Skill Directory (111 skills) je v samostatném souboru:
+Detailní Skill Directory (121 skills) je v samostatném souboru:
   ManagerPromptSkills.txt — Drive folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Načíst při startu (po DB ping, před discovery).
@@ -1746,7 +1750,7 @@ Pokud soubor chybí: pokračovat bez skills, reportovat capability_missing pro k
 Pokud úkol není pokryt žádným skill: navrhnout nový skill (zejména sport-specific),
   přidat ho do ManagerPromptSkills.txt na Drive a reportovat jako capability_missing.
 
-Rychlý přehled klíčových skills (viz ManagerPromptSkills.txt pro kompletní seznam 111):
+Rychlý přehled klíčových skills (viz ManagerPromptSkills.txt pro kompletní seznam 121):
 
 | Task type | Skill |
 |---|---|
@@ -1787,12 +1791,12 @@ Aktivace:
 
 Pravidla v DryRun modu:
 - VSECHNY INSERT, UPDATE, DELETE operace jsou blokovany
-- upsertRecord vraci simulovany vystup s prefix "[DRY_RUN]"
+- upsert_record vraci simulovany vystup s prefix "[DRY_RUN]"
 - Cteni z DB je povoleno (SELECT, getRecord, queryRecords)
 - Google Drive cteni je povoleno; Drive zapis je blokovan
 - ntfy notifikace: povoleny ale s titulem prefixed "[DRY_RUN TEST]"
 - Calendar event: NEBUDE vytvoren v DryRun modu
-- save_agent_run_report: provede se s IsDryRun = true flagou
+- upsert_record("AgentRunReports",...): provede se s IsDryRun = true flagou
 
 DryRun vystup:
 - highlights[] obsahuje "[DRY_RUN] Would insert N rows into TableName"
