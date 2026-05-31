@@ -313,11 +313,22 @@ RowCount = 0 pro Score >= 90 -> report critical_baseline_empty, blokovat readine
 RowCount = 0 pro Score >= 70 -> report baseline_incomplete, warn ale pokracovat
 RowCount = 0 pro Score < 70  -> note v highlights, zadny blok
 
-Katalog aktualizovat:
-- nova tabulka vytvorena v DB (auto-discovered, Score = 50)
+Lifecycle rules:
+- pokud soubor neexistuje: vytvorit po prvnim uspesnem runu:
+  create_file(title="{AgentName}.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<catalog content>)
+- pokud soubor existuje: aktualizovat na konci kazdeho uspesneho runu:
+  pokud dostupny update_file_content: update_file_content(fileId=<id>, textContent=<updated content>)
+  pokud update_file_content neni dostupny: create_file s novym obsahem (stary soubor ponech)
+- nikdy neaktualizovat kdyz db_status == db_unreachable
+
+Katalog aktualizovat kdyz:
+- nova tabulka vytvorena v DB (auto-discovered) → pridat novy radek (Score = 50 jako vychozi)
 - row counts se zmenily o vice nez 10%
 - na konci kazdeho uspesneho scheduled runu
 - po backfill pasu ktery pridal > 50 radku do jakekoliv tabulky
+
+Agent MUZE pridavat nove radky tabulek: pri kazdem runu zkontroluj DB tables a pridej chybejici.
+Novy radek: Score=50 (odhadni dle dulezitosti), RowCount z DB, LastPopulated=dnes.
 
 =============================================================
 CHAPTER 4: SCHEDULED RUN PROTOCOL
