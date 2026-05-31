@@ -20,15 +20,18 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (Score 90-100 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-    L neexistuje -> vytvorit po prvnim uspesnem runu
+    L neexistuje -> vytvorit po prvnim uspesnem runu:
+      create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=...)
+    FORMAT: Score | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
-    (prvnich 5 baseline entities)
 5.  NAMES -> nacist {AgentName}_names.txt z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
     L neexistuje -> preskocit tiše
+    FORMAT: jeden nazev na radek, zadne hlavicky ani metadata
 6.  URLS -> nacist {AgentName}_urls.txt z Drive /Prompts/Urls/
     Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
     L neexistuje -> preskocit tiše
+    FORMAT: jedna URL na radek, zadne hlavicky ani metadata
     BACKFILL (ihned po 4+5+6): NULL hodnoty first, pak nejstarsi dle UpdatedAt;
     sloupce mohou byt prepsat novou hodnotou (nove data maji prednost)
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
@@ -808,7 +811,7 @@ Location:
 - Folder: /Prompts/Catalogs/ (Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
 - Filename: {AgentName}.txt (e.g. PeopleAgent.txt, SportAgent.txt)
 
-Catalog file format:
+Catalog file format (PŘESNĚ tento formát — žádné narrative sekce, žádné entity záznamy):
 ```
 AgentName: {AgentName}
 PromptVersion: {activePromptVersion}
@@ -817,9 +820,14 @@ TableCount: {count}
 
 --- BASELINE TABLES ---
 Score | TableName | Description | RowCount | LastPopulated
-100 | CoreEntityTable | Primary entity table | 1520 | 2025-05-27
-...
+100 | CoreEntityTable | Primary entity table | 1520 | 2026-05-31
+ 90 | EntityAliases | Aliases for entities | 340 | 2026-05-30
+ 70 | Sources | Data sources | 85 | 2026-05-29
 ```
+
+DŮLEŽITÉ: Soubor obsahuje POUZE tabulky (DB table names), NE individuální záznamy/entity.
+- Správně: řádek = jedna DB tabulka se Score, RowCount, LastPopulated
+- Špatně: řádek = konkrétní entita (Solar, Copper, Smith...) nebo narrative text
 
 Score field (0–100) — data collection priority per table:
 - 90–100: critical — blocks readiness if empty
@@ -832,16 +840,17 @@ RowCount = current row count from DB (SELECT COUNT(*) WHERE IsDeleted IS NOT TRU
 LastPopulated = ISO8601 date of last run that wrote data to this table
 
 Lifecycle rules:
-- on startup: read catalog via read_file_content
-- if file does not exist: create after first successful run via create_file
-- compare catalog table list with actual DB tables
-- update RowCount and LastPopulated at end of every successful run
+- on startup: read catalog via read_file_content (search by title in folder 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
+- if file does not exist: create after first successful run:
+  create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=<catalog content>)
+- if file exists: update at end of every successful run:
+  update_file_content(fileId=<id from search_files>, textContent=<updated catalog content>)
 - never update catalog when db_status == db_unreachable
 
 Catalog file read procedure:
-1. search for {AgentName}.txt in Drive folder 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-2. call read_file_content to load current catalog
-3. parse table lines
+1. search_files(query="title = '{AgentName}.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
+2. call read_file_content(fileId=<found id>) to load current catalog
+3. parse table lines (Score | TableName | Description | RowCount | LastPopulated)
 4. compare with actual DB tables
 5. report discrepancies in startup diagnostics
 
@@ -877,20 +886,33 @@ Catalogs/:
 Names/:
 - Agent načte /Prompts/Names/{AgentName}_names.txt při startu
 - Soubor obsahuje seznam konkrétních názvů entit k prioritnímu vyhledání
-- Formát: jeden název na řádek, UTF-8, prázdné řádky přeskočit
+- Formát: POUZE jeden název na řádek, UTF-8 — ŽÁDNÉ hlavičky, metadata, sekce ani komentáře
+  Správně:   Anna
+             Jakub
+             John
+  Špatně:    Purpose: priority queue
+             - Anna | Priority=high | Reason=...
 - Prázdný soubor = žádné prioritní names → pokračovat standardní discovery
 - Nalezené entity z Names souboru zpracovat jako Score 90+ prioritu
-- Po zpracování: Optionally odmazat zpracované položky (přesunout do processed sekce)
+- Při vytváření: create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent=<names>)
+- Při aktualizaci: update_file_content(fileId=<id>, textContent=<updated names>)
+- Po zpracování: odmazat zpracované položky ze souboru (update_file_content s prázdným nebo zkráceným obsahem)
 
 Urls/:
 - Agent načte /Prompts/Urls/{AgentName}_urls.txt při startu
 - Soubor obsahuje seznam URL, které má agent projít pro sběr dat
-- Formát: jedna URL na řádek, UTF-8, prázdné řádky přeskočit
+- Formát: POUZE jedna URL na řádek, UTF-8 — ŽÁDNÉ hlavičky, metadata, sekce ani komentáře
+  Správně:   https://www.fda.gov/
+             https://www.who.int/
+  Špatně:    Purpose: seed URLs
+             - https://www.fda.gov/ | FDA | confirmed
 - Každou URL projít max 1× za run (dedup pomocí hash URL)
-- URL z Urls souboru zpracovat před standardním web scrapin (vyšší priorita)
+- URL z Urls souboru zpracovat před standardním web scrapingem (vyšší priorita)
 - Rate limiting platí stejně jako pro ostatní zdroje (1 req/s scraping)
 - Pokud URL vrátí 4xx/5xx: zaznamenat do errors[], přeskočit, nepřestat
-- Po zpracování: Optionally odmazat zpracované URL (přesunout do processed sekce)
+- Při vytváření: create_file(title="{AgentName}_urls.txt", parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent=<urls>)
+- Při aktualizaci: update_file_content(fileId=<id>, textContent=<updated urls>)
+- Po zpracování: odmazat zpracované URL ze souboru (update_file_content)
 
 Pravidla pro Names a Urls soubory:
 - Číst vždy na začátku runu (po DB ping, před discovery)
