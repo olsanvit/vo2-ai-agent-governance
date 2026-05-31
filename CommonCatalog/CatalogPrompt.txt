@@ -542,7 +542,7 @@ CHAPTER 6: DATA QUALITY
 ## Confidence Decay Governance — 8.3.0
 
 Decay rules:
-- každých 30 dní bez re-verifikace: ConfidenceScore klesá o 5 bodů (minimum 10)
+- každých 30 dní bez re-verifikace: ConfidenceScore klesá o 5.000 bodů (minimum 10.000)
 - VerifiedAt column tracks last verification timestamp
 - decay applications during backfill pass: select up to 100 records WHERE VerifiedAt < now() - interval '30 days' AND ConfidenceScore > 10
 - new score: ConfidenceScore - (5 * floor(days_since_verification / 30))
@@ -2126,11 +2126,11 @@ Priorita zdrojů:
 Kritické údaje vždy pokud možno ověř více zdroji.
 
 QualityScore interpretace:
-- 0.00-29.99: slabé
-- 30.00-49.99: nízké
-- 50.00-69.99: základní
-- 70.00-89.99: dobré
-- 90.00-100.00: výborné
+- 0.000-29.999: slabé
+- 30.000-49.999: nízké
+- 50.000-69.999: základní
+- 70.000-89.999: dobré
+- 90.000-100.000: výborné
 
 ## Fallback do Google Sheets (podrobně)
 
@@ -2193,11 +2193,11 @@ Jedna entita může mít:
 
 ### Image QualityScore
 
-- 90.00-100.00: oficiální asset z oficiálního zdroje
-- 70.00-89.99: důvěryhodný zdroj, dobrá shoda
-- 50.00-69.99: použitelný obrázek, chybí část ověření
-- 30.00-49.99: slabý zdroj nebo nejistý obrázek
-- 0.00-29.99: neukládat jako důvěryhodný primary obrázek
+- 90.000-100.000: oficiální asset z oficiálního zdroje
+- 70.000-89.999: důvěryhodný zdroj, dobrá shoda
+- 50.000-69.999: použitelný obrázek, chybí část ověření
+- 30.000-49.999: slabý zdroj nebo nejistý obrázek
+- 0.000-29.999: neukládat jako důvěryhodný primary obrázek
 
 Obrázek s nízkým QualityScore nesmí přepsat kvalitnější primary obrázek.
 
@@ -2320,7 +2320,7 @@ V sekci "Uloženo do tabulek" zahrň SharedImages a EntityImages.
 - HistoricalScore: historická stabilita a úplnost
 - AiScore: AI odhad použitelnosti/kvality
 
-Všechny score sloupce v rozsahu 0.00 až 100.00.
+Všechny score sloupce v rozsahu 0.000 až 100.000.
 Pokud skóre nelze určit: null nebo 0 podle DB standardu.
 Nepřepisuj vyšší skóre nižším bez důvodu.
 
@@ -2354,7 +2354,7 @@ Při nejisté identitě: sniž ConfidenceScore
      - zpracovat před standardním scrapingem; každý zpracovaný název označit jako processed
 10b. Urls queue zpracování — {AgentName}_urls.txt → scraping před standardními zdroji
      - každou zpracovanou URL označit jako processed
-11. data collection (Score 90-100 first)
+11. data collection (Score >= 90.000 first)
     - rate limiting, pagination, anti-bot
 12. data validation (range, format, referential integrity)
 13. deduplication (4 kroky)
@@ -2505,7 +2505,7 @@ Běh je dry_run, pokud:
 - TechnologiesView, SoftwareSystemsView, APIsView, SDKsView
 - InfrastructureView, CloudServicesView, IntegrationsView, VersionHistoryView
 
-## Skill Directory -- 8.1.0
+## Skill Directory -- 8.3.0
 
 Detailní Skill Directory (111 skills) je v samostatném souboru:
   CatalogPromptSkills.txt — Drive folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
