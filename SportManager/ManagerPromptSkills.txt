@@ -153,11 +153,11 @@ Outputs: anomaly flag (true/false), ManualReviewQueue záznam (pokud flagován)
 Limitations: threshold 15 je konfigurovatelný; flag nezastavuje zápis
 
 ## match-event-bulk-inserter
-Task types: MatchEvents, bulk_insert, goals/cards/substitutions
+Task types: MatchEvents, smart_upsert_batch, goals/cards/substitutions
 Description: Efektivně bulk insertuje MatchEvents (góly, karty, střídání) pro zápas.
   Substitution = 2 záznamy (IN + OUT). Deduplicates dle EventType/Minute/PlayerGuid.
 Inputs: MatchGuid, seznam eventů (type, minute, player, team)
-Outputs: počet vložených eventů, duplicity přeskočeny, bulk_insert výsledek
+Outputs: počet vložených eventů, duplicity přeskočeny, smart_upsert_batch výsledek
 Limitations: max 100 eventů per zápas; dedup pouze na základě minute + type + player
 
 ## match-lineups-processor
@@ -528,7 +528,7 @@ Limitations: pouze informativní flag; nenavrhuje konkrétní sázky
 ## tier1-pipeline-executor
 Task types: Tier1 kroky, okamžité post-match, scores/events/standings
 Description: Exekuuje Tier1 post-match pipeline kroky okamžitě po dokončení zápasu:
-  HomeScore/AwayScore/Status/WinnerTeamGuid, MatchEvents bulk_insert, Standings update.
+  HomeScore/AwayScore/Status/WinnerTeamGuid, MatchEvents smart_upsert_batch, Standings update.
 Inputs: MatchGuid, raw result data ze zdroje
 Outputs: Matches update, MatchEvents záznamy, Standings update, AuditLog
 Limitations: Tier1 NIKDY přeskočit; při selhání retry → fallback → error escalation
@@ -629,7 +629,7 @@ Description: Generuje strukturovaný run report ve standardním formátu Manager
   Zahrnuje: startup sekci, zpracované zápasy per datum, Post-Match Pipeline výsledky
   (Krok 1-11), errors, highlights, SkillsUsed[], capability_missing[], duration.
 Inputs: raw run data (matches processed per date, pipeline results, errors, highlights, SkillsUsed)
-Outputs: formátovaný run report připravený pro save_agent_run_report
+Outputs: formátovaný run report připravený pro upsert_record("AgentRunReports", ...)
 Limitations: report musí být uložen i při selhání runu
 
 ## fallback-run-auditor
@@ -960,7 +960,7 @@ Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří
 Task types: DryRun mode, testovací beh bez DB zápisů, simulace
 Description: Řídí DryRun mod pro sport agenty: blokuje INSERT/UPDATE/DELETE, simuluje výstupy
   s "[DRY_RUN]" prefixem. Calendar eventy se netvoří. Ntfy odesílá s "[DRY_RUN TEST]".
-  save_agent_run_report se provede s IsDryRun=true.
+  upsert_record("AgentRunReports", ...) se provede s IsDryRun=true.
 Inputs: RunMode: dry_run nebo DryRunAllowed: true + dry_run=true parametr
 Outputs: simulované výstupy, run report s IsDryRun=true, závěrečná zpráva "DRY RUN COMPLETE"
 Limitations: DB čtení povoleno; Drive čtení povoleno; veškeré zápisy (DB/Drive/Calendar) blokovány

@@ -1825,8 +1825,8 @@ Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - upsert_record("AgentRunReports",...) — uložení run reportu (POVINNÉ)
 - run_select_sql("SELECT * FROM AgentRunReports...") — čtení run reportů
 - send_notification [MCP tool v server.js] — ntfy notifikace
-- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(42)")
-- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(42)")
+- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
+- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
 Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
 
 ## Google Drive Agent Folder Structure -- 8.4.0
