@@ -1927,9 +1927,13 @@ app.post("/mcp", async (req, res) => {
   if (req.headers.authorization !== `Bearer ${AUTH_TOKEN}`) {
     return res.status(401).json({ error: "Unauthorized" });
   }
-  // Normalize Accept header — Claude.ai and some MCP clients omit text/event-stream
+  // Normalize Accept header — Claude.ai and some MCP clients omit text/event-stream.
+  // @hono/node-server reads from rawHeaders (not headers), so both must be updated.
   if (!req.headers["accept"] || !req.headers["accept"].includes("text/event-stream")) {
     req.headers["accept"] = "application/json, text/event-stream";
+    const idx = req.rawHeaders.findIndex((h, i) => i % 2 === 0 && h.toLowerCase() === "accept");
+    if (idx === -1) req.rawHeaders.push("Accept", "application/json, text/event-stream");
+    else req.rawHeaders[idx + 1] = "application/json, text/event-stream";
   }
 
   const server = createMcpServer();
