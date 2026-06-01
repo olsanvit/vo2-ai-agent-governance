@@ -304,8 +304,10 @@ ODLIŠUJ Drive soubor od DB tabulky:
 
 ## Concurrent Runs Governance -- 8.4.0
 
-Lock key = hashtext(SportName || AgentName)::bigint & 2147483647
+Lock key = hashtext(COALESCE(NULLIF(SportName,''), 'unknown') || '|' || AgentName)::bigint & 2147483647
   (per sport + per agent — různé sporty mohou běžet paralelně)
+  POZNÁMKA: '|' jako separator zabraňuje kolizím (např. "Foot" + "ball" ≠ "Football" + "")
+  SportName nesmí být prázdný — pokud sport nebyl nalezen, STOP před lock krokem
 
 Lock failure protocol:
 - pg_try_advisory_lock vrátí false → lock drží jiný proces
@@ -631,7 +633,7 @@ Automaticke znovuotevreni exhausted datumu:
 1.  Overit dostupnost DB (db_ping)
     L db_unreachable → STOP okamžitě: žádné zápisy, žádný Drive update
        Run report nelze uložit do DB → zaznamenat v textu odpovědi + ntfy urgent (topic: agent-errors)
-2.  Ziskat lock: run_select_sql("SELECT pg_try_advisory_lock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
+2.  Ziskat lock: run_select_sql("SELECT pg_try_advisory_lock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
     Lock je per sport + per agent — různé sporty mohou běžet paralelně.
     L lock selže → retry 3× (2s/4s/8s); stále locked → STOP, log blocker "concurrent_run_detected" do highlights[]
 3.  Nacist sport podle Agent/Alias
@@ -690,7 +692,7 @@ Automaticke znovuotevreni exhausted datumu:
        L Calendar nedostupný → log capability_missing("calendar"), pokračovat
     c) send_notification(topic="agent-runs") [MCP tool v server.js]
        L ntfy nedostupný → log capability_missing("ntfy"), pokračovat
-18. Uvolnit lock: run_select_sql("SELECT pg_advisory_unlock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
+18. Uvolnit lock: run_select_sql("SELECT pg_advisory_unlock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
     L unlock selže → retry jednou po 2s; pokud stale selhává → log warning, pokračovat
 
 ## Post-Match Data Collection Pipeline -- 8.4.0
@@ -1833,8 +1835,8 @@ Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - upsert_record("AgentRunReports",...) — uložení run reportu (POVINNÉ)
 - run_select_sql("SELECT * FROM AgentRunReports...") — čtení run reportů
 - send_notification [MCP tool v server.js] — ntfy notifikace
-- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
-- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(hashtext('{SportName}' || '{AgentName}')::bigint & 2147483647)")
+- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
+- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
 Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
 
 ## Google Drive Agent Folder Structure -- 8.4.0
