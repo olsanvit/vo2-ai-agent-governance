@@ -446,6 +446,22 @@ async function ensureBaseStructure(table) {
   await addColumnIfMissing("ScoreUpdatedAt", `"ScoreUpdatedAt" timestamptz NULL`);
   await addColumnIfMissing("ScoreReason", `"ScoreReason" text NOT NULL DEFAULT ''`);
 
+  // Batch-fetch all score column types for this table in one query instead of N queries.
+  const scoreColsExisting = SCORE_COLUMNS.filter(c => existing.has(c));
+  let colTypesMap = {};
+  if (scoreColsExisting.length > 0) {
+    const typeRes = await pool.query(
+      `SELECT column_name, numeric_precision, numeric_scale
+       FROM information_schema.columns
+       WHERE table_schema='public' AND table_name=$1
+         AND column_name = ANY($2::text[])`,
+      [t, scoreColsExisting]
+    );
+    for (const row of typeRes.rows) {
+      colTypesMap[row.column_name] = { p: Number(row.numeric_precision), s: Number(row.numeric_scale) };
+    }
+  }
+
   for (const col of SCORE_COLUMNS) {
     if (!existing.has(col)) {
       await pool.query(`ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS "${col}" numeric(6,3) NOT NULL DEFAULT 0 CHECK ("${col}" >= 0 AND "${col}" <= 100)`);
@@ -454,16 +470,16 @@ async function ensureBaseStructure(table) {
     } else {
       // Migrate existing numeric(5,2) score columns to numeric(6,3) for 3-decimal precision.
       // This is a safe widening cast — no data loss, just increased precision.
-      const typeRes = await pool.query(
-        `SELECT numeric_precision, numeric_scale FROM information_schema.columns
-         WHERE table_schema='public' AND table_name=$1 AND column_name=$2`,
-        [t, col]
-      );
-      if (typeRes.rows.length > 0) {
-        const { numeric_precision, numeric_scale } = typeRes.rows[0];
-        if (Number(numeric_precision) === 5 && Number(numeric_scale) === 2) {
+      // Skips gracefully when a view or rule depends on the column (PG error 0A000).
+      const info = colTypesMap[col];
+      if (info && info.p === 5 && info.s === 2) {
+        try {
           await pool.query(`ALTER TABLE "${t}" ALTER COLUMN "${col}" TYPE numeric(6,3)`);
           invalidateSchema(t);
+        } catch (e) {
+          // 0A000 = feature_not_supported: column used by a view or rule — skip silently.
+          if (e.code !== "0A000") throw e;
+          console.warn(`[migration] Skipped numeric(6,3) cast for "${t}"."${col}" — view dependency: ${e.detail || e.message}`);
         }
       }
     }
@@ -1910,6 +1926,10 @@ app.post("/mcp", async (req, res) => {
   }
   if (req.headers.authorization !== `Bearer ${AUTH_TOKEN}`) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+  // Normalize Accept header — Claude.ai and some MCP clients omit text/event-stream
+  if (!req.headers["accept"] || !req.headers["accept"].includes("text/event-stream")) {
+    req.headers["accept"] = "application/json, text/event-stream";
   }
 
   const server = createMcpServer();
