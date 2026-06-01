@@ -324,17 +324,21 @@ Lock failure protocol:
 
 Pravidlo: vyšší tier NIKDY nepřepsán nižším.
 
-Tier 1 (score >= 90.000, verified official): HomeScore, AwayScore, Status, WinnerTeamGuid
-  → nepřepisovat NIKDY z Tier 2/3/4; pouze opravit pokud official VAR rozhodnutí
+Tier 1 (score >= 90.000, verified official): klíčové výsledkové a stavové hodnoty entity
+  → nepřepisovat NIKDY z Tier 2/3/4; pouze opravit při prokazatelné official korekci
 
-Tier 2 (score >= 70.000, high-confidence): stats, lineups, referees
+Tier 2 (score >= 70.000, high-confidence): statistiky, detailní data, vazby
   → přepsat pouze pokud nový zdroj má VYŠŠÍ ConfidenceScore
 
-Tier 3 (score >= 50.000, standard): player ratings, H2H, form
+Tier 3 (score >= 50.000, standard): odvozená data, hodnocení, agregace
   → přepsat pokud nový zdroj je spolehlivější nebo data jsou novější
 
-Tier 4 (score < 50.000, opportunistic): conditions, broadcast, narrative
+Tier 4 (score < 50.000, opportunistic): kontextová data, narativní popisy
   → přepsat volně, NIKDY nepřepisovat Tier 1-3 hodnoty
+
+POZNÁMKA: Sport-specifické příklady sloupců (HomeScore, AwayScore, WinnerTeamGuid, MatchEvents...)
+jsou definovány v ManagerPrompt. CatalogPrompt je obecný — tento tier systém platí pro
+libovolný typ dat (entity záznamy, dokumenty, produkty, osoby, organizace...).
 
 Backfill pravidlo:
   → backfill POUZE prázdné (NULL) hodnoty
@@ -1080,13 +1084,20 @@ Pravidla pro Names a Urls soubory:
 
 ## Manager Agent — Definice a Governance — 8.4.0
 
-Manager agent je nadřazený orchestrační agent, který koordinuje skupinu Catalog agentů v rámci jedné domény.
+!! DŮLEŽITÉ ROZLIŠENÍ:
+   "Manager agent" v CatalogPrompt = čistý KOORDINÁTOR Catalog agentů (nepíše přímo do DB)
+   "ManagerPrompt" (SportManager/) = SAMOSTATNÝ sport datový agent (píše přímo do DB)
+   Jedná se o dva různé koncepty se sdíleným slovem "Manager". NEPLÉST.
+
+Manager agent (koordinátor) je nadřazený orchestrační agent, který koordinuje skupinu
+Catalog agentů v rámci jedné domény. NEPÍŠE přímo do DB spravovaných agentů — pouze
+přiděluje úkoly přes Names/Urls soubory a agreguje jejich reporty.
 
 Rozdíl oproti Catalog agentovi:
 - Catalog agent: sbírá a udržuje data pro konkrétní doménu (People, Sport, Vehicles...)
-- Manager agent: koordinuje více Catalog agentů, přiděluje úkoly, agreguje reporty, řeší cross-agent konflikty
+- Manager agent (koordinátor): koordinuje více Catalog agentů, přiděluje úkoly, agreguje reporty, řeší cross-agent konflikty
 
-Prompt Manager agenta:
+Prompt Manager agenta (koordinátora):
 - Uložen v /Prompts/Managers/{ManagerName}.txt
 - Dědí CatalogPrompt governance stejně jako Catalog agent
 - Navíc obsahuje: seznam spravovaných Catalog agentů, pravidla přidělování úkolů, agregační logiku
