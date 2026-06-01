@@ -1,10 +1,21 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.4.0
-Generated: 2026-05-28
+SkillsVersion: 8.5.0
+Generated: 2026-06-01
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
 Tento soubor je autoritativní seznam skills povolených pro Catalog agenty.
 Každý Catalog agent musí mít aktivních ASPOŇ 11 skills.
+
+!! MAINTENANCE POZNÁMKA: Přibližně 60 skills existuje identicky v CatalogPromptSkills i
+   ManagerPromptSkills. Při úpravě sdíleného skilu VŽDY aktualizuj OBA soubory.
+   Sdílené skills (identické nebo téměř identické v obou souborech):
+   db-schema-guardian, db-migration-validator, db-null-audit, db-index-optimizer,
+   db-constraint-checker, db-table-health-monitor, db-column-score-auditor,
+   db-foreign-key-resolver, match-upsert-guardian, entity-alias-registry,
+   confidence-decay-manager, source-reliability-tracker, cross-source-verifier,
+   ntfy-notification-sender, audit-log-writer, next-run-calendar-scheduler,
+   vo2qnapdb-image-guardian, weekly-digest-reporter, cross-agent-task-writer,
+   agent-schedule-manager, dry-run-mode-controller a další.
 
 =============================================================
 PRAVIDLA POUŽITÍ SKILLS

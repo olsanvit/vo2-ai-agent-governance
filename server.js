@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "8.4.0";
+const MCP_VERSION = "8.5.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -451,6 +451,21 @@ async function ensureBaseStructure(table) {
       await pool.query(`ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS "${col}" numeric(6,3) NOT NULL DEFAULT 0 CHECK ("${col}" >= 0 AND "${col}" <= 100)`);
       invalidateSchema(t);
       existing = await getColumns(t);
+    } else {
+      // Migrate existing numeric(5,2) score columns to numeric(6,3) for 3-decimal precision.
+      // This is a safe widening cast — no data loss, just increased precision.
+      const typeRes = await pool.query(
+        `SELECT numeric_precision, numeric_scale FROM information_schema.columns
+         WHERE table_schema='public' AND table_name=$1 AND column_name=$2`,
+        [t, col]
+      );
+      if (typeRes.rows.length > 0) {
+        const { numeric_precision, numeric_scale } = typeRes.rows[0];
+        if (Number(numeric_precision) === 5 && Number(numeric_scale) === 2) {
+          await pool.query(`ALTER TABLE "${t}" ALTER COLUMN "${col}" TYPE numeric(6,3)`);
+          invalidateSchema(t);
+        }
+      }
     }
   }
 }
@@ -657,17 +672,23 @@ async function searchRecords(table, query, limit = 20) {
 }
 
 async function listAgentEntityTables(agentName, entityTables = []) {
+  // When explicit table list is provided, use it directly — recommended for all agents.
   if (Array.isArray(entityTables) && entityTables.length > 0) {
     return entityTables.map(normalizeIdentifierName);
   }
 
-  const normalizedAgentName = normalizeIdentifierName(agentName).toLowerCase();
+  // Auto-detection fallback: return all public base tables except known system tables.
+  // NOTE: for precise agent-scoped queries always pass entityTables explicitly —
+  // auto-detection cannot reliably infer which tables belong to a given agent
+  // when table names do not carry the agent name as a prefix (e.g. sport agents
+  // use generic names like Matches, Teams, Players).
   const excludedTables = new Set([
     "AuditLog",
     "MigrationLog",
+    "SchemaMigrations",
     "JobQueue",
-    "EntityImages",
     "DeadLetterQueue",
+    "EntityImages",
     ...ENTERPRISE_530_TABLES
   ].map(name => name.toLowerCase()));
 
@@ -683,12 +704,6 @@ async function listAgentEntityTables(agentName, entityTables = []) {
     .map(row => String(row.table_name || "").trim())
     .filter(Boolean)
     .filter(name => !excludedTables.has(name.toLowerCase()))
-    .filter(name => {
-      const lower = name.toLowerCase();
-      // Strict prefix match only — prevents accidental capture of tables from other agents
-      // that happen to contain the agent name as a substring.
-      return lower === normalizedAgentName || lower.startsWith(normalizedAgentName + "_");
-    })
     .map(normalizeIdentifierName);
 }
 
