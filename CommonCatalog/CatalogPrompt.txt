@@ -144,7 +144,7 @@ ntfy:         https://ntfy.vo2info.cz
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-MCP Version:  8.5.0
+MCP Version:  8.5.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -958,7 +958,7 @@ DB operations (VO2QNAPDB MCP — skutečná jména nástrojů):
 - run_select_sql(sql) — SELECT queries + advisory lock/unlock
 - soft_delete_record(table, criteria) — soft delete (IsDeleted=true)
 - ensure_table(table) — vytvoří tabulku pokud neexistuje
-- audit_log(action, table, data) — zápis do AuditLog
+- upsert_record("AuditLog", {Guid: newGuid}, {...}) — zápis do AuditLog (není samostatný MCP tool — použij upsert_record)
 
 Run report (není dedikovaný tool — použij):
 - upsert_record("AgentRunReports", {Guid: ...}, {AgentName, Status, PromptVersion, ...}) — save report

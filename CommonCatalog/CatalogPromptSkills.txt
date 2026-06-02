@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.5.0
+SkillsVersion: 8.5.1
 Generated: 2026-06-02
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -710,11 +710,12 @@ Outputs: degraded execution plan, deferred operations list, estimated recovery t
 Limitations: nemůže odložit Tier1 (kritické) operace ani upsert_record("AgentRunReports", ...)
 
 ## error-escalation-manager
-Task types: error escalation, ntfy agent-errors, Tier3 errors
-Description: Eskaluje Tier3 chyby na ntfy agent-errors kanál. Formátuje zprávu
-  s kontextem (agent, operation, error, affected records). Max 3 ntfy per run.
-Inputs: Tier3 error list, AgentName, run ID
-Outputs: ntfy zprávy odeslány, escalation log
+Task types: error escalation, ntfy agent-alerts, Tier3 errors
+Description: Eskaluje Tier3 chyby na ntfy agent-alerts kanál. Tier4 (kritické bloky) eskaluje
+  na agent-errors. Formátuje zprávu s kontextem (agent, operation, error, affected records).
+  Max 3 ntfy per run.
+Inputs: Tier3/4 error list, AgentName, run ID
+Outputs: ntfy zprávy odeslány (agent-alerts nebo agent-errors), escalation log
 Limitations: max 3 ntfy per run; překročení limitu agreguje do jedné souhrnné zprávy
 
 ## source-failover-coordinator
@@ -892,11 +893,13 @@ Limitations: query parametry nutné pro obsah (id, page) zachovává
 -- M. NOTIFICATION (3) ----------------------------------------
 
 ## ntfy-notification-sender
-Task types: ntfy notifikace, agent-runs, agent-errors, agent-maintenance
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts, agent-maintenance, agent-digest
 Description: Odesílá notifikace na ntfy.vo2info.cz do příslušných kanálů.
-  Formátuje zprávu pro agent-runs (run summary), agent-errors (Tier3), agent-maintenance.
-  Max 3 notifikace per run.
-Inputs: kanál (agent-runs/agent-errors/agent-maintenance), zpráva, priority (default/high)
+  agent-runs: výsledky runů. agent-errors: POUZE kritické bloky (priority urgent).
+  agent-alerts: varování (rate limit, source blocked, missed run, circuit breaker, ManualReviewQueue).
+  agent-maintenance: backfill, merge, schema změny. agent-digest: týdenní/měsíční souhrny.
+  Max 3 notifikace per run (digest se nepočítá do limitu).
+Inputs: kanál (agent-runs/agent-errors/agent-alerts/agent-maintenance/agent-digest), zpráva, priority
 Outputs: notifikace odeslána, message ID
 Limitations: max 3 ntfy per run; při překročení agreguje do jedné souhrnné zprávy
 
@@ -916,7 +919,7 @@ Inputs: run výsledek (success/partial/failed), run stats, duration
 Outputs: ntfy zpráva odeslána na agent-runs, message format string
 Limitations: jedna zpráva per run; zahrnuta v limitu 3 ntfy/run
 
--- N. ADVANCED OPERATIONS (6) -----------------------------------
+-- N. ADVANCED OPERATIONS (7) -----------------------------------
 
 ## dry-run-mode-controller
 Task types: DryRun mode, testovací beh, simulace bez DB zápisů

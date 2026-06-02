@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 8.5.0
+SkillsVersion: 8.5.1
 Generated: 2026-06-02
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -869,11 +869,14 @@ Limitations: contract_expiry musí být uložen v Metadata; bez dat nelze sledov
 -- L. NOTIFICATION & REPORTING (5) ----------------------------
 
 ## ntfy-notification-sender
-Task types: ntfy notifikace, agent-runs, agent-errors, agent-maintenance
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts, agent-maintenance, agent-digest
 Description: Odesílá notifikace na ntfy.vo2info.cz pro sportovního agenta.
-  Kanály: agent-runs (run summary), agent-errors (Tier3), agent-maintenance (alerts).
+  agent-runs: výsledky runů, výsledky zápasů, standings. agent-errors: POUZE kritické bloky (priority urgent).
+  agent-alerts: varování (source blocked, odds integrity flag, missed run, circuit breaker).
+  agent-maintenance: backfill, season lifecycle, hráčské disciplíny. agent-digest: týdenní/měsíční souhrny.
   Sport emoji dle sportu: fotbal=soccer, basketbal=basketball, hokej=ice_hockey.
-Inputs: kanál, zpráva, sport emoji tag, priority (default/high)
+  Max 3 notifikace per run (digest se nepočítá do limitu).
+Inputs: kanál, zpráva, sport emoji tag, priority (default/high/urgent)
 Outputs: notifikace odeslána, message ID
 Limitations: max 3 ntfy per run; překročení agreguje do jedné souhrnné zprávy
 
@@ -886,11 +889,12 @@ Outputs: AuditLog záznam Guid
 Limitations: before/after max 10 KB per záznam; SELECT operace neloguje
 
 ## error-escalation-manager
-Task types: error escalation, ntfy agent-errors, Tier3 sport errors
-Description: Eskaluje Tier3 chyby sport agenta na ntfy agent-errors. Kontextualizuje
-  zprávu pro sport: jaký zápas/soutěž/datum selhal a proč.
-Inputs: Tier3 error list, AgentName, run ID, sport context
-Outputs: ntfy zprávy odeslány, escalation log
+Task types: error escalation, ntfy agent-alerts, Tier3 sport errors
+Description: Eskaluje Tier3 chyby sport agenta na ntfy agent-alerts. Tier4 (kritické bloky —
+  db_unreachable, run zastaven) eskaluje na agent-errors. Kontextualizuje zprávu pro sport:
+  jaký zápas/soutěž/datum selhal a proč.
+Inputs: Tier3/4 error list, AgentName, run ID, sport context
+Outputs: ntfy zprávy odeslány (agent-alerts nebo agent-errors), escalation log
 Limitations: max 3 ntfy per run; sdílí limit s dalšími skills
 
 ## compliance-audit-generator
@@ -951,7 +955,7 @@ Inputs: AgentName, look-back period (default 30 dní)
 Outputs: performance trend (improving/stable/degrading), SLA compliance per metric
 Limitations: vyžaduje min 10 runů pro benchmark; nové agenty mají insufficient data period
 
--- N. ADVANCED OPERATIONS (11) -----------------------------------
+-- N. ADVANCED OPERATIONS (12) -----------------------------------
 
 ## manager-baseline-file-manager
 Task types: baseline soubor agenta, Drive /Prompts/Managers/, RowCount, LastPopulated aktualizace
