@@ -1958,16 +1958,25 @@ app.post("/mcp", async (req, res) => {
   await transport.handleRequest(req, res, req.body);
 });
 
-initDb()
-  .then(() => {
-    const PORT = Number(process.env.PORT || 3000);
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`VO2QNAPDB MCP ${MCP_VERSION} running on port ${PORT}`);
-    });
-  })
+const PORT = Number(process.env.PORT || 3000);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`VO2QNAPDB MCP ${MCP_VERSION} running on port ${PORT}`);
+});
+
+async function initDbWithRetry(attempt = 1) {
+  try {
+    await initDb();
+    console.log(`VO2QNAPDB MCP ${MCP_VERSION} DB initialized OK`);
+  } catch (err) {
+    const delay = Math.min(attempt * 5000, 60000);
+    console.warn(`DB init attempt ${attempt} failed (${err.message}) — retry in ${delay / 1000}s`);
+    setTimeout(() => initDbWithRetry(attempt + 1), delay);
+  }
+}
+
+initDbWithRetry()
   .catch(err => {
-    console.error("Failed to initialize database:", err);
-    process.exit(1);
+    console.error("Unexpected error in initDbWithRetry:", err);
   });
 
 
