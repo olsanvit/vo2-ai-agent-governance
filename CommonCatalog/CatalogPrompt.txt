@@ -1,10 +1,10 @@
-Agent: 8.5.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 8.6.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 8.5.1
+PromptVersion: 8.6.0
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.5.1
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.6.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -63,7 +63,8 @@ SCHEDULED RUN (v tomto poradi):
              c) každých 30 úspěšných runů (runCount % 30 == 0)
              → viz Chapter 4: Self-Audit Protocol — projít bloky 1–8, uložit report
              → pokud audit selže s errors: STOP scheduled run, zapsat problem report
-             → pokud audit projde: pokračovat na krok 0 (LOCK)
+             GARANCE: pokud self-audit projde bez errors, žádné komplikace v běhu
+             se neočekávají — verze, tools, skills, Drive soubory a ntfy jsou ověřeny.
 0.  LOCK    -> run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)")
              Lock je per-agent (hash AgentName) — zabrání souběžnému runu stejného agenta.
              L selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP
@@ -153,7 +154,7 @@ ntfy:         https://ntfy.vo2info.cz
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
-MCP Version:  8.5.1
+MCP Version:  8.6.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -248,7 +249,7 @@ Required runtime sequence:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.5.1)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.6.0)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -426,19 +427,19 @@ Catch-up rules:
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol — 8.5.1
+## Self-Audit Protocol — 8.6.0
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
 BLOK 1 — DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.5.1
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.6.0
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 8.5.1
-2b. MCP_VERSION z db_ping == 8.5.1
-2c. SkillsVersion z načteného PromptSkills souboru == 8.5.1
+2a. PromptVersion tohoto promptu == 8.6.0
+2b. MCP_VERSION z db_ping == 8.6.0
+2c. SkillsVersion z načteného PromptSkills souboru == 8.6.0
 L jakýkoliv mismatch → selfUpdate, pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 14 kritických):
@@ -448,7 +449,7 @@ list_entity_images | rate_limit_guard | schema_report | score_breakdown_report
 L chybí tool → log capability_missing("{tool}"), pokračovat (pokud není kritický)
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 8.5.1
+4a. SkillsVersion načteného souboru == 8.6.0
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -474,7 +475,7 @@ BLOK 7 — DB schema:
     → všech 9 systémových tabulek přítomno?
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 8.5.1?
+    → poslední runy mají promptVersion 8.6.0?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -493,7 +494,7 @@ Výstup self-auditu:
 - upsert_record("AgentRunReports", ..., {runMode="self_audit", success=..., highlights=[], errors=[]})
 - errors > 0: zapsat problem report do Drive (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) + send_notification(topic="agent-alerts")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 8.5.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
+          message="Verze: 8.6.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -1795,12 +1796,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.5.1
-- SchemaVersion: 8.5.1
-- RuntimeSafetyVersion: 8.5.1
+- GovernanceVersion: 8.6.0
+- SchemaVersion: 8.6.0
+- RuntimeSafetyVersion: 8.6.0
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.5.1
-- PromptVersion: 8.5.1
+- ImageGovernanceVersion: 8.6.0
+- PromptVersion: 8.6.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -1906,14 +1907,16 @@ Pravidla:
 
 ## Changelog (zkráceno)
 
-v8.5.1 (2026-06-02): Konzistenční opravy napříč 5 soubory.
+v8.6.0 (2026-06-02): Self-Audit Protocol + konzistenční opravy napříč 5 soubory.
+  Self-Audit Protocol (krok 0a): 8 bloků ověření před každým 30. runem, prvním runem
+    nebo na žádost operátora. Garance: úspěšný audit = žádné komplikace v běhu.
   ImportantScore: přejmenován Score→ImportantScore v Catalogs/Managers souborech.
   ProblemScore: přidán do Problems formátu (seřazeno sestupně).
   ntfy topics: přidány agent-alerts a agent-digest; oddělení infra topics (system-alerts, infra-qnap).
   Tier3→agent-alerts, Tier4→agent-errors; ntfy auth opravena v server.js.
-  MCP_VERSION sjednocen na 8.5.1; audit_log opraven na upsert_record("AuditLog",...).
-  MAX_BATCH_SIZE: opraven v promptech (default 100, ne 500).
-  Skills soubory: counts sekce N opraveny; SkillsVersion→8.5.1.
+  MCP connector names: VO2QNAPDBxx (AI/TE/MAB/USM); MCP URLs doplněny pro MAB+USM.
+  audit_log opraven na upsert_record("AuditLog",...); MAX_BATCH_SIZE default 100.
+  Upload URL generalizován: /{instance}/uploads.
 
 v8.5.0 (2026-06-01): Opravy governance nesrovnalostí.
   Data Write Priority odstraněny sport-specifické příklady — CatalogPrompt je obecný.
