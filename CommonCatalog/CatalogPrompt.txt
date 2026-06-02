@@ -19,12 +19,12 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
        Run report do DB nelze uložit → zaznamenat selhání v textu odpovědi agenta.
 2.  PROMPT VERSION -> porovnat s Google Drive + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
-3.  FRESHNESS CHECK -> stale tabulky dle SLA (Score >= 90.000 = max 24h)
+3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
     L neexistuje -> vytvorit po prvnim uspesnem runu:
       create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=...)
-    FORMAT: Score(3des.) | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
+    FORMAT: ImportantScore(3des.) | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
 5.  NAMES -> nacist {AgentName}_names.txt z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
@@ -226,7 +226,7 @@ Required runtime sequence:
     - pokud soubor neexistuje: přeskočit tiše, reportovat capability_missing pro všechny skills
     - pokud úkol není pokryt: navrhnout nový skill, přidat do CatalogPromptSkills.txt na Drive
 12. načíst /Prompts/Catalogs/{AgentName}.txt z Drive (folder: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
-    → přehled spravovaných tabulek (Score, RowCount, LastPopulated)
+    → přehled spravovaných tabulek (ImportantScore, RowCount, LastPopulated)
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
     - použít jako výchozí přehled pro prioritizaci tabulek v běhu
 13. načíst {AgentName}_names.txt z Drive (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
@@ -291,20 +291,20 @@ ODLIŠUJ tyto dva různé případy:
    → NENÍ blocker readiness
 
 2. DB tabulka existuje ale je prázdná (RowCount = 0):
-   → Score >= 90.000: readiness = blocked, log critical_baseline_empty
-   → Score 70.000–89.999: readiness = not_ready, log baseline_incomplete, pokračovat
-   → Score < 70.000: log note v highlights[], pokračovat
+   → ImportantScore >= 90.000: readiness = blocked, log critical_baseline_empty
+   → ImportantScore 70.000–89.999: readiness = not_ready, log baseline_incomplete, pokračovat
+   → ImportantScore < 70.000: log note v highlights[], pokračovat
 
 3. DB tabulka neexistuje vůbec:
-   → Score >= 70.000: pokus ensure_table; pokud selže → readiness = blocked
-   → Score < 70.000: pokus ensure_table; pokud selže → log warning, pokračovat
+   → ImportantScore >= 70.000: pokus ensure_table; pokud selže → readiness = blocked
+   → ImportantScore < 70.000: pokus ensure_table; pokud selže → log warning, pokračovat
 
 ## Table Existence Check Protocol
 
 Před zápisem do jakékoli tabulky:
 1. run_select_sql("SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='{TableName}'")
-2. Tabulka neexistuje + Score >= 70.000 → ensure_table → pokud selže → readiness blocked
-3. Tabulka neexistuje + Score < 70.000  → ensure_table → pokud selže → log warning, skip tabulka
+2. Tabulka neexistuje + ImportantScore >= 70.000 → ensure_table → pokud selže → readiness blocked
+3. Tabulka neexistuje + ImportantScore < 70.000  → ensure_table → pokud selže → log warning, skip tabulka
 4. Tabulka existuje → pokračovat normálně
 5. Novou tabulku vždy zaznamenat v highlights[] a aktualizovat Baseline Catalog Drive soubor
 
@@ -407,7 +407,7 @@ Detection:
 
 Catch-up rules:
 - priority 1: most recent data first (yesterday → day before → older)
-- priority 2: high-score tables (Score >= 70) first
+- priority 2: high-score tables (ImportantScore >= 70) first
 - maximum 3 missed days per catch-up run
 - if gap > 30 days: collect only last 30 days, notify operator via ntfy
 
@@ -435,7 +435,7 @@ Time management rules:
 
 Budget warning thresholds:
 - 75% elapsed: add to highlights[]: "Čas: 75% rozpočtu využito"
-- 90% elapsed: prioritize only Score >= 70 tables
+- 90% elapsed: prioritize only ImportantScore >= 70 tables
 
 ## Agent Run Report Governance — 8.5.0
 
@@ -796,7 +796,7 @@ Backfill procedure (per run):
 
 Limits per run:
 - maximum 100 records per table
-- process most critical table first (highest entity Score)
+- process most critical table first (highest entity ImportantScore)
 - smart_upsert_batch preferred for batch backfill
 - backfill nesmí přepsat existující hodnotu hodnotou NULL
 
@@ -822,7 +822,7 @@ Rules:
 
 ## Data Freshness SLA — 8.5.0
 
-| Score Tier | Max age before stale warning | Action when stale |
+| ImportantScore Tier | Max age before stale warning | Action when stale |
 |---|---|---|
 | 90.000–100.000 | 24 hours | report stale_data warning, collect in next run |
 | 70.000–89.999  | 3 days | report stale_data notice |
@@ -834,7 +834,7 @@ Freshness check procedure:
 1. read LastPopulated from baseline catalog for each table
 2. calculate age = now() - LastPopulated
 3. compare against SLA tier
-4. stale_data for Score >= 90 sets readiness_status = not_ready
+4. stale_data for ImportantScore >= 90 sets readiness_status = not_ready
 
 =============================================================
 CHAPTER 7: SOURCE MANAGEMENT
@@ -999,17 +999,17 @@ LastUpdated: {ISO8601 datetime}
 TableCount: {count}
 
 --- BASELINE TABLES ---
-Score | TableName | Description | RowCount | LastPopulated
+ImportantScore | TableName | Description | RowCount | LastPopulated
 91.156 | CoreEntityTable | Primary entity table | 1520 | 2026-05-31
 83.420 | EntityAliases | Aliases for entities | 340 | 2026-05-30
 71.008 | Sources | Data sources | 85 | 2026-05-29
 ```
 
 DŮLEŽITÉ: Soubor obsahuje POUZE tabulky (DB table names), NE individuální záznamy/entity.
-- Správně: řádek = jedna DB tabulka se Score, RowCount, LastPopulated
+- Správně: řádek = jedna DB tabulka se ImportantScore, RowCount, LastPopulated
 - Špatně: řádek = konkrétní entita (Solar, Copper, Smith...) nebo narrative text
 
-Score field (0.000–100.000, 3 desetinná místa) — data collection priority per table:
+ImportantScore field (0.000–100.000, 3 desetinná místa) — důležitost/priorita tabulky pro tohoto agenta:
 - 90.000–100.000: critical — blocks readiness if empty
 - 70.000–89.999: high — populated every run
 - 50.000–69.999: medium — populated when source available
@@ -1028,12 +1028,12 @@ Lifecycle rules:
   pokud update_file_content není dostupný: create_file s novým obsahem (starý soubor ponech — operátor smaže)
 - never update catalog when db_status == db_unreachable
 - agent MŮŽE přidávat nové řádky tabulek: při každém runu zkontroluj DB tables a přidej chybějící
-  (nová tabulka = nový řádek s Score odhadnutým dle důležitosti, RowCount z DB, LastPopulated=dnes)
+  (nová tabulka = nový řádek s ImportantScore odhadnutou dle důležitosti, RowCount z DB, LastPopulated=dnes)
 
 Catalog file read procedure:
 1. search_files(query="title = '{AgentName}.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
 2. call read_file_content(fileId=<found id>) to load current catalog
-3. parse table lines (Score | TableName | Description | RowCount | LastPopulated)
+3. parse table lines (ImportantScore | TableName | Description | RowCount | LastPopulated)
 4. compare with actual DB tables
 5. report discrepancies in startup diagnostics
 
@@ -1046,7 +1046,7 @@ Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0
 Podsložky:
 - /Prompts/Managers/      — Prompt soubory pro Manager agenty (správci domén)
 - /Prompts/Catalogs/      — Katalogové soubory entit pro jednotlivé agenty
-                            Format: {AgentName}.txt, Score|TableName|RowCount|LastPopulated
+                            Format: {AgentName}.txt, ImportantScore|TableName|RowCount|LastPopulated
 - /Prompts/Names/         — Soubory se seznamy názvů pro dohledání (per agent)
                             Format: {AgentName}_names.txt, jeden název na řádek
 - /Prompts/Urls/          — Soubory se seznamy URL k prohledání (per agent)
@@ -1061,7 +1061,7 @@ Managers/:
 
 Catalogs/:
 - Každý Catalog agent udržuje svůj soubor /Prompts/Catalogs/{AgentName}.txt
-- Soubor obsahuje seznam DB tabulek (Score, RowCount, LastPopulated)
+- Soubor obsahuje seznam DB tabulek (ImportantScore, RowCount, LastPopulated)
 - Načíst při startu (po DB ping, před discovery) → přehled tabulek pro prioritizaci běhu
 - Aktualizovat na konci každého úspěšného scheduled runu
 - Pokud soubor neexistuje: přeskočit tiše, vytvořit po prvním úspěšném běhu
@@ -1128,9 +1128,10 @@ Timestamp: {ISO 8601 datetime}
 RunGuid:   {guid}
 Version:   {PromptVersion}
 
-PROBLÉMY:
-- {popis problému 1} [{kategorie: db_error | source_error | schema_error | skill_missing | time_budget | other}]
-- {popis problému 2}
+PROBLÉMY (seřazeno dle ProblemScore sestupně — 100=kritické, 0=info):
+ProblemScore | kategorie | popis
+{score} | {db_error | source_error | schema_error | skill_missing | time_budget | other} | {popis problému 1}
+{score} | {kategorie} | {popis problému 2}
 ...
 
 NEDOKONČENÉ KROKY:
@@ -1280,7 +1281,7 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
 
 4. Baseline tabulka prázdná (topic: agent-errors)
    - title: "{AgentName} ⚠️ chybí baseline"
-   - message: "Tabulka {TableName} je prázdná (Score {score})\nReadiness: not_ready"
+   - message: "Tabulka {TableName} je prázdná (ImportantScore {score})\nReadiness: not_ready"
 
 5. Schema změna (topic: agent-maintenance)
    - title: "{AgentName} 🗄️ schema změna"
@@ -1967,7 +1968,7 @@ Pouziti:
 ## Data Export and Backup Protocol — 8.4.0
 
 Backup schedule:
-- weekly: export all Score >= 70 tables to Drive /Prompts/Backups/{AgentName}/weekly/
+- weekly: export all ImportantScore >= 70 tables to Drive /Prompts/Backups/{AgentName}/weekly/
 - monthly: full export of all tables to /Prompts/Backups/{AgentName}/monthly/
 - pre-migration: full export before any schema breaking change
 
@@ -3377,7 +3378,7 @@ Canonical source:
 
 Baseline catalog:
   Agent's table registry stored in Google Drive /Prompts/Catalogs/{AgentName}.txt.
-  Lists DB tables with Score, RowCount, LastPopulated.
+  Lists DB tables with ImportantScore, RowCount, LastPopulated.
 
 DiscoveryQueue:
   DB table storing entities discovered but not yet written.
@@ -3539,7 +3540,7 @@ Pravidla:
 - agent nesmí tvrdit canonical write safety bez potvrzené orchestration capability
 
 AgentTableOwnership:
-- každá tabulka má primary owner agent (s nejvyšším Score pro danou tabulku)
+- každá tabulka má primary owner agent (s nejvyšším ImportantScore pro danou tabulku)
 - ostatní agenti mohou číst a obohacovat, ale nepřepisovat critical fields
 
 ## Canonical Enum Registry (Complete)

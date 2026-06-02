@@ -58,7 +58,7 @@ SCHEDULED RUN (v tomto poradi):
 15. UNLOCK -> uvolnit advisory lock
 
 -----------------------------------------------------------
-KLICOVE TABULKY (Score):
+KLICOVE TABULKY (ImportantScore):
 -----------------------------------------------------------
 100: Matches, Teams, Competitions
  95: Players, Seasons
@@ -202,11 +202,11 @@ Povinné kroky v tomto pořadí:
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
    - pokud ukol neni pokryt: navrhnout novy skill, pridat do ManagerPromptSkills.txt na Drive
 8. Nacist {AgentName}.txt z Drive /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-   → seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
+   → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
    - pokud soubor neexistuje nebo je prazdny: preskocit tiše (ne chyba)
    - pouzit jako prehled pro prioritizaci tabulek v behu
    DŮLEŽITÉ: Managers soubor se načítá PŘED Baseline-25 check (krok 9), protože
-   check potřebuje vědět, které tabulky mají Score >= 70 pro počítání baseline.
+   check potřebuje vědět, které tabulky mají ImportantScore >= 70 pro počítání baseline.
 8a. Načíst {AgentName}_names.txt z Drive /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
     → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
@@ -214,7 +214,7 @@ Povinné kroky v tomto pořadí:
     → seznam URL k projití před standardním scrapingem
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 9. Zkontrolovat existenci alespon 25 baseline entit
-   - seznam tabulek pro počítání: Score >= 70 tabulky z Managers souboru (krok 8)
+   - seznam tabulek pro počítání: ImportantScore >= 70 tabulky z Managers souboru (krok 8)
    - pokud Managers soubor chybí (první run): použít doporučené tabulky
      (Competitions, Seasons, Teams, Players, Venues, Matches)
    - SQL: SELECT SUM(cnt) FROM (SELECT COUNT(*) as cnt FROM T1 WHERE IsDeleted IS NOT TRUE
@@ -258,7 +258,7 @@ readiness_status == ready je povoleno POUZE kdyz:
 ## Baseline-25 Definition -- 8.5.0
 
 "Alespoň 25 baseline entit" znamená: celkový počet aktivních řádků (IsDeleted IS NOT TRUE)
-napříč VŠEMI Score >= 70.000 tabulkami tohoto agenta dohromady >= 25.
+napříč VŠEMI ImportantScore >= 70.000 tabulkami tohoto agenta dohromady >= 25.
 
 Příklad výpočtu:
   SELECT SUM(cnt) FROM (
@@ -272,8 +272,8 @@ Výsledek < 25:
   → first run nebo velmi brzy po inicializaci: readiness = "first_run_init", pokračovat
   → po 3+ runech stále < 25: readiness = not_ready, log baseline_too_sparse
 
-Doporučené tabulky pro počítání baseline (Score >= 90.000):
-  Competitions, Seasons, Teams, Players, Venues, Matches (Score >= 90.000 per baseline catalog)
+Doporučené tabulky pro počítání baseline (ImportantScore >= 90.000):
+  Competitions, Seasons, Teams, Players, Venues, Matches (ImportantScore >= 90.000 per baseline catalog)
 
 ## First Run Protocol -- 8.5.0
 
@@ -304,13 +304,13 @@ ODLIŠUJ Drive soubor od DB tabulky:
    → přeskočit tiše, vytvořit po prvním úspěšném runu — NENÍ blocker readiness
 
 2. DB tabulka existuje ale RowCount = 0:
-   → Score >= 90.000: readiness = blocked, log critical_baseline_empty
-   → Score 70.000–89.999: readiness = not_ready, log baseline_incomplete, pokračovat
-   → Score < 70.000: log note v highlights[], pokračovat
+   → ImportantScore >= 90.000: readiness = blocked, log critical_baseline_empty
+   → ImportantScore 70.000–89.999: readiness = not_ready, log baseline_incomplete, pokračovat
+   → ImportantScore < 70.000: log note v highlights[], pokračovat
 
 3. DB tabulka neexistuje vůbec:
-   → Score >= 70.000: ensure_table → pokud selže → readiness = blocked
-   → Score < 70.000: ensure_table → pokud selže → log warning, skip
+   → ImportantScore >= 70.000: ensure_table → pokud selže → readiness = blocked
+   → ImportantScore < 70.000: ensure_table → pokud selže → log warning, skip
 
 ## Concurrent Runs Governance -- 8.5.0
 
@@ -444,9 +444,9 @@ Pokud capability neni potvrzena:
 
 Kazdy sport agent ma v Google Drive pristup k temto slozkam:
 
-- Managers/{AgentName}.txt  -- seznam vlastnich DB tabulek agenta (Score, RowCount, LastPopulated)
+- Managers/{AgentName}.txt  -- seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
   Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
-  Format: Score|TableName|RowCount|LastPopulated, jedna tabulka na radek
+  Format: ImportantScore|TableName|RowCount|LastPopulated, jedna tabulka na radek
 - Names/{AgentName}_names.txt -- seznam nazvu tymu/soutezi/hracu k prioritnimu dohledani
   Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
   Format: jeden nazev na radek | Max 500 polozek | Priority = Score 90+
@@ -468,19 +468,19 @@ Sport agenti udrzuji katalogovy soubor v Google Drive.
 Umisteni: /Prompts/Managers/{AgentName}.txt (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
 
 Katalog obsahuje: AgentName, PromptVersion, LastUpdated, TableCount
-Format radku: Score | TableName | Description | RowCount | LastPopulated
-Score ma 3 desetinna mista (napr. 91.156, 74.320, 50.000)
+Format radku: ImportantScore | TableName | Description | RowCount | LastPopulated
+ImportantScore ma 3 desetinna mista (napr. 91.156, 74.320, 50.000)
 
-Score guidelines (0.000–100.000):
+ImportantScore guidelines (0.000–100.000) — dulezitost/priorita tabulky pro tohoto agenta:
 - 90.000–100.000: tabulky ktere museji byt naplneny pro readiness; empty = blocker
 - 70.000–89.999:  tabulky naplnene v kazdem scheduled runu; gaps degraduji report
 - 50.000–69.999:  tabulky naplnene kdyz je zdroj dostupny
 - 30.000–49.999:  enrichment tabulky, opportunistically
 - 0.000–29.999:   archive/reference/operational, jen v maintenance runech
 
-RowCount = 0 pro Score >= 90 -> report critical_baseline_empty, blokovat readiness
-RowCount = 0 pro Score >= 70 -> report baseline_incomplete, warn ale pokracovat
-RowCount = 0 pro Score < 70  -> note v highlights, zadny blok
+RowCount = 0 pro ImportantScore >= 90 -> report critical_baseline_empty, blokovat readiness
+RowCount = 0 pro ImportantScore >= 70 -> report baseline_incomplete, warn ale pokracovat
+RowCount = 0 pro ImportantScore < 70  -> note v highlights, zadny blok
 
 Lifecycle rules:
 - pokud soubor neexistuje: vytvorit po prvnim uspesnem runu:
@@ -491,13 +491,13 @@ Lifecycle rules:
 - nikdy neaktualizovat kdyz db_status == db_unreachable
 
 Katalog aktualizovat kdyz:
-- nova tabulka vytvorena v DB (auto-discovered) → pridat novy radek (Score = 50 jako vychozi)
+- nova tabulka vytvorena v DB (auto-discovered) → pridat novy radek (ImportantScore = 50 jako vychozi)
 - row counts se zmenily o vice nez 10%
 - na konci kazdeho uspesneho scheduled runu
 - po backfill pasu ktery pridal > 50 radku do jakekoliv tabulky
 
 Agent MUZE pridavat nove radky tabulek: pri kazdem runu zkontroluj DB tables a pridej chybejici.
-Novy radek: Score=50 (odhadni dle dulezitosti), RowCount z DB, LastPopulated=dnes.
+Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopulated=dnes.
 
 =============================================================
 CHAPTER 4: SCHEDULED RUN PROTOCOL
@@ -524,7 +524,7 @@ Time management rules:
 
 Budget warning thresholds:
 - 75% elapsed: přidat do highlights[]: "Čas: 75% rozpočtu využito"
-- 90% elapsed: prioritizovat pouze Score >= 70.000 tabulky
+- 90% elapsed: prioritizovat pouze ImportantScore >= 70.000 tabulky
 
 ## Agent Run Report Governance -- 8.5.0
 
@@ -586,9 +586,10 @@ Timestamp: {ISO 8601 datetime}
 RunGuid:   {guid}
 Version:   {PromptVersion}
 
-PROBLÉMY:
-- {popis problému 1} [{kategorie: db_error | source_error | pipeline_error | skill_missing | time_budget | other}]
-- {popis problému 2}
+PROBLÉMY (seřazeno dle ProblemScore sestupně — 100=kritické, 0=info):
+ProblemScore | kategorie | popis
+{score} | {db_error | source_error | pipeline_error | skill_missing | time_budget | other} | {popis problému 1}
+{score} | {kategorie} | {popis problému 2}
 ...
 
 NEDOKONČENÉ KROKY:
@@ -1790,7 +1791,7 @@ Backfill procedure (per run):
 
 Limits per run:
 - maximum 100 záznamů na tabulku
-- nejprve kritická tabulka (nejvyšší entity Score)
+- nejprve kritická tabulka (nejvyšší entity ImportantScore)
 - smart_upsert_batch preferováno pro batch backfill
 - backfill nesmí přepsat existující hodnotu hodnotou NULL
 
@@ -1815,7 +1816,7 @@ Rules:
 
 ## Data Freshness SLA -- 8.5.0
 
-| Score Tier | Max stáří před stale warning | Akce při stale |
+| ImportantScore Tier | Max stáří před stale warning | Akce při stale |
 |---|---|---|
 | 90–100 | 24 hodin | stale_data warning, sbírat v příštím runu |
 | 70–89 | 3 dny | stale_data notice |
@@ -1827,7 +1828,7 @@ Freshness check procedure:
 1. přečíst LastPopulated z baseline catalog pro každou tabulku
 2. vypočítat age = now() - LastPopulated
 3. porovnat s SLA tier
-4. stale_data pro Score >= 90 nastaví readiness_status = not_ready
+4. stale_data pro ImportantScore >= 90 nastaví readiness_status = not_ready
 
 =============================================================
 CHAPTER 12: SOURCE MANAGEMENT
@@ -1937,10 +1938,10 @@ Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0
 
 Podsložky:
 - /Prompts/Managers/          — Prompt soubory pro Manager agenty
-- /Prompts/Managers/{AgentName}.txt — Seznam vlastních DB tabulek agenta (Score, RowCount, LastPopulated)
-                                Format: Score|TableName|RowCount|LastPopulated, jedna tabulka na řádek
+- /Prompts/Managers/{AgentName}.txt — Seznam vlastních DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+                                Format: ImportantScore|TableName|RowCount|LastPopulated, jedna tabulka na řádek
 - /Prompts/Catalogs/{AgentName}.txt — Katalogový soubor tabulek Catalog agenta
-                                Format: Score|TableName|RowCount|LastPopulated
+                                Format: ImportantScore|TableName|RowCount|LastPopulated
 - /Prompts/Names/{AgentName}_names.txt — Task queue pro entity names (sdílená složka — Manager i Catalog agenti)
 - /Prompts/Urls/{AgentName}_urls.txt   — Task queue pro URL k projití (sdílená složka — Manager i Catalog agenti)
 
@@ -2736,5 +2737,5 @@ Refresh: po kazdem matchday. Pouzivat CREATE OR REPLACE.
 Guid, MatchGuid, BroadcasterName, Country (ISO 3166-1 alpha-2),
 BroadcastType (live_tv/streaming/radio/pay_per_view/free),
 StreamUrl, KickoffLocalTime, Notes, SourceName, CreatedAt
-Score priority: 20.000-30.000 (collect opportunistically)
+ImportantScore priority: 20.000-30.000 (collect opportunistically)
 
