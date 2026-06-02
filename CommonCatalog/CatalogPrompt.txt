@@ -134,8 +134,10 @@ Lock:     run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::b
 -----------------------------------------------------------
 INFRASTRUKTURA:
 -----------------------------------------------------------
-MCP AIData:   https://mcp.vo2info.cz/AI/   (DB: AIData)
-MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)
+MCP AIData:   https://mcp.vo2info.cz/AI/   (DB: AIData)          → VO2QNAPDBAI
+MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)      → VO2QNAPDBTE
+MCP MAB:      https://mcp.vo2info.cz/MAB/  (DB: MercsAndBeasts) → VO2QNAPDBMAB
+MCP USM:      https://mcp.vo2info.cz/USM/  (DB: UniSportManager) → VO2QNAPDBUSM
 ntfy:         https://ntfy.vo2info.cz
   Auth: Authorization: Basic YWRtaW46Um91bmRuZXQ1NzVQYWRlbA==   (admin:Roundnet575Padel)
   Publish na topics VYŽADUJE auth — anonymous = jen čtení.
@@ -1463,7 +1465,7 @@ Storage naming: /uploads/{first2sha}/{next2sha}/{Guid}.{ext}
 MCP/QNAP:
 - upload adresář: /app/uploads
 - QNAP bind mount: /share/Container/mcp-qnap/uploads:/app/uploads
-- veřejná URL báze: https://mcp.vo2info.cz/AI/uploads
+- veřejná URL báze: https://mcp.vo2info.cz/{instance}/uploads  (AI | TE | MAB | USM dle aktivního MCP)
 
 Image write flow:
 1. ověř entitu a zdroj obrázku
@@ -1917,7 +1919,7 @@ Google Calendar:
 
 MCP/QNAP Upload Storage:
 - fyzické ukládání obrázků, upload assetů
-- veřejná URL: https://mcp.vo2info.cz/AI/uploads
+- veřejná URL: https://mcp.vo2info.cz/{instance}/uploads  (AI | TE | MAB | USM dle aktivního MCP)
 
 ntfy:
 - server: https://ntfy.vo2info.cz
@@ -2487,7 +2489,7 @@ Ukládej pouze dlouhodobě užitečná pravidla. Neukládej jednorázové dohady
 MCP běží jako služba ukládající obrázky do upload složky.
 Upload adresář v kontejneru: /app/uploads
 QNAP bind mount: /share/Container/mcp-qnap/uploads:/app/uploads
-Veřejná URL báze: https://mcp.vo2info.cz/AI/uploads
+Veřejná URL báze: https://mcp.vo2info.cz/{instance}/uploads  (AI | TE | MAB | USM dle aktivního MCP)
 Databáze: AIData
 
 ### Základní pravidlo obrázků
@@ -3290,7 +3292,7 @@ MCP Endpoints:
 - https://mcp.vo2info.cz/TE/ — topEleven DB
 
 QNAP Storage:
-- /share/Container/mcp-qnap/uploads → https://mcp.vo2info.cz/AI/uploads
+- /share/Container/mcp-qnap/uploads → https://mcp.vo2info.cz/{instance}/uploads  (AI | TE | MAB | USM dle aktivního MCP)
 - Kontejner /app/uploads je bind-mounted na QNAP cestu
 
 Ntfy:

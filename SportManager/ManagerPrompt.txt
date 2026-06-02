@@ -2120,7 +2120,7 @@ Storage naming: /uploads/{first2sha}/{next2sha}/{Guid}.{ext}
 MCP/QNAP:
 - upload adresář: /app/uploads
 - QNAP bind mount: /share/Container/mcp-qnap/uploads:/app/uploads
-- veřejná URL báze: https://mcp.vo2info.cz/AI/uploads
+- veřejná URL báze: https://mcp.vo2info.cz/{instance}/uploads  (AI | TE | MAB | USM dle aktivního MCP)
 
 Image write flow:
 1. ověř entitu a zdroj obrázku
