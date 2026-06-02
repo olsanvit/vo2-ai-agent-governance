@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "8.4.0";
+const MCP_VERSION = "8.5.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -127,6 +127,16 @@ function isDateOnly(value) { return typeof value === "string" && /^\d{4}-\d{2}-\
 function isTimeOnly(value) { return typeof value === "string" && /^\d{2}:\d{2}(:\d{2})?$/.test(value); }
 function isDataUrl(value) { return typeof value === "string" && /^data:image\/(png|jpeg|jpg|webp|gif);base64,/i.test(value); }
 
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/svg+xml"]);
+
+function validateImageMimeType(mimeType) {
+  const normalized = String(mimeType || "").toLowerCase().split(";")[0].trim();
+  if (!ALLOWED_IMAGE_MIME_TYPES.has(normalized)) {
+    throw new Error(`Unsupported image MIME type: "${mimeType}". Allowed: ${[...ALLOWED_IMAGE_MIME_TYPES].join(", ")}`);
+  }
+  return normalized;
+}
+
 function arrayPgType(value) {
   if (!Array.isArray(value)) return null;
   if (value.length === 0) return "jsonb";
@@ -142,7 +152,7 @@ function pgTypeForKey(key, value, explicitTypes = {}) {
   const name = normalizeIdentifierName(key);
   if (explicitTypes && explicitTypes[name]) return sanitizePgType(explicitTypes[name]);
   if (name === "Guid" || isGuidColumn(name) || isUuidString(value)) return "uuid";
-  if (/Score$/i.test(name)) return "numeric(5,2)";
+  if (/Score$/i.test(name)) return "numeric(6,3)";
   // Explicit text overrides — prevent false-positive numeric inference from substrings
   // e.g. "Migration" contains "ratio", "Operation" contains "ratio", "Integrate" contains "rate"
   if (/(Name|Hash|Title|Label|Slug|Description|Type|Category|Status|Tag|Token|Key|Path|Url|Uri|Message|Error|Reason|Comment|Summary|Body|Content|Format|Locale|Language|Timezone|Currency|Country|Region|City|Address|Email|Phone|Operation|Migration|Integration|Generation|Iteration|Enumeration|Configuration|Decoration|Duration|Location)$/i.test(name)) {
@@ -185,7 +195,7 @@ function normalizeValue(value) {
 function clampScore(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return 0;
-  return Math.max(0, Math.min(100, Math.round(n * 100) / 100));
+  return Math.max(0, Math.min(100, Math.round(n * 1000) / 1000));
 }
 
 function normalizeScoreData(data) {
@@ -255,12 +265,19 @@ function safeLimit(limit, max = 100) {
 function buildWhere(criteria, startIndex = 1) {
   const keys = Object.keys(criteria || {});
   if (keys.length === 0) throw new Error("criteria must not be empty");
-  const where = keys.map((rawKey, i) => {
+  const values = [];
+  let paramIdx = startIndex;
+  const clauses = keys.map((rawKey) => {
     const key = normalizeIdentifierName(rawKey);
     assertIdentifier(key);
-    return `"${key}" = $${i + startIndex}`;
-  }).join(" AND ");
-  return { where, values: keys.map(k => normalizeValue(criteria[k])) };
+    const val = normalizeValue(criteria[rawKey]);
+    if (val === null || val === undefined) {
+      return `"${key}" IS NULL`;
+    }
+    values.push(val);
+    return `"${key}" = $${paramIdx++}`;
+  });
+  return { where: clauses.join(" AND "), values };
 }
 
 function sha256(buffer) { return crypto.createHash("sha256").update(buffer).digest("hex"); }
@@ -400,7 +417,7 @@ async function ensureBaseStructure(table) {
 
   async function addColumnIfMissing(name, sql) {
     if (!existing.has(name)) {
-      await pool.query(`ALTER TABLE "${t}" ADD COLUMN ${sql}`);
+      await pool.query(`ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS ${sql}`);
       invalidateSchema(t);
       existing = await getColumns(t);
     }
@@ -429,11 +446,42 @@ async function ensureBaseStructure(table) {
   await addColumnIfMissing("ScoreUpdatedAt", `"ScoreUpdatedAt" timestamptz NULL`);
   await addColumnIfMissing("ScoreReason", `"ScoreReason" text NOT NULL DEFAULT ''`);
 
+  // Batch-fetch all score column types for this table in one query instead of N queries.
+  const scoreColsExisting = SCORE_COLUMNS.filter(c => existing.has(c));
+  let colTypesMap = {};
+  if (scoreColsExisting.length > 0) {
+    const typeRes = await pool.query(
+      `SELECT column_name, numeric_precision, numeric_scale
+       FROM information_schema.columns
+       WHERE table_schema='public' AND table_name=$1
+         AND column_name = ANY($2::text[])`,
+      [t, scoreColsExisting]
+    );
+    for (const row of typeRes.rows) {
+      colTypesMap[row.column_name] = { p: Number(row.numeric_precision), s: Number(row.numeric_scale) };
+    }
+  }
+
   for (const col of SCORE_COLUMNS) {
     if (!existing.has(col)) {
-      await pool.query(`ALTER TABLE "${t}" ADD COLUMN "${col}" numeric(5,2) NOT NULL DEFAULT 0 CHECK ("${col}" >= 0 AND "${col}" <= 100)`);
+      await pool.query(`ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS "${col}" numeric(6,3) NOT NULL DEFAULT 0 CHECK ("${col}" >= 0 AND "${col}" <= 100)`);
       invalidateSchema(t);
       existing = await getColumns(t);
+    } else {
+      // Migrate existing numeric(5,2) score columns to numeric(6,3) for 3-decimal precision.
+      // This is a safe widening cast — no data loss, just increased precision.
+      // Skips gracefully when a view or rule depends on the column (PG error 0A000).
+      const info = colTypesMap[col];
+      if (info && info.p === 5 && info.s === 2) {
+        try {
+          await pool.query(`ALTER TABLE "${t}" ALTER COLUMN "${col}" TYPE numeric(6,3)`);
+          invalidateSchema(t);
+        } catch (e) {
+          // 0A000 = feature_not_supported: column used by a view or rule — skip silently.
+          if (e.code !== "0A000") throw e;
+          console.warn(`[migration] Skipped numeric(6,3) cast for "${t}"."${col}" — view dependency: ${e.detail || e.message}`);
+        }
+      }
     }
   }
 }
@@ -470,7 +518,7 @@ async function ensureColumnsInternal(table, data = {}) {
     if (ALL_RESERVED_COLUMNS.has(key)) continue;
     if (existing.has(key)) continue;
     const type = pgType(rawValue, key, explicitTypes);
-    await pool.query(`ALTER TABLE "${t}" ADD COLUMN "${key}" ${type}`);
+    await pool.query(`ALTER TABLE "${t}" ADD COLUMN IF NOT EXISTS "${key}" ${type}`);
     invalidateSchema(t);
     existing = await getColumns(t);
   }
@@ -530,8 +578,12 @@ async function audit(action, table, payload) {
   }
 }
 
-async function upsertRecord(table, criteria, data, skipAudit = false) {
+// dbClient — optional dedicated pg client (for use inside transactions).
+// When provided, DML queries run on this client instead of the pool.
+// Schema operations (ensureColumnsInternal) always use the pool — DDL is idempotent.
+async function upsertRecord(table, criteria, data, skipAudit = false, dbClient = null) {
   const t = normalizeIdentifierName(table);
+  const db = dbClient || pool;
   const normalized = normalizeScoreData({ ...(data || {}) });
   if (normalized.Name && !normalized.NormalizedName) normalized.NormalizedName = normalizeSearchText(normalized.Name);
   if (!normalized.SearchText) normalized.SearchText = normalizeSearchText(JSON.stringify({ ...criteria, ...normalized }));
@@ -543,12 +595,23 @@ async function upsertRecord(table, criteria, data, skipAudit = false) {
 
   if (criteriaKeys.length > 0) {
     const where = buildWhere(criteria);
-    const result = await pool.query(`SELECT * FROM "${t}" WHERE ${where.where} AND COALESCE("IsDeleted", false)=false LIMIT 1`, where.values);
+    // Search includes soft-deleted records so we can restore them instead of creating duplicates.
+    // Prefer active records (IsDeleted=false) first; fall back to deleted if nothing active found.
+    const result = await db.query(
+      `SELECT * FROM "${t}" WHERE ${where.where} ORDER BY COALESCE("IsDeleted", false) ASC LIMIT 1`,
+      where.values
+    );
     existing = result.rows[0] || null;
   }
 
   if (existing) {
     const updateData = { ...normalized };
+    // Restore a previously soft-deleted record automatically on upsert
+    if (existing.IsDeleted === true) {
+      updateData.IsDeleted = false;
+      updateData.IsActive = true;
+      updateData.DeletedAt = null;
+    }
     const keys = Object.keys(updateData);
     if (keys.length === 0) return { mode: "unchanged", guid: existing.Guid };
 
@@ -556,10 +619,10 @@ async function upsertRecord(table, criteria, data, skipAudit = false) {
     const values = keys.map(k => normalizeValue(updateData[k]));
     values.push(existing.Guid);
 
-    await pool.query(`UPDATE "${t}" SET ${setClause} WHERE "Guid" = $${keys.length + 1}`, values);
+    await db.query(`UPDATE "${t}" SET ${setClause} WHERE "Guid" = $${keys.length + 1}`, values);
     metrics.updates++;
     if (!skipAudit) await audit("update", t, { criteria, data: updateData });
-    return { mode: "update", guid: existing.Guid };
+    return { mode: existing.IsDeleted ? "restore" : "update", guid: existing.Guid };
   }
 
   const insertData = { Guid: criteria?.Guid || uuid(), ...(criteria || {}), ...(normalized || {}) };
@@ -568,7 +631,7 @@ async function upsertRecord(table, criteria, data, skipAudit = false) {
   const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
   const values = keys.map(k => normalizeValue(insertData[k]));
 
-  await pool.query(`INSERT INTO "${t}" (${columns}) VALUES (${placeholders})`, values);
+  await db.query(`INSERT INTO "${t}" (${columns}) VALUES (${placeholders})`, values);
   metrics.inserts++;
   if (!skipAudit) await audit("insert", t, insertData);
   return { mode: "insert", guid: insertData.Guid };
@@ -625,17 +688,23 @@ async function searchRecords(table, query, limit = 20) {
 }
 
 async function listAgentEntityTables(agentName, entityTables = []) {
+  // When explicit table list is provided, use it directly — recommended for all agents.
   if (Array.isArray(entityTables) && entityTables.length > 0) {
     return entityTables.map(normalizeIdentifierName);
   }
 
-  const normalizedAgentName = normalizeIdentifierName(agentName).toLowerCase();
+  // Auto-detection fallback: return all public base tables except known system tables.
+  // NOTE: for precise agent-scoped queries always pass entityTables explicitly —
+  // auto-detection cannot reliably infer which tables belong to a given agent
+  // when table names do not carry the agent name as a prefix (e.g. sport agents
+  // use generic names like Matches, Teams, Players).
   const excludedTables = new Set([
     "AuditLog",
     "MigrationLog",
+    "SchemaMigrations",
     "JobQueue",
-    "EntityImages",
     "DeadLetterQueue",
+    "EntityImages",
     ...ENTERPRISE_530_TABLES
   ].map(name => name.toLowerCase()));
 
@@ -651,10 +720,6 @@ async function listAgentEntityTables(agentName, entityTables = []) {
     .map(row => String(row.table_name || "").trim())
     .filter(Boolean)
     .filter(name => !excludedTables.has(name.toLowerCase()))
-    .filter(name => {
-      const lower = name.toLowerCase();
-      return lower.startsWith(normalizedAgentName) || lower.includes(normalizedAgentName);
-    })
     .map(normalizeIdentifierName);
 }
 
@@ -946,7 +1011,8 @@ async function saveImageUrl({ entityTable, entityGuid, imageUrl, originalFileNam
   const response = await fetch(imageUrl);
   if (!response.ok) throw new Error(`image download failed: ${response.status} ${response.statusText}`);
 
-  const mimeType = response.headers.get("content-type") || "application/octet-stream";
+  const rawMime = response.headers.get("content-type") || "application/octet-stream";
+  const mimeType = validateImageMimeType(rawMime);  // throws if not in whitelist
   const arrayBuffer = await response.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
   if (buffer.length > MAX_IMAGE_BYTES) throw new Error("image too large");
@@ -1043,20 +1109,24 @@ async function recordMigration(name, sql) {
   const exists = await pool.query(`SELECT 1 FROM "SchemaMigrations" WHERE "MigrationHash"=$1 LIMIT 1`, [hash]);
   if (exists.rowCount > 0) return { skipped: true, hash };
 
-  await pool.query("BEGIN");
+  // Use a dedicated client so BEGIN/COMMIT/ROLLBACK all stay on the same DB connection.
+  const client = await pool.connect();
   try {
-    await pool.query(sql);
+    await client.query("BEGIN");
+    await client.query(sql);
     await upsertRecord("SchemaMigrations", { MigrationHash: hash }, {
       MigrationName: migrationName,
       MigrationHash: hash,
       ExecutedAt: new Date().toISOString()
-    }, true);
-    await pool.query("COMMIT");
+    }, true, client);
+    await client.query("COMMIT");
     metrics.migrationsRecorded++;
     return { executed: true, hash };
   } catch (e) {
-    await pool.query("ROLLBACK");
+    await client.query("ROLLBACK");
     throw e;
+  } finally {
+    client.release();
   }
 }
 
@@ -1076,6 +1146,7 @@ async function enqueueJob(jobType, payload, runAt = null) {
 
 async function saveImage({ entityTable, entityGuid, base64, mimeType = "image/png", originalFileName = "image" }) {
   if (!base64) throw new Error("base64 required");
+  validateImageMimeType(mimeType);  // throws if not in whitelist
   let cleanBase64 = base64;
   if (isDataUrl(base64)) cleanBase64 = base64.split(",")[1];
 
@@ -1381,11 +1452,26 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
 
-  wrapTool("smart_upsert_batch", "Batch upsert records.", { table: z.string(), records: z.array(z.object({ criteria: z.record(z.any()), data: z.record(z.any()) })) }, async ({ table, records }) => {
+  wrapTool("smart_upsert_batch", "Batch upsert records. All writes execute in a single DB transaction — on error every record is rolled back.", { table: z.string(), records: z.array(z.object({ criteria: z.record(z.any()), data: z.record(z.any()) })) }, async ({ table, records }) => {
     if (records.length > MAX_BATCH_SIZE) throw new Error(`Batch too large. Max ${MAX_BATCH_SIZE}.`);
-    const results = [];
-    for (const record of records) results.push(await upsertRecord(table, record.criteria, record.data));
-    return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+    // Phase 1: ensure schema for all records outside the transaction (DDL is idempotent)
+    for (const record of records) {
+      await ensureColumnsInternal(table, { ...(record.criteria || {}), ...(record.data || {}) });
+    }
+    // Phase 2: all DML in a single transaction on a dedicated client
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const results = [];
+      for (const record of records) results.push(await upsertRecord(table, record.criteria, record.data, false, client));
+      await client.query("COMMIT");
+      return { content: [{ type: "text", text: JSON.stringify(results, null, 2) }] };
+    } catch (e) {
+      await client.query("ROLLBACK");
+      throw e;
+    } finally {
+      client.release();
+    }
   });
 
   wrapTool("infer_schema", "Infer columns and PostgreSQL types from JSON.", { sample: z.record(z.any()) }, async ({ sample }) => {
@@ -1840,6 +1926,14 @@ app.post("/mcp", async (req, res) => {
   }
   if (req.headers.authorization !== `Bearer ${AUTH_TOKEN}`) {
     return res.status(401).json({ error: "Unauthorized" });
+  }
+  // Normalize Accept header — Claude.ai and some MCP clients omit text/event-stream.
+  // @hono/node-server reads from rawHeaders (not headers), so both must be updated.
+  if (!req.headers["accept"] || !req.headers["accept"].includes("text/event-stream")) {
+    req.headers["accept"] = "application/json, text/event-stream";
+    const idx = req.rawHeaders.findIndex((h, i) => i % 2 === 0 && h.toLowerCase() === "accept");
+    if (idx === -1) req.rawHeaders.push("Accept", "application/json, text/event-stream");
+    else req.rawHeaders[idx + 1] = "application/json, text/event-stream";
   }
 
   const server = createMcpServer();
