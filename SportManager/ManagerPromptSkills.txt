@@ -103,6 +103,8 @@ Task types: identity validace, matching, safe upsert zápasů a entit
 Description: Bezpečný upsert s validací identity. Provádí multi-step matching
   (exact name → alias → token 80% → ExternalID → manual queue) před zápisem.
   Pro sport: validuje HomeTeam/AwayTeam/Competition/Season konzistenci před upsert Matches.
+  POZNÁMKA: Tento skill je dostupný jako instrukce z načteného ManagerPromptSkills.txt.
+  Není to separátní MCP tool — nelze "attach" nebo "detach". Vždy dostupný pokud skills soubor načten.
 Inputs: entita nebo zápas k upsertnutí s dostupnými identifikátory
 Outputs: match result (matched/new/conflict), Guid, upsert výsledek
 Limitations: při nejednoznačném matchování posílá do ManualReviewQueue, nezapisuje

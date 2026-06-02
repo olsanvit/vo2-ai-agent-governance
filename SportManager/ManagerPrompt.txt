@@ -1,11 +1,11 @@
-Agent: 8.5.0 [SPORT_NAME] Data Manager
+Agent: 8.5.1 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 8.5.0
+PromptVersion: 8.5.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.5.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.5.1
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -230,7 +230,9 @@ Povinné kroky v tomto pořadí:
     → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
       + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
-12. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
+12. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Managers" → uložit CALENDAR_ID
+    L calendar nedostupný nebo nenalezen: log capability_missing("ai_managers_calendar_id"), přeskočit — NEBLOKUJ
+13. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
 
 Povinne reportovane stavy (oddelene):
 - db_ping: ok | failed | retry_{N}
@@ -342,9 +344,14 @@ Backfill: POUZE NULL hodnoty; nepřepisovat non-NULL bez "force_refresh" flagu v
 
 ## Critical Skills Classification -- 8.5.0
 
-Critical skills (selhání = readiness blocked):
+Skills jsou dostupné jako instrukce z načteného ManagerPromptSkills.txt souboru.
+"Skill není dostupný" = skills soubor NEBYL načten z Drive (ne separátní tool attachment).
+Pokud skills soubor byl načten → VŠECHNY skills jsou dostupné jako instrukce.
+
+Critical skills — blokují readiness POUZE pokud skills soubor NEŠLO načíst z Drive:
   db-schema-guardian, match-upsert-guardian, archival-run-orchestrator,
   scheduled-run-report-formatter
+Pokud skills soubor nebyl dostupný: log capability_missing("skills_file_unavailable"), degraded mode, pokračovat.
 
 Non-critical skills (selhání = capability_missing + warning, run pokračuje): ostatní
 
@@ -1918,6 +1925,8 @@ Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - send_notification [MCP tool v server.js] — ntfy notifikace
 - Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
 - Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
+DŮLEŽITÉ: MCP konektor = stateless HTTP sessions. pg_advisory_unlock vrací false = OČEKÁVANÉ CHOVÁNÍ.
+  Unlock false → log warning, NEBLOKUJ run, nezapisuj jako error.
 Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
 
 ## Google Drive Agent Folder Structure -- 8.5.0
@@ -2258,6 +2267,8 @@ CHAPTER 16: NOTIFICATIONS & CALENDAR
 
 MCP tool: send_notification
 Server: https://ntfy.vo2info.cz
+Auth: Authorization: Basic YWRtaW46Um91bmRuZXQ1NzVQYWRlbA==   (admin:Roundnet575Padel)
+Publish na topics VYŽADUJE auth — anonymous = jen čtení. Pokud 403: přidat Authorization hlavičku.
 Topics: agent-runs, agent-errors, agent-maintenance
 
 POVINNE notifikace:
@@ -2336,60 +2347,71 @@ Cyklistika: bicyclist | Obecne: sports_medal
 
 ## Google Calendar Integration -- Sports -- 8.5.0
 
-Kalendář: "AI Managers" (použít calendar ID kalendáře s tímto názvem)
+Kalendář: "AI Managers"
+DŮLEŽITÉ: Google Calendar connector NEPŘIJÍMÁ název kalendáře jako calendar_id.
+Vyžaduje primary calendar ID (formát: email@gmail.com nebo UUID string).
+
+Calendar ID resolution — povinný krok při startu PŘED jakýmkoli calendar zápisem:
+1. list_calendars() → najít kalendář s názvem obsahujícím "AI Managers"
+2. Uložit jeho id jako CALENDAR_ID pro celý run
+3. Pokud list_calendars() selže nebo "AI Managers" není nalezen:
+   → log capability_missing("ai_managers_calendar_id"), přeskočit všechny calendar operace tiše
+   → NEBLOKUJ run — calendar je optional krok
+4. NIKDY nepoužívej řetězec "AI Managers" přímo jako calendar_id parametr
 
 Deduplikace před vytvořením eventu:
-1. list_events(calendarName="AI Managers", query="{AgentName}", timeMin=now())
+1. list_events(calendarId=CALENDAR_ID, query="{AgentName}", timeMin=now())
 2. Pokud existuje budoucí event se stejným AgentName v title → smazat starý (delete_event), pak vytvořit nový
 3. Pokud žádný neexistuje → vytvořit přímo
 
-Udalosti vytvorit automaticky (vždy do kalendáře "AI Managers"):
+Udalosti vytvorit automaticky (vždy do CALENDAR_ID):
 
 1. Next scheduled run (create at end of every run):
    - title: "{AgentName} — scheduled run"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: next expected run time (dle AgentSchedules.NextRunAt), duration: 30 minutes
 
 2. Matchday processing reminder (po standings update):
    - title: "{Competition} kolo {N} -- zpracovat vysledky"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: matchday date + 1 den, 07:00 Prague
    - duration: 30 minut
    - description: "Zpracovat vysledky kola {N}: {matchCount} zapasu. Zdroj: {sourceUrl}"
 
 3. Season start:
    - title: "{Competition} start sezony {seasonName}"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: first match date - 1 den
    - description: "Inicializovat: {teamCount} tymu, {matchCount} zapasu. Transfer window closes: {date}"
 
 4. Season end:
    - title: "{Competition} konec sezony {seasonName}"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: last match date + 1 den
    - description: "Uzavrit sezonu. Vitez: TBD. Promoted: TBD. Relegated: TBD."
 
 5. Transfer window close:
    - title: "{Competition} prestupni okno zavira"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: window close date, 23:00
    - description: "Po tomto datu neaktualizovat Squads bez manuálniho potvrzeni."
 
 6. International break:
    - title: "FIFA/UEFA prestávka -- {competition} nehraje"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: break start date, end: break end date
    - description: "{nDays} dni bez zapasu. Vyuzit pro backfill a maintenance."
 
 7. Player suspension:
    - title: "{PlayerName} -- trest ({competition})"
-   - calendar: "AI Managers"
+   - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
    - start: first suspended match date (all-day)
    - description: "Automaticky trest za {yellowCount}. zlutou kartu. Tym: {teamName}"
 
 Calendar rules:
-- vždy použít calendar "AI Managers" — nikdy jiný
-- deduplikuj před vytvořením (list_events → smazat starý → vytvořit nový)
+- vždy použít CALENDAR_ID resolvovaný přes list_calendars() — nikdy název "AI Managers" přímo
+- pokud CALENDAR_ID není resolvován: přeskočit všechny calendar operace tiše
+- deduplikuj před vytvořením (list_events(calendarId=CALENDAR_ID) → smazat starý → vytvořit nový)
 - do not create events when db_status == db_unreachable
 - calendar failures must not abort run — log capability_missing("calendar"), continue
 
@@ -2465,10 +2487,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 8.5.0
-SchemaVersion: 8.5.0
-RuntimeSafetyVersion: 8.5.0
-PromptVersion: 8.5.0
+GovernanceVersion: 8.5.1
+SchemaVersion: 8.5.1
+RuntimeSafetyVersion: 8.5.1
+PromptVersion: 8.5.1
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
