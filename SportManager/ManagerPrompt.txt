@@ -575,15 +575,15 @@ Kdy zapsat:
 - NEBO selhal upsert_record("AgentRunReports") — report neuložen do DB
 
 MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojení):
-- AIData DB (mcp.vo2info.cz/AI)    → VO2QNAPAI
-- TopEleven DB (mcp.vo2info.cz/TE) → VO2QNAPTE
-- MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPMAB
-- UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPUSM
+- AIData DB (mcp.vo2info.cz/AI)    → VO2QNAPDBAI
+- TopEleven DB (mcp.vo2info.cz/TE) → VO2QNAPDBTE
+- MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPDBMAB
+- UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPDBUSM
 
 Formát souboru {AgentName}.txt:
 ```
 Agent:     {AgentName}
-MCP:       {VO2QNAPAI | VO2QNAPTE | VO2QNAPMAB | VO2QNAPUSM}
+MCP:       {VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM}
 Timestamp: {ISO 8601 datetime}
 RunGuid:   {guid}
 Version:   {PromptVersion}

@@ -1062,7 +1062,7 @@ Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVO
 Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
 Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
-  Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPAI/VO2QNAPTE/VO2QNAPMAB/VO2QNAPUSM),
+  Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
   problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
   stav nedokončených kroků (ntfy, Calendar, DB report).
   Spouští se PŘED finálním reportem operátorovi.
