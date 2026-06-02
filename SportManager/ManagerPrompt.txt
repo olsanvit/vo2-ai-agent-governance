@@ -20,6 +20,13 @@ STARTUP (12 kroku -- viz Ch 3: db_ping + db_status, version check, Skills/Manage
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto poradi):
 -----------------------------------------------------------
+0a. SELF-AUDIT → spustit POUZE pokud platí alespoň jedna podmínka:
+             a) operator explicitně žádá audit (klíčová slova: "self-audit", "zkontroluj se", "audit")
+             b) první run (AgentRunReports COUNT = 0)
+             c) každých 30 úspěšných runů (runCount % 30 == 0)
+             → viz Chapter 4: Self-Audit Protocol — projít bloky 1–8, uložit report
+             → pokud audit selže s errors: STOP scheduled run, zapsat problem report
+             → pokud audit projde: pokračovat na krok 1 (STARTUP checks)
 1.  STARTUP checks (db, prompt, skills, catalog, missed run, circuit breaker)
 2.  INTERNATIONAL CALENDAR -> aktivni prestavka? -> preskocit afektovane souteze
 3.  NAMES QUEUE  -> {AgentName}_names.txt -> resolve tymy/hrace -> priority queue
@@ -504,6 +511,76 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 =============================================================
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
+
+## Self-Audit Protocol -- 8.5.1
+
+Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
+
+BLOK 1 -- DB & MCP konektivita:
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.5.1
+1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
+1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
+
+BLOK 2 -- Verze:
+2a. PromptVersion tohoto promptu == 8.5.1
+2b. MCP_VERSION z db_ping == 8.5.1
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 8.5.1
+L jakýkoliv mismatch → selfUpdate, pak pokračovat
+
+BLOK 3 -- MCP tools (ověřit dostupnost všech 14 kritických):
+db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
+ensure_table | find_records | send_notification | save_image_url | save_image_base64 |
+list_entity_images | rate_limit_guard | schema_report | score_breakdown_report
+L chybí tool → log capability_missing("{tool}"), pokračovat (pokud není kritický)
+
+BLOK 4 -- Skills:
+4a. SkillsVersion načteného souboru == 8.5.1
+4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
+4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
+    archival-run-orchestrator | scheduled-run-report-formatter |
+    ntfy-notification-sender | problem-report-writer | baseline-managers-file-manager
+L skills soubor nenačten → capability_missing("skills_file_unavailable"), degraded mode
+
+BLOK 5 -- Drive soubory:
+5a. {AgentName}.txt v /Prompts/Managers/ → existuje a formát je ImportantScore|TableName|Description|RowCount|LastPopulated
+5b. {AgentName}_names.txt v /Prompts/Names/ → existuje (prázdný OK)
+5c. {AgentName}_urls.txt v /Prompts/Urls/ → existuje (prázdný OK)
+5d. {AgentName}.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) → přečíst pokud existuje, ověřit aktuálnost
+
+BLOK 6 -- ntfy:
+6a. send_notification(topic="agent-runs", title="{AgentName} self-audit", message="test -- ignorovat", priority="min")
+    → HTTP 200? Pokud 403: chybí NTFY_USER/NTFY_PASS env vars → log capability_missing("ntfy_auth")
+6b. Ověřit znalost všech 5 topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+
+BLOK 7 -- DB schema:
+7a. schema_report → zkontrolovat tabulky s chybějícími BaseGuid nebo scoring sloupci
+7b. run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public'
+    AND table_name IN ('AgentRunReports','AuditLog','AgentSchedules','SourceCircuitBreaker',
+    'SourceReliability','ManualReviewQueue','DiscoveryQueue','AgentTableSync','SchemaMigrations')")
+    → všech 9 systémových tabulek přítomno?
+7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
+    WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
+    → poslední runy mají promptVersion 8.5.1?
+
+BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
+☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
+☐ Vždy ukládám run report i při selhání
+☐ Advisory lock: hashtext(COALESCE(NULLIF(SportName,''), 'unknown') || '|' || AgentName) před každým runem
+☐ NormalizedName vždy sync s Name
+☐ ConfidenceScore nikdy NULL
+☐ Tier3 chyby → agent-alerts (ne agent-errors)
+☐ Tier4 kritické bloky → agent-errors priority urgent
+☐ MAX_BATCH_SIZE čerpám z rate_limit_guard (ne hardcoded)
+☐ MCP connector: VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM -- správný pro aktuální DB?
+☐ ImportantScore (ne Score) v Managers souborech
+☐ ProblemScore | kategorie | popis (sestupně) v Problems souboru
+☐ Sbírám POUZE dokončené zápasy (datum <= včerejšek Prague TZ)
+
+Výstup self-auditu:
+- upsert_record("AgentRunReports", ..., {runMode="self_audit", success=..., highlights=[], errors=[]})
+- errors > 0: zapsat problem report do Drive (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) + send_notification(topic="agent-alerts")
+- vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
+          message="Verze: 8.5.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
