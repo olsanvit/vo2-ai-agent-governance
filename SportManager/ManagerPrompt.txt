@@ -221,7 +221,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.5.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.5.1)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
