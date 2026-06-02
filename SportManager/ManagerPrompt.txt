@@ -288,7 +288,9 @@ Postup při prvním runu:
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit sport-specifické tabulky: Competitions, Seasons, Teams, Players, Matches
 4. Vytvořit prázdné Drive soubory pokud neexistují:
-   {AgentName}.txt v Managers, {AgentName}_names.txt v Names, {AgentName}_urls.txt v Urls
+   create_file(title="{AgentName}.txt",       parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent="")
+   create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
+   create_file(title="{AgentName}_urls.txt",  parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
 5. Upsert AgentSchedules (AgentName, AgentType="Manager", ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT post-match pipeline — pouze schema init + discovery (max 5 datumů, max 10 zápasů)
 7. Uložit run report: runMode="first_run", success=schema_ready
@@ -428,7 +430,7 @@ Canonical source = Google Drive folder ManagerPrompt
 
 Pred write operacemi overit:
 - dostupnost MCP nastroju
-- dostupnost VO2QNAPDBAI connector akci
+- dostupnost VO2QNAPDB MCP connector akci
 - dostupnost ranked-read operaci
 - dostupnost schema introspection
 - dostupnost view maintenance operaci
