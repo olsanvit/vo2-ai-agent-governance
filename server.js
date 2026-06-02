@@ -17,6 +17,9 @@ const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/app/uploads";
 const PUBLIC_UPLOAD_BASE_URL = process.env.PUBLIC_UPLOAD_BASE_URL || "";
+const NTFY_BASE_URL = process.env.NTFY_URL || "https://ntfy.vo2info.cz";
+const NTFY_USER = process.env.NTFY_USER || "";
+const NTFY_PASS = process.env.NTFY_PASS || "";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -1810,13 +1813,17 @@ function createMcpServer() {
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
     tags:     z.array(z.string()).optional(),
   }, async ({ topic, title, message, priority = "default", tags = [] }) => {
-    const ntfyUrl = `https://ntfy.vo2info.cz/${topic}`;
+    const ntfyUrl = `${NTFY_BASE_URL}/${topic}`;
     const body = JSON.stringify({ title, message, priority, tags });
+    const headers = { "Content-Type": "application/json" };
+    if (NTFY_USER && NTFY_PASS) {
+      headers["Authorization"] = "Basic " + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString("base64");
+    }
     let status, responseText;
     try {
       const res = await fetch(ntfyUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body,
       });
       status = res.status;
