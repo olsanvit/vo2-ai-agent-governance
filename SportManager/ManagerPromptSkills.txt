@@ -75,7 +75,7 @@ Limitations: pouze čte; neopravuje data automaticky
 ## db-table-health-monitor
 Task types: monitoring tabulek, row counts, freshness, bloat
 Description: Monitoruje zdraví sportovních tabulek: počty řádků, datum posledního UpdatedAt,
-  table bloat. Flaguje stale tabulky dle SLA (Matches Score 100 = max 24h).
+  table bloat. Flaguje stale tabulky dle SLA (Matches ImportantScore 100 = max 24h).
 Inputs: seznam tabulek, SLA konfigurace
 Outputs: health report per tabulka (rows, last_update, bloat_estimate, sla_status)
 Limitations: bloat estimate přibližný bez VACUUM ANALYZE
@@ -961,8 +961,8 @@ Limitations: vyžaduje min 10 runů pro benchmark; nové agenty mají insufficie
 Task types: baseline soubor agenta, Drive /Prompts/Managers/, RowCount, LastPopulated aktualizace
 Description: Čte a aktualizuje {AgentName}.txt v Drive /Prompts/Managers/
   (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO). Načítá přehled sportovních tabulek
-  (Score, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
-  Formát řádku: Score | TableName | Description | RowCount | LastPopulated
+  (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
+  Formát řádku: ImportantScore | TableName | Description | RowCount | LastPopulated
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
 Outputs: přečtený katalog (startup), aktualizovaný soubor zapsaný na Drive (end of run)
 Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří nové záznamy tabulek; DryRun = nezapisuje
@@ -1063,8 +1063,9 @@ Task types: problem report, Drive zápis při selhání, nedokončený run, chyb
 Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
   Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPAI/VO2QNAPTE/VO2QNAPMAB/VO2QNAPUSM),
-  seznam problémů s kategoriemi, stav nedokončených kroků (ntfy, Calendar, DB report).
+  problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
+  stav nedokončených kroků (ntfy, Calendar, DB report).
   Spouští se PŘED finálním reportem operátorovi.
-Inputs: AgentName, MCP identifikátor, errors[], stav ntfy/Calendar/DB report kroků
+Inputs: AgentName, MCP identifikátor, errors[] s ProblemScore, stav ntfy/Calendar/DB report kroků
 Outputs: soubor {AgentName}.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
 Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")

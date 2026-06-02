@@ -82,7 +82,7 @@ Limitations: pouze čte; neopravuje data automaticky
 Task types: monitoring tabulek, row counts, freshness, bloat
 Description: Monitoruje zdraví tabulek: počty řádků, datum posledního UpdatedAt,
   odhadnutý table bloat. Flaguje stale tabulky překračující freshness SLA.
-Inputs: seznam tabulek, SLA konfigurace (Score → max stale hours)
+Inputs: seznam tabulek, SLA konfigurace (ImportantScore → max stale hours)
 Outputs: health report per tabulka (rows, last_update, bloat_estimate, sla_status)
 Limitations: bloat estimate pouze přibližný bez VACUUM ANALYZE
 
@@ -530,8 +530,8 @@ Limitations: nenahrazuje domain-specific logiku sběru dat
 ## archival-scope-optimizer
 Task types: scope optimization, highest-value safe scope, prioritizace tabulek
 Description: Optimalizuje rozsah runu tak, aby maximalizoval hodnotu zpracovaných dat
-  v rámci time budgetu. Řadí tabulky dle Score, freshness SLA a počtu NULL hodnot.
-Inputs: tabulky s jejich Score, LastRunAt, NULL ratio, time budget
+  v rámci time budgetu. Řadí tabulky dle ImportantScore, freshness SLA a počtu NULL hodnot.
+Inputs: tabulky s jejich ImportantScore, LastRunAt, NULL ratio, time budget
 Outputs: prioritizovaný seznam tabulek s odhadovanou dobou zpracování
 Limitations: neprovádí samotný sběr dat
 
@@ -570,7 +570,7 @@ Limitations: checkpoints do AgentRunReports Metadata; max 24h platnost
 ## missed-run-catchup-handler
 Task types: missed run, catch-up mode, gap detection
 Description: Detekuje výpadky runů porovnáním LastRunAt s očekávaným intervalem.
-  Gap > 2x interval → aktivuje catch-up mode (max 3 dny zpět, prioritizuje high Score).
+  Gap > 2x interval → aktivuje catch-up mode (max 3 dny zpět, prioritizuje high ImportantScore).
 Inputs: AgentName, expected_interval, LastRunAt timestamp
 Outputs: catch-up plán (datum od-do, prioritizované tabulky), ntfy notifikace
 Limitations: max 3 dny zpět; starší data označuje jako low_priority pro next regular run
@@ -620,7 +620,7 @@ Limitations: max 50 tabulek na reportovací run
 
 ## coverage-gap-reporter
 Task types: coverage gaps, chybějící data, priority enrichment list
-Description: Identifikuje entity s chybějícími daty pro high-Score tabulky (Score 80+).
+Description: Identifikuje entity s chybějícími daty pro high-ImportantScore tabulky (ImportantScore 80+).
   Generuje prioritizovaný seznam pro doplnění v příštím runu.
 Inputs: seznam entit, required fields per entity type
 Outputs: coverage gap report (EntityGuid, missing fields, priority rank)
@@ -749,8 +749,8 @@ Limitations: pouze kalendář "AI Catalogs"; nemaže historické eventy (jen bud
 ## run-interval-calculator
 Task types: interval výpočtu, freshness SLA, next run time
 Description: Vypočítává optimální interval dalšího runu na základě freshness SLA
-  tabulek (Score >= 90.000 = max 24h, >= 70.000 = max 48h). Vrací recommended next run time.
-Inputs: AgentName, tabulky s Score, posledního run time
+  tabulek (ImportantScore >= 90.000 = max 24h, >= 70.000 = max 48h). Vrací recommended next run time.
+Inputs: AgentName, tabulky s ImportantScore, posledního run time
 Outputs: recommended next run timestamp, SLA compliance status per tabulka
 Limitations: nezohledňuje external events (publishing cycle, game day)
 
@@ -765,7 +765,7 @@ Limitations: nezná real-time server load; plánuje dle historických vzorců
 ## catch-up-scheduler
 Task types: catch-up scheduling, missed runs, multi-day backfill plan
 Description: Při detekci missed runs sestavuje catch-up plán pro max 3 dny zpět.
-  Distribuuje zátěž rovnoměrně; prioritizuje high-Score tabulky.
+  Distribuuje zátěž rovnoměrně; prioritizuje high-ImportantScore tabulky.
 Inputs: AgentName, gap start/end, normal run interval
 Outputs: catch-up run schedule (date/time/scope per run), total estimated time
 Limitations: max 3 dny zpět; nenahrazuje data za delší výpadky
@@ -932,7 +932,7 @@ Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován; DB a Drive č
 
 ## data-export-backup-manager
 Task types: export, backup, JSON Lines, Drive /Prompts/Backups/
-Description: Exportuje data z DB do Drive jako backup: týdně Score>=70 tabulky,
+Description: Exportuje data z DB do Drive jako backup: týdně ImportantScore>=70 tabulky,
   měsíčně full export všech tabulek. Formát JSON Lines (.jsonl), gzip pro soubory >1MB.
   Notifikuje přes ntfy po dokončení exportu.
 Inputs: tabulky k exportu, backup type (weekly/monthly/pre-migration), Drive backup složka
@@ -943,7 +943,7 @@ Limitations: max 10 000 řádků per tabulka; nespouštět pokud db_status != db
 Task types: baseline catalog soubor, Drive Catalogs/, RowCount, LastPopulated aktualizace
 Description: Čte a aktualizuje {AgentName}.txt v Drive /Prompts/Catalogs/
   (folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi). Načítá přehled tabulek
-  (Score, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
+  (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
 Outputs: přečtený katalog (startup), aktualizovaný katalog zapsaný na Drive (end of run)
 Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří nové záznamy tabulek
@@ -981,8 +981,9 @@ Task types: problem report, Drive zápis při selhání, nedokončený run, chyb
 Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
   Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPAI/VO2QNAPTE/VO2QNAPMAB/VO2QNAPUSM),
-  seznam problémů s kategoriemi, stav nedokončených kroků (ntfy, Calendar, DB report).
+  problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
+  stav nedokončených kroků (ntfy, Calendar, DB report).
   Spouští se PŘED finálním reportem operátorovi.
-Inputs: AgentName, MCP identifikátor, errors[], stav ntfy/Calendar/DB report kroků
+Inputs: AgentName, MCP identifikátor, errors[] s ProblemScore, stav ntfy/Calendar/DB report kroků
 Outputs: soubor {AgentName}.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
 Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")
