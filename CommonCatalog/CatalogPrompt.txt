@@ -123,7 +123,7 @@ SourceName, Metadata (jsonb), NormalizedName (pro entity tabulky)
 -----------------------------------------------------------
 KLICOVE MCP NASTROJE:
 -----------------------------------------------------------
-DB:       upsert_record, smart_upsert_batch (bulk, max 500), run_select_sql
+DB:       upsert_record, smart_upsert_batch (bulk, max MAX_BATCH_SIZE — default 100, zjisti z rate_limit_guard), run_select_sql
 Audit:    upsert_record("AgentRunReports", ...) -- save report
           run_select_sql("SELECT * FROM AgentRunReports ...") -- get reports
 Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-alerts / agent-maintenance / agent-digest)
@@ -239,7 +239,7 @@ Required runtime sequence:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.5.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.5.1)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -954,7 +954,7 @@ CHAPTER 8: TOOLS & INTEGRATIONS
 
 DB operations (VO2QNAPDB MCP — skutečná jména nástrojů):
 - upsert_record(table, criteria, data) — primary write operation, handles schema expansion
-- smart_upsert_batch(table, records[]) — bulk upsert, up to 500 records in single transaction
+- smart_upsert_batch(table, records[]) — bulk upsert, max MAX_BATCH_SIZE záznamů v jedné transakci (default 100; aktuální limit zjisti přes rate_limit_guard)
 - run_select_sql(sql) — SELECT queries + advisory lock/unlock
 - soft_delete_record(table, criteria) — soft delete (IsDeleted=true)
 - ensure_table(table) — vytvoří tabulku pokud neexistuje
@@ -982,7 +982,7 @@ Image operations:
 
 Bulk operation rules:
 - use smart_upsert_batch instead of repeated single-record calls when inserting/updating 5+ records
-- maximum batch size: 500 records per call
+- maximum batch size: MAX_BATCH_SIZE per call (default 100, konfigurovatelné env var; zjisti aktuální hodnotu přes rate_limit_guard)
 - bulk operations wrapped in DB transaction — partial success not possible
 
 ## Google Drive Baseline Catalog File Governance — 8.5.0
@@ -1717,12 +1717,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.5.0
-- SchemaVersion: 8.5.0
-- RuntimeSafetyVersion: 8.5.0
+- GovernanceVersion: 8.5.1
+- SchemaVersion: 8.5.1
+- RuntimeSafetyVersion: 8.5.1
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.5.0
-- PromptVersion: 8.5.0
+- ImageGovernanceVersion: 8.5.1
+- PromptVersion: 8.5.1
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -1827,6 +1827,15 @@ Pravidla:
 - Max 1000 zaznamu na EntityGuid; starsi archivuj (IsDeleted = true, ChangeReason = "archived")
 
 ## Changelog (zkráceno)
+
+v8.5.1 (2026-06-02): Konzistenční opravy napříč 5 soubory.
+  ImportantScore: přejmenován Score→ImportantScore v Catalogs/Managers souborech.
+  ProblemScore: přidán do Problems formátu (seřazeno sestupně).
+  ntfy topics: přidány agent-alerts a agent-digest; oddělení infra topics (system-alerts, infra-qnap).
+  Tier3→agent-alerts, Tier4→agent-errors; ntfy auth opravena v server.js.
+  MCP_VERSION sjednocen na 8.5.1; audit_log opraven na upsert_record("AuditLog",...).
+  MAX_BATCH_SIZE: opraven v promptech (default 100, ne 500).
+  Skills soubory: counts sekce N opraveny; SkillsVersion→8.5.1.
 
 v8.5.0 (2026-06-01): Opravy governance nesrovnalostí.
   Data Write Priority odstraněny sport-specifické příklady — CatalogPrompt je obecný.

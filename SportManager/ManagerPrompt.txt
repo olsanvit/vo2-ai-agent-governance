@@ -1919,7 +1919,7 @@ Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
 - db_ping — ověření dostupnosti DB
 - run_select_sql — čtení z DB (SELECT + advisory lock/unlock)
 - upsert_record — zápis jednoho záznamu
-- smart_upsert_batch — bulk zápis (max 500 záznamů)
+- smart_upsert_batch — bulk zápis (max MAX_BATCH_SIZE záznamů, default 100; zjisti přes rate_limit_guard)
 - soft_delete_record — soft delete
 - ensure_table — vytvoření nové tabulky
 - upsert_record("AgentRunReports",...) — uložení run reportu (POVINNÉ)
@@ -2673,6 +2673,14 @@ Pravidla:
 10. Legacy Id-only tabulky respektovat, ale nove tabulky = Guid uuid PRIMARY KEY.
 
 ## Changelog
+
+- 8.5.1 (2026-06-02): Konzistenční opravy napříč 5 soubory.
+  ImportantScore: přejmenován Score→ImportantScore v Managers souborech.
+  ProblemScore: přidán do Problems formátu (seřazeno sestupně).
+  ntfy topics: přidány agent-alerts a agent-digest; Tier3→agent-alerts, Tier4→agent-errors.
+  ntfy auth opravena v server.js (NTFY_USER/NTFY_PASS env vars).
+  MCP_VERSION sjednocen na 8.5.1; MAX_BATCH_SIZE opraven (default 100, ne 500).
+  ManagerPromptSkills sekce N: 11→12; SkillsVersion→8.5.1.
 
 - 8.5.0 (2026-06-01): Opravy governance nesrovnalostí.
   Startup sekvence: Managers soubor (krok 8) načten PŘED Baseline-25 check (krok 9).
