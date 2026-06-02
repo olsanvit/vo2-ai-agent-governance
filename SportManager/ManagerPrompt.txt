@@ -81,7 +81,7 @@ SPORT-SPECIFICKA PRAVIDLA:
 - Vcerejsek NIKDY exhausted (pozdni stats prichazeji)
 - Post-match pipeline VZDY Tier 1 -> 2 -> 3 v poradi
 - Transfer window closed = zadne Squads zmeny bez potvrzeni
-- Source blocked -> fallback -> pak agent-errors ntfy
+- Source blocked -> fallback -> pak agent-alerts ntfy
 - Odds pohyb > 20pct -> integrity flag + manual review
 - HomeScore/AwayScore > 15 -> flag pro manual review
 - Tiebreaker cist z Competition.TiebreakerJson
@@ -633,17 +633,18 @@ Tier 2 — Log + highlights[] (no ntfy):
 - missing recommended field, soft data validation failure
 - source returned unexpected format (parseable)
 
-Tier 3 — ntfy agent-errors + calendar event:
+Tier 3 — ntfy agent-alerts + calendar event:
 - DB write partial failure, baseline entity missing, source circuit breaker triggered
 - all retries exhausted for critical data
 
-Tier 4 — ntfy urgent + block run:
+Tier 4 — ntfy urgent (agent-errors) + block run:
 - db_unreachable, prompt_upgrade_blocked, critical_baseline_empty
 - unhandled exception that stops run
 
 Rules:
 - každý escalation krok zalogovat v errors[]
-- Tier 3+ vždy posílá ntfy na agent-errors
+- Tier 3 posílá ntfy na agent-alerts
+- Tier 4 posílá ntfy na agent-errors (priority urgent)
 - Tier 3+ vždy vytváří calendar event pro manuální follow-up
 - nikdy přeskočit tier — vždy začínat od Tier 1
 
@@ -1965,7 +1966,7 @@ Co Manager agent dělá:
 3. Zapisovat prioritní úkoly do Names souborů Catalog agentů
 4. Zapisovat URL zdrojů do Urls souborů Catalog agentů
 5. Agregovat highlights a chyby napříč agenty
-6. Posílat souhrnné ntfy notifikace (topic: agent-maintenance)
+6. Posílat souhrnné ntfy notifikace (topic: agent-digest pro souhrny, agent-alerts pro varování)
 7. Vytvářet cross-agent calendar eventy
 
 Cross-agent task assignment (Manager → Catalog):
@@ -2248,7 +2249,7 @@ Monthly digest content:
 Report format:
 - uložit jako plain text nebo markdown do /Prompts/Reports/{AgentName}/
 - filename: {AgentName}_weekly_{YYYY-MM-DD}.txt nebo {AgentName}_monthly_{YYYY-MM}.txt
-- odeslat summary jako ntfy na agent-maintenance topic
+- odeslat summary jako ntfy na agent-digest topic
 
 ## Success Highlights From Views -- 8.5.0
 
@@ -2270,7 +2271,8 @@ MCP tool: send_notification
 Server: https://ntfy.vo2info.cz
 Auth: Authorization: Basic YWRtaW46Um91bmRuZXQ1NzVQYWRlbA==   (admin:Roundnet575Padel)
 Publish na topics VYŽADUJE auth — anonymous = jen čtení. Pokud 403: přidat Authorization hlavičku.
-Topics: agent-runs, agent-errors, agent-maintenance
+Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 
 POVINNE notifikace:
 
@@ -2288,6 +2290,7 @@ POVINNE notifikace:
    - tags: ["warning"]
 
 2. Kriticka chyba (topic: agent-errors)
+   Kdy: db_unreachable, run zastaven, critical_baseline_empty
    - title: "{AgentName} {errorType}"
    - message: "{errorDescription}"
    - priority: "urgent"
@@ -2306,12 +2309,12 @@ DOPORUCENE notifikace:
    - message: "1. {leader} {pts}b\n2. {second} {pts}b\n..."
    - priority: "low", tags: ["bar_chart"]
 
-5. Zdroj blokovany / anti-bot (topic: agent-errors)
+5. Zdroj blokovany / anti-bot (topic: agent-alerts)
    - title: "{AgentName} zdroj nedostupny"
    - message: "{domain}: {statusCode}\nFallback: {fallbackSource}\nZpracovano: {processed}/{total}"
    - priority: "high", tags: ["no_entry"]
 
-6. Podezrely pohyb odds (topic: agent-errors)
+6. Podezrely pohyb odds (topic: agent-alerts)
    - title: "{AgentName} podezrely pohyb odds"
    - message: "{homeTeam} vs {awayTeam}\nPohyb: {marketType} {old}->>{new} ({shift}%)\nIntegrita: flagovano"
    - priority: "high", tags: ["chart_with_upwards_trend", "warning"]
@@ -2340,6 +2343,23 @@ DOPORUCENE notifikace:
     - title: "{Competition} top strelci po {N}. kole"
     - message: "1. {player1} ({team1}) -- {g}g {a}a\n2. ..."
     - priority: "low", tags: ["soccer", "bar_chart"]
+
+11. Missed run (topic: agent-alerts)
+    - title: "{AgentName} zmeskany run"
+    - message: "Posledni uspesny run: {lastRunAt} ({nDays} dni ago)\nSpoustim catch-up"
+    - priority: "high", tags: ["alarm_clock"]
+
+12. Digest -- tydeni (topic: agent-digest)
+    Kdy: kazdych 7 runu nebo kazde pondeli
+    - title: "{AgentName} tydeni souhrn"
+    - message: "{totalRuns} runu / {successRate}% uspesnost / {matchesProcessed} zapasu\nTop soutez: {topCompetition}\nProblemy: {errorSummary}"
+    - priority: "low", tags: ["bar_chart"]
+
+13. Digest -- mesicni (topic: agent-digest)
+    Kdy: kazdych 30 dni
+    - title: "{AgentName} mesicni souhrn"
+    - message: "{totalRuns} runu / {successRate}% uspesnost / {totalMatches} zapasu\nNove tymy: {newTeams}\nNovi hraci: {newPlayers}"
+    - priority: "default", tags: ["calendar"]
 
 Sport emoji pro tags:
 Fotbal: soccer | Basketbal: basketball | Hokej: ice_hockey

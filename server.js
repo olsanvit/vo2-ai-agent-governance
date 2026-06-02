@@ -1807,7 +1807,7 @@ function createMcpServer() {
   });
 
   wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz.", {
-    topic:    z.enum(["agent-runs", "agent-errors", "agent-maintenance"]),
+    topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest"]),
     title:    z.string(),
     message:  z.string(),
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),

@@ -126,7 +126,7 @@ KLICOVE MCP NASTROJE:
 DB:       upsert_record, smart_upsert_batch (bulk, max 500), run_select_sql
 Audit:    upsert_record("AgentRunReports", ...) -- save report
           run_select_sql("SELECT * FROM AgentRunReports ...") -- get reports
-Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-maintenance)
+Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-alerts / agent-maintenance / agent-digest)
 Drive:    read_file_content, create_file, update_file_content, search_files  [Google Drive MCP]
 Calendar: create_event, list_events, delete_event  [Google Calendar MCP]
 Lock:     run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)") / pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)
@@ -138,8 +138,10 @@ MCP AIData:   https://mcp.vo2info.cz/AI/   (DB: AIData)
 MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)
 ntfy:         https://ntfy.vo2info.cz
   Auth: Authorization: Basic YWRtaW46Um91bmRuZXQ1NzVQYWRlbA==   (admin:Roundnet575Padel)
-  Publish na topics (agent-runs/agent-errors/agent-maintenance) VYŽADUJE auth — anonymous = jen čtení.
+  Publish na topics VYŽADUJE auth — anonymous = jen čtení.
   Pokud send_notification tool selže 403: přidat hlavičku Authorization nebo použít credentials.
+  Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+  Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
 MCP Version:  8.5.0
@@ -217,7 +219,7 @@ Required runtime sequence:
    → prompt_status = prompt_upgrade_blocked
    → log warning: "selfUpdate blocked — pokračuji s verzí {agentVersion}"
    → zahrnout do errors[], ale run NEBLOKOVAT (agent může pokračovat se starou verzí)
-   → send ntfy (topic: agent-errors): "{AgentName} ⚠️ prompt upgrade blocked"
+   → send ntfy (topic: agent-alerts): "{AgentName} ⚠️ prompt upgrade blocked"
 
 9. after successful selfUpdate, continue in same governed run path
 10. after baseline existence checks, continue to Baseline Entity Validation Before Views
@@ -508,7 +510,8 @@ Tier 4 — Emergency stop (critical integrity risk):
 
 Rules:
 - every escalation step logged in errors[]
-- Tier 3+ always sends ntfy to agent-errors
+- Tier 3 sends ntfy to agent-alerts (partial failure, source unavailable)
+- Tier 4 sends ntfy to agent-errors priority urgent (data integrity, run stopped)
 - Tier 3+ always creates calendar event for manual follow-up
 - never skip tiers — always start from Tier 1
 
@@ -882,7 +885,7 @@ Rules:
 - if State = open: skip domain entirely, log "Circuit open: {domain}", use fallback
 - if State = half_open: allow exactly one test request
 - circuit breaker state persists across runs (stored in DB)
-- notify via ntfy (agent-errors) when circuit opens
+- notify via ntfy (agent-alerts) when circuit opens
 - notify when circuit closes: "Circuit breaker zavřen: {domain} — zdroj opět dostupný"
 
 ## Source Reliability Score — 8.5.0
@@ -1187,7 +1190,7 @@ Co Manager agent dělá:
 3. Zapisovat prioritní úkoly do Names souborů Catalog agentů
 4. Zapisovat URL zdroje do Urls souborů Catalog agentů
 5. Agregovat highlights a chyby napříč agenty
-6. Posílat souhrnné ntfy notifikace (topic: agent-maintenance)
+6. Posílat souhrnné ntfy notifikace (topic: agent-digest pro souhrny, agent-alerts pro varování)
 7. Vytvářet cross-agent calendar eventy
 
 Cross-agent task assignment (Manager → Catalog):
@@ -1246,9 +1249,15 @@ Server: https://ntfy.vo2info.cz
 MCP sends via: NTFY_URL=http://127.0.0.1:8225 with Basic Auth (NTFY_USER / NTFY_PASS)
 
 Topics:
-- agent-runs — výsledek každého scheduled runu
-- agent-errors — kritické chyby, blokéry, neočekávané selhání
-- agent-maintenance — maintenance akce (backfill, merge, schema změny, catch-up)
+- agent-runs        — výsledek každého scheduled runu (✅/⚠️), prompt upgrade
+- agent-errors      — POUZE kritické bloky: DB unreachable, run zastaven, critical baseline empty (priority urgent)
+- agent-alerts      — varování nevyžadující okamžitý zásah: rate limit, source blocked, missed run, circuit breaker, ManualReviewQueue, source reliability
+- agent-maintenance — maintenance akce: backfill, merge/dedup, schema změny, catch-up, season lifecycle
+- agent-digest      — týdenní/měsíční souhrny (každých 7 runů/pondělí, každých 30 dní)
+
+Infra topics (Zabbix/QNAP — konfigurovat přímo v Zabbix/QNAP, NIKOLI přes send_notification):
+- system-alerts — systémové alerty ze Zabbix
+- infra-qnap    — QNAP události (disk, backup, kontejnery)
 
 ────────────────────────────────────────
 POVINNÉ notifikace (MUSÍ poslat vždy):
@@ -1279,9 +1288,10 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
    - title: "{AgentName} 🔄 prompt upgradován"
    - message: "{oldVersion} → {newVersion} aplikováno"
 
-4. Baseline tabulka prázdná (topic: agent-errors)
+4. Baseline tabulka prázdná — varování (topic: agent-alerts)
    - title: "{AgentName} ⚠️ chybí baseline"
    - message: "Tabulka {TableName} je prázdná (ImportantScore {score})\nReadiness: not_ready"
+   - priority: "high", tags: ["warning"]
 
 5. Schema změna (topic: agent-maintenance)
    - title: "{AgentName} 🗄️ schema změna"
@@ -1291,23 +1301,58 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
    - title: "{AgentName} 🔧 backfill"
    - message: "{filled}/{total} záznamů doplněno v {TableName}"
 
-7. Missed run (topic: agent-errors)
+7. Missed run (topic: agent-alerts)
    - title: "{AgentName} ⏰ zmeškaný run"
    - message: "Poslední úspěšný run: {lastRunAt} ({nDays} dní ago)\nSpouštím catch-up"
+   - priority: "high", tags: ["alarm_clock"]
 
-8. Rate limit / source blokován (topic: agent-errors)
+8. Rate limit / source blokován (topic: agent-alerts)
    - title: "{AgentName} 🚫 zdroj blokován"
    - message: "Zdroj: {domain}\nDůvod: {reason} ({statusCode})"
+   - priority: "default", tags: ["no_entry"]
 
 9. Deduplikace / merge (topic: agent-maintenance)
    - title: "{AgentName} 🔀 merge entit"
    - message: "{count} duplikátů sloučeno\n{manualQueueCount} čeká na manuální review"
 
+10. Circuit breaker (topic: agent-alerts)
+    Otevřen:
+    - title: "{AgentName} 🔴 circuit open: {domain}"
+    - message: "Zdroj {domain} selhal {failureCount}×\nAutomatický retry za {resetAfterSeconds}s"
+    - priority: "default", tags: ["red_circle"]
+    Zavřen:
+    - title: "{AgentName} 🟢 circuit closed: {domain}"
+    - message: "Zdroj {domain} opět dostupný"
+    - priority: "low", tags: ["green_circle"]
+
+11. Source reliability < 50 (topic: agent-alerts)
+    - title: "{AgentName} 📉 nespolehlivý zdroj"
+    - message: "Zdroj: {domain}\nReliabilityScore: {score} (< 50)\nConfidence multiplier: {multiplier}×"
+    - priority: "default", tags: ["chart_with_downwards_trend"]
+
+12. ManualReviewQueue > 10 (topic: agent-alerts)
+    - title: "{AgentName} 👁 review queue: {count} položek"
+    - message: "{count} položek čeká na manuální review\nNejstarší: {oldestItem}"
+    - priority: "low", tags: ["eyes"]
+
+13. Digest — týdenní (topic: agent-digest)
+    Kdy: každých 7 runů nebo každé pondělí
+    - title: "{AgentName} 📊 týdenní souhrn"
+    - message: "{totalRuns} runů / {successRate}% úspěšnost / {totalInserted} záznamů\nTop tabulka: {topTable} ({rowCount} řádků)\nProblémy: {errorSummary}"
+    - priority: "low", tags: ["bar_chart"]
+
+14. Digest — měsíční (topic: agent-digest)
+    Kdy: každých 30 dní
+    - title: "{AgentName} 📅 měsíční souhrn"
+    - message: "{totalRuns} runů / {successRate}% úspěšnost / {totalInserted} záznamů\nSchema změny: {schemaChanges}\nNové entity: {newEntities}"
+    - priority: "default", tags: ["calendar"]
+
 Pravidla:
 - vždy ulož run report (upsert_record na AgentRunReports) před odesláním send_notification
-- maximálně 3 notifikace za jeden run
+- maximálně 3 notifikace za jeden run (digest se nepočítá do limitu)
 - send_notification selhání nesmí přerušit run — log do errors[]
 - vždy uváděj AgentName a PromptVersion
+- agent-errors = POUZE priority urgent; varování patří do agent-alerts
 
 ## Google Calendar Integration — 8.5.0
 
@@ -1573,7 +1618,7 @@ Monthly digest content:
 Report format:
 - save as plain text or markdown to /Prompts/Reports/{AgentName}/
 - filename: {AgentName}_weekly_{YYYY-MM-DD}.txt or {AgentName}_monthly_{YYYY-MM}.txt
-- send summary as ntfy on agent-maintenance topic
+- send summary as ntfy on agent-digest topic
 
 ## Success Highlights From Views
 
@@ -1983,7 +2028,7 @@ Backup rules:
 - keep last 4 weekly backups (delete older)
 - keep last 12 monthly backups (delete older)
 - backup must include schema version (PromptVersion) in first line
-- notify via ntfy on agent-maintenance when backup completes
+- notify via ntfy on agent-digest when backup completes
 
 
 ## Baseline Entity Validation Before Views
@@ -3242,7 +3287,8 @@ QNAP Storage:
 Ntfy:
 - Veřejný endpoint: https://ntfy.vo2info.cz
 - MCP internal: http://127.0.0.1:8225 (Basic Auth)
-- Topics: agent-runs, agent-errors, agent-maintenance
+- Agent topics: agent-runs, agent-errors, agent-alerts, agent-maintenance, agent-digest
+- Infra topics (Zabbix/QNAP): system-alerts, infra-qnap
 
 Containerization notes:
 - loopback DB targets (localhost, 127.0.0.1, ::1) inside containers are deployment-risk diagnostics
