@@ -1,6 +1,6 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 8.4.0
-Generated: 2026-05-28
+SkillsVersion: 8.5.0
+Generated: 2026-06-02
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
 Tento soubor je autoritativní seznam skills povolených pro Catalog agenty.
@@ -959,3 +959,14 @@ Description: Spravuje tabulku AgentSchedules — ukládá denní plánovaný ča
 Inputs: AgentName, ScheduledRunTime (time, Europe/Prague), IntervalHours, AgentType (Catalog/Manager)
 Outputs: upsert do AgentSchedules, startup report konfliktů, přehled tabulky agentů
 Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVOJIT upsert při DryRun
+
+## problem-report-writer
+Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
+Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+  pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
+  Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPAI/VO2QNAPTE/VO2QNAPMAB/VO2QNAPUSM),
+  seznam problémů s kategoriemi, stav nedokončených kroků (ntfy, Calendar, DB report).
+  Spouští se PŘED finálním reportem operátorovi.
+Inputs: AgentName, MCP identifikátor, errors[], stav ntfy/Calendar/DB report kroků
+Outputs: soubor {AgentName}.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")

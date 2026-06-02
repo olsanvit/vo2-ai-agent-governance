@@ -1069,6 +1069,56 @@ Urls/:
 - Rate limiting platí stejně jako pro ostatní zdroje (1 req/s scraping)
 - Pokud URL vrátí 4xx/5xx: zaznamenat do errors[], přeskočit, nepřestat
 
+## Agent Problem Report Drive Folder — 8.5.0
+
+Pokud run NESKONČIL úspěšně (success = false), agent MUSÍ zapsat problem report do Drive.
+
+Drive folder ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Soubor: {AgentName}.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
+
+Kdy zapsat:
+- success = false v run reportu
+- NEBO selhal ntfy (notification neodeslána)
+- NEBO selhal Calendar event (❌ event nevytvořen nebo nezaktualizován)
+- NEBO selhal upsert_record("AgentRunReports") — report neuložen do DB
+
+MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojení):
+- AIData DB (mcp.vo2info.cz/AI)  → VO2QNAPAI
+- TopEleven DB (mcp.vo2info.cz/TE) → VO2QNAPTE
+- MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPMAB
+- UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPUSM
+
+Formát souboru {AgentName}.txt:
+```
+Agent:     {AgentName}
+MCP:       {VO2QNAPAI | VO2QNAPTE | VO2QNAPMAB | VO2QNAPUSM}
+Timestamp: {ISO 8601 datetime}
+RunGuid:   {guid}
+Version:   {PromptVersion}
+
+PROBLÉMY:
+- {popis problému 1} [{kategorie: db_error | source_error | schema_error | skill_missing | time_budget | other}]
+- {popis problému 2}
+...
+
+NEDOKONČENÉ KROKY:
+- ntfy notifikace:      {✅ odesláno | ❌ SELHAL — {důvod}}
+- Calendar event (✅):  {✅ vytvořen | ❌ SELHAL — {důvod}}
+- Run report (DB):      {✅ uložen   | ❌ SELHAL — {důvod}}
+```
+
+Postup:
+1. Sestavit obsah souboru podle formátu výše
+2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
+3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
+   Pokud soubor neexistuje: create_file(title="{AgentName}.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+4. Zapsat PŘED odesláním finálního reportu operátorovi
+5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
+
+Priorita:
+- Problem report Drive zápis se NEBLOKUJE run ani report — jen best-effort
+- Pokud Drive nedostupný: agent pokračuje k finálnímu reportu bez blokatéru
+
 Pravidla pro Names a Urls soubory:
 - Číst vždy na začátku runu (po DB ping, před discovery)
 - Pokud soubor neexistuje: vytvořit prázdný (ne chyba, ne přeskočit)
