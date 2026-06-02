@@ -6,6 +6,10 @@ Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná 
 Tento soubor je autoritativní seznam skills povolených pro Manager agenty.
 Každý Manager agent musí mít aktivních ASPOŇ 11 skills.
 
+!! MAINTENANCE POZNÁMKA: Přibližně 60 skills existuje identicky v ManagerPromptSkills i
+   CatalogPromptSkills. Při úpravě sdíleného skilu VŽDY aktualizuj OBA soubory.
+   Viz CatalogPromptSkills.txt pro úplný seznam sdílených skills.
+
 =============================================================
 PRAVIDLA POUŽITÍ SKILLS
 =============================================================
