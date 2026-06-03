@@ -21,7 +21,7 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     L mismatch -> selfUpdate -> pokracovat
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
-    Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
+    Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
     L neexistuje -> vytvorit po prvnim uspesnem runu:
       create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=...)
     FORMAT: ImportantScore(3des.) | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
@@ -153,7 +153,7 @@ ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-Catalogs:     Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi
+Catalogs:     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
 MCP Version:  8.6.0
 
 =============================================================
@@ -237,7 +237,7 @@ Required runtime sequence:
     - agent musí mít aktivních ASPOŇ 11 skills
     - pokud soubor neexistuje: přeskočit tiše, reportovat capability_missing pro všechny skills
     - pokud úkol není pokryt: navrhnout nový skill, přidat do CatalogPromptSkills.txt na Drive
-12. načíst /Prompts/Catalogs/{AgentName}.txt z Drive (folder: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
+12. načíst /Prompts/Catalogs/{AgentName}.txt z Drive (folder: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
     → přehled spravovaných tabulek (ImportantScore, RowCount, LastPopulated)
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
     - použít jako výchozí přehled pro prioritizaci tabulek v běhu
@@ -333,7 +333,7 @@ Co dělat při prvním runu (v tomto pořadí):
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit score sloupce (numeric(6,3)) ve všech existujících tabulkách
 4. Vytvořit prázdné Drive soubory pokud neexistují:
-   create_file(title="{AgentName}.txt",       parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent="")
+   create_file(title="{AgentName}.txt",       parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent="")
    create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
    create_file(title="{AgentName}_urls.txt",  parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
