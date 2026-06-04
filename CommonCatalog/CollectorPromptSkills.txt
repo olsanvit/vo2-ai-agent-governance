@@ -1,0 +1,301 @@
+SkillsFor: CollectorPrompt
+SkillsVersion: 8.7.0
+Generated: 2026-06-04
+
+Skills jsou konfigurovány per agent v Claude.ai.
+Každý Collector agent musí mít aktivních ASPOŇ 11 skills.
+
+!! MAINTENANCE: Sdílené skills s CatalogPrompt/ManagerPrompt — při úpravě aktualizovat všechny soubory.
+
+=============================================================
+PRAVIDLA POUŽITÍ SKILLS
+=============================================================
+
+- pokud skill pokrývá úkol: použít skill, má přednost před obecným workflow
+- pokud skill odporuje canonical governance: canonical governance má přednost
+- nikdy netvrdit, že skill existuje pokud není dostupný
+- uvést SkillsUsed[] v run reportu
+- skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití
+
+=============================================================
+SKILL DIRECTORY (32 skills)
+=============================================================
+
+-- A. DB & SCHEMA (5) ------------------------------------------
+
+## db-schema-guardian
+Task types: schema governance, tabulky, sloupce, indexy, BaseGuid, migrace
+Description: Autoritativní správce DB schématu. Zajišťuje BaseGuid standard,
+  scoring sloupce, správné indexy. Řídí migrace bezpečně.
+Inputs: název tabulky nebo seznam tabulek
+Outputs: SQL migration script, schema diff report
+Limitations: nespouští migrace automaticky
+
+## db-null-audit
+Task types: NULL analýza, datová kvalita, prioritizace backfillu
+Description: Skenuje collector tabulky a reportuje NULL hodnoty per sloupec.
+  Prioritizuje ImageUrl, Category, ConfidenceScore NULL violations.
+Inputs: seznam tabulek nebo ALL
+Outputs: NULL audit report (tabulka, sloupec, NULL ratio, priority rank)
+Limitations: max 200 tabulek na run
+
+## db-table-health-monitor
+Task types: monitoring tabulek, row counts, freshness
+Description: Monitoruje zdraví collector tabulek: počty řádků per kategorie,
+  datum posledního přidání, balance report.
+Inputs: seznam tabulek, balance threshold
+Outputs: health report, balance status per kategorie
+Limitations: balance výpočet přibližný
+
+## duplicate-detector
+Task types: detekce duplicitů, SourceUrl, ImageUrl hash
+Description: Detekuje potenciální duplikáty v collector tabulkách přes
+  SourceUrl nebo ImageUrl hash. Vrací páry kandidátů.
+Inputs: tabulka, URL sloupce pro porovnání
+Outputs: seznam duplikátů (Guid_A, Guid_B, match_type)
+Limitations: max 1000 párů per run
+
+## collection-schema-initializer
+Task types: první run, schema setup, collector tabulky
+Description: Inicializuje schema pro nový collector agent. Vytvoří potřebné
+  tabulky dle {AgentName}_entities.txt nebo defaultního schématu.
+  Přidá všechny BaseGuid + scoring sloupce.
+Inputs: AgentName, target types (Mobile/Desktop/...), custom column list
+Outputs: vytvořené tabulky, updated entities soubor
+Limitations: nespouští migrace na existujících tabulkách bez potvrzení
+
+-- B. COLLECTION & SEARCH (8) -----------------------------------
+
+## web-search-coordinator
+Task types: web search, multi-query, category search
+Description: Koordinuje web search queries pro collector agenta. Distribuuje
+  queries dle balance priority (méně obsazené kategorie první). Respektuje
+  rate limit (1 req/5s, max 20 queries/run).
+Inputs: category list s counts, target type, max queries
+Outputs: seznam výsledků s URL, title, source, category guess
+Limitations: max 20 queries/run; bez API key nemůže použít placené search API
+
+## category-classifier
+Task types: klasifikace do kategorií, target type detection
+Description: Zařadí nalezený obsah do správné kategorie z povolených listů.
+  Detekuje target type (Mobile/Desktop) dle rozměrů nebo kontextu.
+  Odmítá obsah který nesedí do žádné kategorie.
+Inputs: výsledek vyhledávání (URL, title, dimensions), allowed categories list
+Outputs: assigned category, target_type, confidence score, skip reason pokud odmítnut
+Limitations: fuzzy matching max 80% threshold; pod tím → ManualReviewQueue
+
+## quality-filter
+Task types: quality check, resolution validation, content safety
+Description: Filtruje výsledky dle kvality: min rozlišení, broken links,
+  paywall, unsafe content, watermarks, duplicate detection.
+  Vypočítává ConfidenceScore dle zdroje a kvality.
+Inputs: výsledek s URL, rozměry, source tier
+Outputs: pass/fail, ConfidenceScore, rejection reason
+Limitations: resolution check pouze pokud rozměry v metadatech; unsafe detection heuristická
+
+## balance-priority-calculator
+Task types: balance analýza, prioritizace kategorií, even distribution
+Description: Vypočítává priority score per kategorii (max_count - category_count).
+  Navrhuje pořadí kategorií pro sběr tak aby pokrytí bylo rovnoměrné.
+Inputs: category list s aktuálními counts z DB
+Outputs: seřazený seznam kategorií dle priority DESC, balance report
+Limitations: pouze pro uniform distribution; weighted distribution vyžaduje custom config
+
+## category-list-manager
+Task types: Drive category list, counts update, sorting
+Description: Čte a aktualizuje category listy v Drive /Prompts/Collectors/.
+  Po každém runu aktualizuje counts dle aktuálního stavu DB.
+  Seřazuje dle Count ASC. Vytváří soubor pokud neexistuje.
+  Drive folder ID pro Collectors: hledat přes search_files.
+Inputs: AgentName, target type, aktuální counts z DB
+Outputs: updated Drive soubor, diff report (co se změnilo)
+Limitations: max 500 kategorií per soubor
+
+## source-reliability-tracker
+Task types: spolehlivost zdrojů, SourceReliability, ReliabilityScore
+Description: Sleduje success/failure ratio per zdroj (Unsplash, Pixabay...).
+  Aktualizuje ReliabilityScore. Navrhuje odstranění nespolehlivých zdrojů.
+Inputs: source name, výsledek requestu (success/fail)
+Outputs: aktualizovaný ReliabilityScore, trend (improving/stable/declining)
+Limitations: min 10 requestů pro výpočet
+
+## source-circuit-breaker-manager
+Task types: circuit breaker, open/half_open/closed, source availability
+Description: Spravuje circuit breaker stavy per source. Otevírá po 3 failures;
+  testuje half_open po 24h; zavírá po úspěchu.
+Inputs: source name, výsledek posledního requestu
+Outputs: aktuální stav, next test time
+Limitations: state přetrvává mezi runy v DB
+
+## idempotency-guard
+Task types: duplicate prevention, SourceUrl check, ImageUrl hash
+Description: Před zápisem ověří že SourceUrl nebo ImageUrl hash ještě
+  neexistuje v DB. Primární: SourceUrl. Sekundární: hash(ImageUrl).
+Inputs: SourceUrl, ImageUrl (volitelně), tabulka
+Outputs: exists/new flag, existující Guid pokud nalezen
+Limitations: hash comparison pouze pro ImageUrl; obsah souboru neporovnává
+
+-- C. RUN ORCHESTRATION (5) ------------------------------------
+
+## archival-run-orchestrator
+Task types: run orchestration, shortest-safe-path, time budget
+Description: Orchestruje celý scheduled run: load categories → balance check
+  → web search → classify → save. Zajišťuje time budget (8 min scheduled).
+Inputs: dostupné kategorie, zbývající time budget
+Outputs: ordered execution plan, skipped steps, time estimate
+Limitations: nenahrazuje domain-specific logiku sběru
+
+## time-budget-governor
+Task types: time budget, graceful stop, run timeout
+Description: Sleduje zbývající time budget. Při 80% spustí graceful stop.
+Inputs: start time, run type, current step
+Outputs: zbývající čas, allow/stop decision
+Limitations: nezastavuje násilně běžící DB operace
+
+## scheduled-run-report-formatter
+Task types: finální run report, formátování výstupu pro AgentRunReports
+Description: Generuje strukturovaný run report: itemsSaved, itemsSkipped,
+  categoriesCovered, balanceReport, errors, highlights, SkillsUsed.
+Inputs: raw run data
+Outputs: formátovaný report pro upsert_record("AgentRunReports",...)
+Limitations: report musí být uložen i při selhání
+
+## missed-run-catchup-handler
+Task types: missed run, catch-up mode
+Description: Detekuje výpadky runů. Collector catch-up = max 1 missed run
+  (nepotřebuje dohánět historii jako Manager agent).
+Inputs: AgentName, expected_interval, LastRunAt
+Outputs: catch-up plán (balanced category focus), ntfy notifikace
+Limitations: max 1 catch-up run; starší výpadky ignorovat
+
+## error-escalation-manager
+Task types: error escalation, ntfy agent-alerts, Tier3 errors
+Description: Eskaluje Tier3 chyby na ntfy agent-alerts. Tier4 na agent-errors.
+  Max 3 ntfy per run.
+Inputs: error list, AgentName
+Outputs: ntfy zprávy, escalation log
+Limitations: max 3 ntfy/run; překročení = agregace
+
+-- D. REPORTING & NOTIFICATIONS (5) ----------------------------
+
+## ntfy-notification-sender
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts
+Description: Odesílá markdown-formátované notifikace na ntfy.vo2info.cz.
+  Collector-specific: balance report, category imbalance, review queue alerts.
+  Max 3 notifikace per run.
+Inputs: kanál, zpráva, priority, tags
+Outputs: notifikace odeslána
+Limitations: max 3/run
+
+## collection-balance-reporter
+Task types: balance report, category distribution, priority suggestions
+Description: Generuje report pokrytí kategorií: count per kategorie, průměr,
+  max/min, doporučení které kategorie prioritizovat příště.
+Inputs: tabulka s Category sloupcem
+Outputs: balance report (sorted by count ASC), priority suggestions
+Limitations: pouze pro uniform distribution goal
+
+## audit-log-writer
+Task types: AuditLog, change tracking
+Description: Zapisuje strukturované záznamy do AuditLog pro zápisy do
+  collector tabulek. Každý záznam: actor, action, EntityGuid, table.
+Inputs: action type, EntityGuid, table, before/after
+Outputs: AuditLog záznam
+Limitations: neloguje SELECT operace
+
+## next-run-calendar-scheduler
+Task types: plánování příštího runu v Google Calendar, AI Collectors
+Description: Vytváří Calendar event v "AI Collectors" pro příští scheduled run.
+  list_events → smazat starý event → vytvořit nový.
+Inputs: AgentName, výsledek runu, NextRunAt
+Outputs: Calendar event vytvořen
+Limitations: pouze "AI Collectors" kalendář
+
+## problem-report-writer
+Task types: problem report, Drive zápis při selhání
+Description: Zapíše {AgentName}_error.txt do Drive Problems složky
+  (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) pokud run selhal.
+Inputs: AgentName, errors[] s ProblemScore, stav ntfy/Calendar/DB kroků
+Outputs: {AgentName}_error.txt v Problems složce
+Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
+
+-- E. IMAGE HANDLING (4) ----------------------------------------
+
+## vo2qnapdb-image-guardian
+Task types: image workflow, SharedImages + EntityImages, QNAP upload
+Description: Kompletní image workflow pro collector: validace MIME, SHA256 dedup,
+  upload přes save_image_url nebo save_image_base64.
+  Pro wallpaper collector: uložit do SharedImages + propojit s collection záznamem.
+Inputs: URL nebo base64 obrázku, EntityGuid, ImageType
+Outputs: SharedImages Guid, upload potvrzení
+Limitations: pouze explicitní volání; SVG bez scriptů
+
+## image-quality-validator
+Task types: rozlišení, velikost, formát, min quality check
+Description: Ověřuje kvalitu obrázku. Pro wallpapers: min 800×600px Mobile,
+  min 1920×1080px Desktop. Preferuje PNG/WebP. Max 15 MB.
+Inputs: image URL nebo base64, CollectionType
+Outputs: pass/fail, dimensions, file size, doporučení
+Limitations: rozměry pouze pokud dostupné v metadatech
+
+## image-license-validator
+Task types: licence, copyright, trademark check před zápisem
+Description: Ověřuje licenci obrázku ze zdroje. Mapuje na LicenseType enum.
+  Tier A zdroje (Unsplash, Pixabay): automaticky CC0/free.
+  Tier B/C: zkontrolovat licence na stránce.
+Inputs: SourceUrl, source name
+Outputs: LicenseType, CommercialUseAllowed, Attribution požadavek
+Limitations: automatická detekce pouze pro známé zdroje; ostatní = "unknown"
+
+## svg-sanitizer
+Task types: SVG sanitizace, bezpečnostní check, script removal
+Description: Sanitizuje SVG soubory před uložením. Odmítá script elementy,
+  event handlers, javascript: URI. Odstraňuje foreignObject, external refs.
+Inputs: SVG content
+Outputs: sanitized SVG nebo REJECT s důvodem
+Limitations: pouze SVG; raster obrázky nepotřebují sanitizaci
+
+-- F. ADVANCED (5) -----------------------------------------------
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací běh bez DB zápisů
+Description: Řídí DryRun mód. Blokuje INSERT/UPDATE/DELETE. Simuluje výstupy
+  s "[DRY_RUN]" prefixem. Povoluje DB čtení a Drive čtení.
+Inputs: RunMode: dry_run nebo dry_run=true
+Outputs: simulované výstupy, run report s IsDryRun=true
+Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován
+
+## agent-schedule-manager
+Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules pro Collector agenty.
+  Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu: load přehled a detekovat konflikty ±15 min.
+Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Collector"
+Outputs: upsert do AgentSchedules, přehled agentů
+Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
+
+## baseline-collector-file-manager
+Task types: baseline entities soubor, Drive Collectors/, RowCount aktualizace
+Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Collectors/.
+  Přehled DB tabulek s ImportantScore, RowCount, LastPopulated.
+  Vytváří soubor pokud neexistuje (query DB tables).
+Inputs: AgentName, seznam tabulek s aktuálním RowCount
+Outputs: přečtený katalog (startup), aktualizovaný na Drive (end of run)
+Limitations: neaktualizuje pokud db_unreachable
+
+## cross-agent-task-writer
+Task types: cross-agent zápis, Urls soubory, task assignment
+Description: Zapisuje URL úkoly pro jiné agenty do jejich _urls.txt souborů.
+  Max 50 nových URL per zápis. Append-only.
+Inputs: cílový AgentName, seznam URL
+Outputs: append do Drive souboru, highlights[] záznam
+Limitations: max 50 položek per zápis; soubor nesmí překročit 500 řádků
+
+## weekly-digest-reporter
+Task types: weekly digest, měsíční digest, souhrnný report
+Description: Generuje týdenní/měsíční digest: celkový count per kategorie,
+  growth trend, top zdroje, error summary.
+  Uložit na Drive /Prompts/Reports/{AgentName}/, ntfy na agent-digest.
+Inputs: AgentName, period type (weekly/monthly)
+Outputs: digest soubor na Drive, ntfy summary
+Limitations: min 5 runů pro smysluplný weekly digest
