@@ -26,7 +26,7 @@ PRAVIDLA POUŽITÍ SKILLS
   a reportovat jako capability_missing
 
 =============================================================
-SKILL DIRECTORY (121 skills)
+SKILL DIRECTORY (126 skills)
 =============================================================
 
 -- A. DB & SCHEMA (8) ------------------------------------------
@@ -697,7 +697,7 @@ Inputs: seznam zdrojů používaných agentem
 Outputs: available sources, blocked sources s důvodem, fallback doporučení
 Limitations: nerestartuje circuit breakery; pouze evaluuje stav
 
--- I. IMAGE & MEDIA (4) ----------------------------------------
+-- I. IMAGE & MEDIA (9) ----------------------------------------
 
 ## vo2qnapdb-image-guardian
 Task types: image workflow, SharedImages + EntityImages, QNAP upload
@@ -732,6 +732,53 @@ Description: Uploaduje fotografie stadionů a tréninkových areálů. Asociuje 
 Inputs: VenueGuid, photo URL nebo base64, photo type (exterior/interior/aerial)
 Outputs: SharedImages Guid, EntityImages záznam, potvrzení
 Limitations: max 5 fotografií per venue; pouze schválené veřejné fotografie
+
+## historical-asset-collector
+Task types: historické loga, historické cresty, historické dresy, historical timeline
+Description: Sbírá VŠECHNY historické verze vizuálních assetů pro sportovní entitu.
+  Buduje kompletní timeline od vzniku klubu/soutěže — loga, cresty, vlajky.
+  Každá verze ukládána s from/to metadata a ConfidenceScore dle jistoty datování.
+  Zdroje: Wikidata P154/P18/P1419, Wikipedia Commons, sportslogos.net.
+Inputs: EntityGuid, EntityType (Teams/Competitions/Countries), ImageTypes[], max_age_years
+Outputs: seznam historických assetů s from/to/circa metadata, EntityImages záznamy
+Limitations: datování může být přibližné (from_circa=true); max 50 historických assetů per run
+
+## wikidata-image-harvester
+Task types: Wikidata P154, P18, P1419, structured image metadata
+Description: Dotazuje Wikidata API pro vizuální assety entity — logo (P154), image (P18),
+  coat_of_arms (P1419). Extrahuje všechny historické verze s přesnými daty redesignů.
+  Mapuje na správný ImageType enum (logo_primary, crest_historical, flag_national...).
+Inputs: WikidataId (Q-identifier) nebo EntityGuid s existujícím WikidataId
+Outputs: seznam image URL s ImageType, from/to datováním, zdroj Commons
+Limitations: vyžaduje WikidataId na entitě; SPARQL timeout pro velké queries
+
+## kit-timeline-builder
+Task types: historické dresy, kit per sezóna, kitsdb.com, historicalkits.co.uk
+Description: Sbírá historické dresy (kit_home, kit_away) pro tým per sezóna od ~1970.
+  Primární zdroj: kitsdb.com, historicalkits.co.uk, Wikipedia Commons.
+  Ukládá každý kit s ValidFrom=SeasonStart, ValidTo=SeasonEnd, IsCurrent dle aktuálnosti.
+  Metadata: {from: "2023", to: "2024", kit_type: "home", sponsor: "Nike", colors: "#004C97"}
+Inputs: TeamGuid, season_range (volitelně: "2000-2024")
+Outputs: EntityImages záznamy per sezóna/kit_type, timeline přehled
+Limitations: kitsdb.com pokrývá ~1970+; starší dresy s from_circa=true
+
+## season-logo-collector
+Task types: season_logo, season_badge, season_artwork, UCL, Premier League per sezóna
+Description: Sbírá season-specific loga pro sledované soutěže. Každá sezóna může mít
+  unikátní branding (UCL 2023/24 vs 2024/25). EntityType="Seasons", IsCurrent pro probíhající.
+  Zdroje: official competition website, Wikipedia Commons, UEFA/FIFA media.
+Inputs: CompetitionGuid, season_range (volitelně)
+Outputs: EntityImages záznamy per sezóna (season_logo, season_badge, season_artwork)
+Limitations: starší sezóny mohou mít nižší ConfidenceScore; max 20 sezón per run
+
+## image-quality-validator
+Task types: rozlišení, velikost, formát, min quality check
+Description: Ověřuje kvalitu obrázku před uložením. Kontroluje minimální rozlišení
+  (100×100px ikony, 200×200px loga, 500×500px cresty/vlajky), preferenci SVG pro
+  vektorová loga, max 15 MB. Flaguje obrázky pod minimem.
+Inputs: image URL nebo base64, ImageType (pro určení min rozlišení)
+Outputs: pass/fail, detected dimensions, file size, doporučení (prefer SVG)
+Limitations: SVG rozlišení nelze měřit jako raster; animované GIF pouze základní check
 
 -- J. ENRICHMENT & BACKFILL (8) --------------------------------
 

@@ -32,7 +32,7 @@ PRAVIDLA POUŽITÍ SKILLS
   přidat ho do CatalogPromptSkills.txt na Drive a reportovat jako capability_missing
 
 =============================================================
-SKILL DIRECTORY (111 skills)
+SKILL DIRECTORY (115 skills)
 =============================================================
 
 -- A. DB & SCHEMA (9) ------------------------------------------
@@ -787,7 +787,7 @@ Inputs: AgentName, calendar="AI Catalogs"
 Outputs: seznam duplicit, smazané eventy, canonical next-run event
 Limitations: neupravuje eventy jiných agentů; pouze pro daného agenta
 
--- K. IMAGE & MEDIA (6) ----------------------------------------
+-- K. IMAGE & MEDIA (10) ----------------------------------------
 
 ## vo2qnapdb-image-guardian
 Task types: image workflow, SharedImages + EntityImages, QNAP upload
@@ -837,6 +837,34 @@ Description: Spravuje historii obrázků entit v EntityImages. Při přidání n
 Inputs: EntityGuid, nový SharedImages Guid, ImageType
 Outputs: aktualizovaný předchozí záznam (IsCurrent=false), nový EntityImages záznam
 Limitations: uchovává historii navždy; nemaže staré záznamy
+
+## historical-asset-collector
+Task types: historické loga, historické vlajky, historické cresty, historical timeline
+Description: Sbírá VŠECHNY historické verze vizuálních assetů pro entitu — loga, vlajky, erby.
+  Buduje kompletní timeline od vzniku entity. Každá verze ukládána s from/to metadata
+  a ConfidenceScore dle jistoty datování. Primárně z Wikidata P154/P18/P1419,
+  Wikipedia Commons, brandsoftheworld.com, historical-flags.com.
+Inputs: EntityGuid, EntityType, ImageTypes[] (které typy sbírat), max_age_years
+Outputs: seznam nalezených historických assetů s from/to/circa metadata, upload potvrzení
+Limitations: datování může být přibližné (from_circa=true); max 50 historických assetů per run
+
+## wikidata-image-harvester
+Task types: Wikidata P154, P18, P1419, structured image metadata
+Description: Dotazuje Wikidata API pro vizuální assety entity — logo (P154), image (P18),
+  coat_of_arms (P1419). Extrahuje všechny historické verze s přesnými daty redesignů
+  pokud jsou dostupné. Mapuje na správný ImageType enum.
+Inputs: WikidataId (Q-identifier) nebo EntityGuid s existujícím WikidataId
+Outputs: seznam image URL s ImageType, from/to datováním, zdroj Commons
+Limitations: vyžaduje WikidataId na entitě; SPARQL timeout pro velké queries
+
+## image-quality-validator
+Task types: rozlišení, velikost, formát, min quality check
+Description: Ověřuje kvalitu obrazku před uložením do SharedImages. Kontroluje minimální
+  rozlišení (100×100px pro ikony, 200×200px pro loga, 500×500px pro cresty/vlajky),
+  preferenci SVG pro vektorová loga, max 15 MB. Flaguje obrázky pod minimem.
+Inputs: image URL nebo base64, ImageType (pro určení min rozlišení)
+Outputs: pass/fail, detected dimensions, file size, doporučení (prefer SVG, increase resolution)
+Limitations: SVG rozlišení nelze měřit stejně jako raster; animované GIF pouze základní check
 
 -- L. NAMES & URLS (6) ----------------------------------------
 
