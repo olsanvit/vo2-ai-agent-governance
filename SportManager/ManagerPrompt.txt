@@ -208,8 +208,10 @@ CHAPTER 3: STARTUP PROTOCOL
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
-   - obsahuje "Catalog" → AgentType=Catalog, promptFile="CatalogPrompt", skillsFile="CatalogPromptSkills"
-   - obsahuje "Manager" → AgentType=Manager, promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills"
+   - obsahuje "Catalog"   → AgentType=Catalog, promptFile="CatalogPrompt", skillsFile="CatalogPromptSkills"
+   - obsahuje "Manager"   → AgentType=Manager, promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills"
+   - obsahuje "Collector" → AgentType=Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
+   - obsahuje "Analytics" → AgentType=Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
    - nelze určit → default Catalog, log warning
 1. db_ping -- overit dostupnost databaze
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
@@ -506,8 +508,10 @@ Pokud AgentSchedules neexistuje nebo je prázdná:
 
 AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 - Urči svůj typ z AgentName nebo z hlavičky promptu:
-    AgentName/header obsahuje "Catalog" → AgentType = Catalog, načíst CatalogPrompt + CatalogPromptSkills
-    AgentName/header obsahuje "Manager" → AgentType = Manager, načíst ManagerPrompt + ManagerPromptSkills
+    AgentName/header obsahuje "Catalog"   → AgentType = Catalog, načíst CatalogPrompt + CatalogPromptSkills
+    AgentName/header obsahuje "Manager"   → AgentType = Manager, načíst ManagerPrompt + ManagerPromptSkills
+    AgentName/header obsahuje "Collector" → AgentType = Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
+    AgentName/header obsahuje "Analytics" → AgentType = Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
 - Pokud nelze určit → default Catalog, log warning
 
 Canonical source = Google Drive (JEDINÝ autoritativní zdroj):
@@ -604,6 +608,8 @@ KROK 0 -- Načtení promptu z Drive (před auditem):
 Otevři Drive složku ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Pokud AgentName obsahuje "Catalog": načti CatalogPrompt + CatalogPromptSkills
 Pokud AgentName obsahuje "Manager": načti ManagerPrompt + ManagerPromptSkills
+Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSkills
+Pokud AgentName obsahuje "Analytics": načti AnalyticsPrompt + AnalyticsPromptSkills
 L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
 
 BLOK 1 -- DB & MCP konektivita:

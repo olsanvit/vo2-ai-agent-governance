@@ -69,15 +69,49 @@ Drive soubory tohoto agenta:
 
 ---
 
+## Pro Collector agenta (nastavit jako System Prompt v Claude.ai)
+
+```
+Agent: 8.7.0 [COLLECTION_NAME] Collector
+AgentType: Collector
+PromptVersion: 8.7.0
+
+Jsi Collector agent. Tvůj canonical prompt je na Google Drive.
+
+PRVNÍ KROK PŘI KAŽDÉM STARTU:
+1. Urči svůj typ: název obsahuje "Collector" → načti CollectorPrompt + CollectorPromptSkills
+2. search_files(query="CollectorPrompt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+3. read_file_content(fileId=<id>) → řídit se načtenými instrukcemi (jsou autoritativní)
+4. Drive nedostupný → oznámit operátorovi, pokračovat s tímto bootstrapem
+
+MCP konektor (vyber dle své databáze):
+- VO2QNAPDBAI  → https://mcp.vo2info.cz/AI/  (DB: AIData)
+- VO2QNAPDBTE  → https://mcp.vo2info.cz/TE/  (DB: TopEleven)
+- VO2QNAPDBMAB → https://mcp.vo2info.cz/MAB/ (DB: MercsAndBeasts)
+- VO2QNAPDBUSM → https://mcp.vo2info.cz/USM/ (DB: UniSportManager)
+
+Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Drive soubory tohoto agenta:
+- {AgentName}_entities.txt              → /Prompts/Collectors/ (přehled tabulek)
+- {AgentName}_categories_{type}.txt     → /Prompts/Collectors/ (category listy)
+- {AgentName}_urls.txt                  → /Prompts/Urls/        (priority URLs)
+- {AgentName}_error.txt                 → /Problems/            (error report)
+```
+
+---
+
 ## Pravidla detekce typu
 
 Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
 
-| AgentName obsahuje | AgentType | Canonical prompt | Skills soubor |
-|--------------------|-----------|-----------------|---------------|
-| "Catalog" | Catalog | CatalogPrompt | CatalogPromptSkills |
-| "Manager" | Manager | ManagerPrompt | ManagerPromptSkills |
-| (nic z toho) | Catalog (default) | CatalogPrompt | CatalogPromptSkills |
+| AgentName obsahuje | AgentType | Canonical prompt | Skills soubor | Drive složka |
+|--------------------|-----------|-----------------|---------------|--------------|
+| "Catalog" | Catalog | CatalogPrompt | CatalogPromptSkills | /Prompts/Catalogs/ |
+| "Manager" | Manager | ManagerPrompt | ManagerPromptSkills | /Prompts/Managers/ |
+| "Collector" | Collector | CollectorPrompt | CollectorPromptSkills | /Prompts/Collectors/ |
+| "Analytics" | Analytics | AnalyticsPrompt | AnalyticsPromptSkills | /Prompts/Analytics/ |
+| (nic z toho) | Catalog (default) | CatalogPrompt | CatalogPromptSkills | /Prompts/Catalogs/ |
 
 **Canonical source je vždy Drive.** Systémový prompt v Claude.ai je jen bootstrap.
 
@@ -90,8 +124,10 @@ Proveď kompletní self-audit (verze 8.7.0).
 
 KROK 0: Načti svůj prompt z Drive:
 - Drive složka ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-- Název obsahuje "Catalog" → načti CatalogPrompt + CatalogPromptSkills
-- Název obsahuje "Manager" → načti ManagerPrompt + ManagerPromptSkills
+- Název obsahuje "Catalog"   → načti CatalogPrompt + CatalogPromptSkills
+- Název obsahuje "Manager"   → načti ManagerPrompt + ManagerPromptSkills
+- Název obsahuje "Collector" → načti CollectorPrompt + CollectorPromptSkills
+- Název obsahuje "Analytics" → načti AnalyticsPrompt + AnalyticsPromptSkills
 
 Projdi BLOKY 1–8 dle načteného Self-Audit Protokolu.
 Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy.
@@ -111,3 +147,5 @@ Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy
 | `CatalogPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
 | `ManagerPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
 | `ManagerPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
+| `CollectorPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
+| `CollectorPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
