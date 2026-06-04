@@ -1,10 +1,10 @@
-Agent: 8.6.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 8.7.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 8.6.0
+PromptVersion: 8.7.0
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.6.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 8.7.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -190,7 +190,7 @@ ntfy:         https://ntfy.vo2info.cz
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
-MCP Version:  8.6.0
+MCP Version:  8.7.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -245,7 +245,7 @@ Score Interpretation Contract:
 CHAPTER 3: STARTUP PROTOCOL
 =============================================================
 
-## Simplified Startup Runtime Sequence 8.6.0
+## Simplified Startup Runtime Sequence 8.7.0
 
 Required runtime sequence:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -297,7 +297,7 @@ Required runtime sequence:
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.6.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.7.0)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -510,7 +510,7 @@ Pokud AgentSchedules neexistuje nebo je prázdná:
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol — 8.6.0
+## Self-Audit Protocol — 8.7.0
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -521,14 +521,14 @@ Pokud AgentName obsahuje "Manager": načti ManagerPrompt + ManagerPromptSkills
 L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
 
 BLOK 1 — DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.6.0
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.7.0
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 8.6.0
-2b. MCP_VERSION z db_ping == 8.6.0
-2c. SkillsVersion z načteného PromptSkills souboru == 8.6.0
+2a. PromptVersion tohoto promptu == 8.7.0
+2b. MCP_VERSION z db_ping == 8.7.0
+2c. SkillsVersion z načteného PromptSkills souboru == 8.7.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 14 kritických):
@@ -537,12 +537,12 @@ ensure_table | find_records | send_notification | save_image_url | save_image_ba
 list_entity_images | rate_limit_guard | schema_report | score_breakdown_report
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 8.6.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 8.7.0 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 8.6.0
+4a. SkillsVersion načteného souboru == 8.7.0
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -575,7 +575,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 8.6.0?
+    → poslední runy mají promptVersion 8.7.0?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -598,7 +598,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 8.6.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
+          message="Verze: 8.7.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -772,6 +772,26 @@ PROVIDER-001: Provider boundary invariant — provider schema není canonical sc
 AI-001: AI provenance invariant — AI inferred data oddělena od verified data
 OPS-001: Runtime append-only invariant — nové runtime bloky nesmí přepisovat canonical governance
 REPORT-001: Report integrity invariant — jasné rozlišení confirmed/dry-run/fallback/failed writes
+
+## Data Lineage Tracking
+
+Každý záznam musí mít dohledatelný původ dat.
+
+Povinné lineage sloupce (přidat pokud neexistují):
+- SourceName: text — jméno zdroje (Wikipedia, ESPN, API...)
+- SourceUrl: text — konkrétní URL kde data pocházejí
+- SourceDate: date — datum sbírání dat ze zdroje
+- VerifiedAt: timestamptz — kdy bylo naposledy ověřeno
+- DataOrigin: text — verified_provider | official_source | ai_inferred | user_modified
+
+EntitySources tabulka (pro vícezdrojové záznamy):
+Guid, EntityTable, EntityGuid, FieldName, SourceName, SourceUrl,
+SourceDate, Value, ConfidenceScore, IsActive, CreatedAt, UpdatedAt
+
+Pravidla:
+- AI-inferred data musí mít DataOrigin="ai_inferred" + AiScore nastaven
+- Každý batch import zaznamenat: source, import_date, record_count
+- Při konfliktu zdrojů: zachovat oba v EntitySources, canonical = vyšší ConfidenceScore
 
 ## Mandatory Generic Views For Every Agent
 
@@ -1312,6 +1332,31 @@ DŮLEŽITÉ:
 - Google Drive a Calendar: samostatné integrace (nejsou součástí VO2QNAPDB MCP)
 - MAX_BATCH_SIZE zjisti VŽDY přes rate_limit_guard (ne hardcoded)
 
+## Database Architecture — Catalog vs Manager
+
+Aktuální architektura (doporučená):
+- Catalog agenti a Manager agenti sdílejí DB per projekt
+  VO2QNAPDBAI  → AIData DB    (Catalog agents + Manager agents pro AI doménu)
+  VO2QNAPDBTE  → TopEleven DB (Manager agents pro Top Eleven)
+  VO2QNAPDBMAB → MercsAndBeasts DB
+  VO2QNAPDBUSM → UniSportManager DB
+
+Proč NEseparovat Catalog a Manager do různých DB:
+- Sdílené entity (People, Organizations, Countries) by musely být duplikovány
+- Cross-agent queries (Manager čte Catalog data) by vyžadovaly cross-DB join
+- Více infrastruktury = více míst kde může nastat selhání
+
+Namespacing místo separace:
+- Catalog tabulky: standardní PascalCase (People, Organizations, Places)
+- Manager tabulky: sport-prefix (Football_Matches, Basketball_Standings)
+- Systémové tabulky: sdílené (AgentRunReports, AuditLog, AgentSchedules)
+- AgentRunReports.AgentType = "Catalog" | "Manager" pro filtrování
+
+Kdy zvážit separaci:
+- DB > 100 GB a query performance degraduje
+- Compliance požadavky (GDPR oddělení PII dat)
+- Různé backup/retention politiky
+
 ## Google Drive Baseline Catalog File Governance — 8.5.0
 
 Every agent must maintain a baseline catalog file in Google Drive listing database tables the agent uses.
@@ -1754,6 +1799,59 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
     - message: "{totalRuns} runů / {successRate}% úspěšnost / {totalInserted} záznamů\nSchema změny: {schemaChanges}\nNové entity: {newEntities}"
     - priority: "default", tags: ["calendar"]
 
+15. Nové historické logo (topic: agent-maintenance)
+    Kdy: při uložení nového/historického loga entity
+    - title: "{AgentName} 🖼️ nové logo: {EntityName}"
+    - message: "Entita: {EntityName} | Typ: {ImageType} | Zdroj: {SourceName}\nHistorické: {IsHistorical} | ValidFrom: {ValidFrom}"
+    - priority: "low", tags: ["frame_with_picture"]
+
+16. Rebranding / reformace entity (topic: agent-maintenance)
+    Kdy: při detekci přejmenování nebo reformace organizace/týmu
+    - title: "{AgentName} 🔄 změna entity: {OldName}"
+    - message: "Typ: {rename|reform|merge|spinoff}\n{OldName} → {NewName} ({datum})\nGuid zachován: {true|false}"
+    - priority: "default", tags: ["arrows_counterclockwise"]
+
+17. Nové entity z discovery (topic: agent-runs)
+    Kdy: po každém discovery pass (krok 1 scheduled run), pokud > 5 nových entit
+    - title: "{AgentName} ✨ {N} nových entit"
+    - message: "Typy: {EntityTypes}\nTop confidence: {TopEntity} ({score})\nDiscovery metoda: {method}"
+    - priority: "low", tags: ["sparkles"]
+
+18. Hromadný upload obrázků (topic: agent-maintenance)
+    Kdy: po batch image upload (5+ obrázků)
+    - title: "{AgentName} 🖼️ image batch: {N} uploady"
+    - message: "Úspěch: {success}/{total} | Duplikáty: {dupes}\nEntity: {EntityTypes}"
+    - priority: "low", tags: ["frame_with_picture", "white_check_mark"]
+
+19. Privacy/PII varování (topic: agent-alerts)
+    Kdy: při detekci potenciálně citlivých dat (minors, health data, private contacts)
+    - title: "{AgentName} 🔒 privacy flag: {EntityType}"
+    - message: "Typ: {privacy_type}\nEntita: {EntityGuid}\nAkce: {quarantined|flagged_for_review}"
+    - priority: "high", tags: ["lock", "warning"]
+
+20. Licensing konflikt (topic: agent-alerts)
+    Kdy: při pokusu uložit media asset s nejasnou licencí
+    - title: "{AgentName} ©️ licensing warning: {AssetType}"
+    - message: "Asset: {SourceUrl}\nLicence: {unknown|restricted}\nAkce: warning_blocker aktivován"
+    - priority: "default", tags: ["copyright"]
+
+21. Self-audit dokončen (topic: agent-runs nebo agent-alerts)
+    Kdy: po dokončení self-audit protokolu
+    Úspěch:
+    - title: "{AgentName} ✅ self-audit passed"
+    - message: "Verze: 8.7.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
+    Selhání:
+    - title: "{AgentName} ⚠️ self-audit: {N} errors"
+    - message: "Errors: {seznam} | Opraveno: {co}\nVyžaduje pozornost: {co_nelze_opravit}"
+    - priority: "high", tags: ["warning", "magnifying_glass_tilted_left"]
+
+22. Prompt upgrade (topic: agent-runs)
+    Kdy: při version_mismatch detekci
+    - title: "{AgentName} 🔄 prompt upgrade: {oldVersion} → {newVersion}"
+    - message: "Drive verze: {newVersion} | Aktivní: {oldVersion}\nUpgrade: {applied|blocked}"
+    - priority: "default", tags: ["arrows_counterclockwise", "rocket"]
+
 Pravidla:
 - vždy ulož run report (upsert_record na AgentRunReports) před odesláním send_notification
 - maximálně 3 notifikace za jeden run (digest se nepočítá do limitu)
@@ -1882,6 +1980,68 @@ Image write flow:
 7. při změně aktuálního loga/vlajky: historizuj starý (IsCurrent=false, ValidTo=now())
 8. starý fyzický soubor nikdy nemaž
 9. zapiš do reportu
+
+## Batch Import Protocol
+
+Kdy použít:
+- Import historických dat z CSV/JSON
+- Migrace dat z jiného systému
+- Operátor dodá hromadný dataset
+
+Postup:
+1. Validovat schema (infer_schema → porovnat s existující tabulkou)
+2. Deduplikovat před zápisem (NormalizedName match)
+3. Použít smart_upsert_batch (max MAX_BATCH_SIZE per call)
+4. Pro > 10 000 záznamů: rozdělit na dávky, ukládat cursor do AgentTableSync
+5. Logovat progress: "Import: {N}/{total} zpracováno"
+6. Po dokončení: aktualizovat {AgentName}.txt v Drive
+7. Ntfy: send_notification(topic="agent-maintenance", title="Batch import dokončen")
+
+Pravidla:
+- Batch import nikdy nepřepíše Tier 1 data
+- Každý batch import zaznamenat v AgentRunReports (runMode="batch_import")
+- Při chybě: pokračovat s dalšími záznamy (neblokovat celý import)
+- validate_sql_safety před jakýmkoliv migration SQL
+
+## Historical Logo & Name Governance — Organizations, Places, Brands
+
+Každá organizace, místo nebo brand může mít VÍCE historických log a názvů.
+
+Typy změn a správný postup:
+
+1. PŘEJMENOVÁNÍ (rebranding, stejná entita):
+   - NEMĚNIT Guid — stejná entita
+   - Původní Name → EntityAliases (AliasType="former_name", ValidTo=datum)
+   - Původní logo → EntityImages: IsCurrent=false, ValidTo=datum
+   - Nové logo → EntityImages: IsCurrent=true, ValidFrom=datum
+   - Log: "🔄 Rebranding: {starý název} → {nový název} ({datum})"
+   - Příklady: "Facebook" → "Meta" (2021), "Google" → "Alphabet" (2015)
+
+2. AKVIZICE / SLOUČENÍ:
+   - Původní entity: IsArchived=true (pokud přestaly samostatně existovat)
+   - Nástupnická entita: MergedFromGuids (jsonb seznam Guidů)
+   - Loga obou zachovat jako historická
+   - Příklad: Instagram → součást Meta
+
+3. SPIN-OFF / ROZDĚLENÍ:
+   - Původní entita zůstává aktivní
+   - Nová entita: PredecessorGuid → FK na původní entitu
+   - Log: "🔀 Spin-off: {nová entita} z {původní entita}"
+
+Schema rozšíření pro Organizations/Places/Brands:
+- PredecessorGuid uuid NULL → FK na stejnou tabulku
+- SuccessorGuid uuid NULL
+- MergedFromGuids jsonb NULL
+- IsDefunct boolean DEFAULT false
+- DefunctDate date NULL
+- NameChanges jsonb NULL → [{fromName, toName, changedAt, reason}, ...]
+- BrandHistory jsonb NULL → přehled rebrandingů s logy a daty
+
+Logo discovery pravidla:
+- Wikipedia Commons, Wikimedia, official website, Brandsrepo
+- ConfidenceScore historického loga: min 60 pokud zdroj uveden
+- Při discovery nového loga: zkontrolovat IsCurrent=true → historizovat starý
+- Loga starší 10 let označit jako IsHistorical=true v EntityImages
 
 =============================================================
 CHAPTER 9: ENTITY GOVERNANCE
@@ -2169,12 +2329,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 8.6.0
-- SchemaVersion: 8.6.0
-- RuntimeSafetyVersion: 8.6.0
+- GovernanceVersion: 8.7.0
+- SchemaVersion: 8.7.0
+- RuntimeSafetyVersion: 8.7.0
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 8.6.0
-- PromptVersion: 8.6.0
+- ImageGovernanceVersion: 8.7.0
+- PromptVersion: 8.7.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -2279,6 +2439,13 @@ Pravidla:
 - Max 1000 zaznamu na EntityGuid; starsi archivuj (IsDeleted = true, ChangeReason = "archived")
 
 ## Changelog (zkráceno)
+
+v8.7.0 (2026-06-04): Historical logos, 22 notifications, rebranding governance, data lineage, batch import.
+  Historical Logo & Name Governance: přejmenování/rebranding, akvizice, spin-off; IsHistorical flag.
+  22 Notification Types: nové notifikace 15-22 (historical logo, rebranding, discovery, batch upload, privacy, licensing, self-audit, prompt upgrade).
+  Data Lineage Tracking: SourceName/SourceUrl/SourceDate/DataOrigin/EntitySources tabulka.
+  Batch Import Protocol: postup pro hromadný import dat z CSV/JSON/migrace.
+  DB Architecture — Catalog vs Manager: doporučení namespacing místo separace.
 
 v8.6.0 (2026-06-02): Self-Audit Protocol + konzistenční opravy napříč 5 soubory.
   Self-Audit Protocol (krok 0a): 8 bloků ověření před každým 30. runem, prvním runem
