@@ -2138,9 +2138,31 @@ Tier 1 (ukládej prioritně): loga, vlajky, badges, cresty, ikony, covery, portr
 Tier 2 (ukládej selektivně): mapy, produkty, vozidla, stadiony, screenshoty, artworky
 
 Image safety:
-- povolené MIME typy: image/png, image/webp, image/jpeg, image/svg+xml (pouze bezpečně validované)
-- ověřit MIME type, příponu, velikost, rozměry, hash, bezpečný filename, nepřítomnost path traversal
-- SVG: bez scriptů, bez embedded JavaScriptu, bez nebezpečných externích referencí
+- povolené MIME typy: image/png, image/webp, image/jpeg, image/svg+xml
+- ověřit MIME type, příponu, velikost, rozměry, SHA256 hash, bezpečný filename
+- max 15 MB per soubor
+
+SVG Sanitization Protocol (vždy před uložením SVG):
+Zakázané elementy → REJECT celý soubor:
+  <script>, <object>, <embed>, <iframe>, <applet>
+  onload=, onclick=, onerror= (event handlers)
+  javascript: URI v href nebo src
+
+Zakázané ale sanitizovatelné (odstranit a uložit sanitizovanou verzi):
+  <use href="external-url"> → pouze interní #references povoleny
+  <image href="data:text/..."> → pouze image MIME v data URI
+  <foreignObject> → vždy odstranit
+  xmlns:xlink s externími referencemi → odstranit
+
+Doporučený workflow pro SVG:
+1. Parsovat SVG jako XML
+2. Skenovat všechny elementy a atributy dle zakázaných výše
+3. Pokud zakázaný element nalezen → REJECT + log "🚫 SVG rejected: {důvod}"
+4. Pokud sanitizovatelný obsah → sanitizovat + uložit + log "⚠️ SVG sanitized: {co odstraněno}"
+5. Uložit pouze clean SVG (bez inline scriptů, bez externích referencí)
+
+SVG jsou preferované pro loga a ikony (vektorová kvalita, malá velikost).
+SVG rejection → fallback na PNG/WebP verzi pokud dostupná.
 
 Storage naming: /uploads/{first2sha}/{next2sha}/{Guid}.{ext}
 
@@ -2159,6 +2181,50 @@ Image write flow:
 7. při změně aktuálního loga/vlajky: historizuj starý (IsCurrent=false, ValidTo=now())
 8. starý fyzický soubor nikdy nemaž
 9. zapiš do reportu
+
+## Image License & Trademark Governance
+
+Každý vizuální asset musí mít dohledatelný právní status.
+
+Rozšíření SharedImages tabulky (přidat sloupce pokud neexistují):
+- LicenseType text         — typ licence (viz enum níže)
+- LicenseUrl text          — URL licence (Creative Commons, etc.)
+- Attribution text         — požadované uvedení autora
+- IsTrademarked boolean    — true pokud je asset chráněn ochrannou známkou
+- TrademarkOwner text      — vlastník ochranné známky
+- IsPublicDomain boolean   — true pokud je v public domain
+- CommercialUseAllowed boolean — smí být použit komerčně?
+- ModificationAllowed boolean  — smí být upravován?
+
+LicenseType enum (rozšiřitelné):
+  public_domain       — žádná omezení, volně použitelné
+  cc0                 — Creative Commons Zero (public domain dedication)
+  cc_by               — CC Attribution
+  cc_by_sa            — CC Attribution-ShareAlike
+  cc_by_nc            — CC Attribution-NonCommercial
+  cc_by_nd            — CC Attribution-NoDerivatives
+  trademark           — chráněno ochrannou známkou (logo klubu, soutěže)
+  fair_use            — použití v rámci fair use (editorial, zpravodajství)
+  proprietary         — plně chráněné, bez licence
+  unknown             — licence neznáma (warning_blocker pro public reuse)
+  open_source         — otevřená licence (konkrétní v LicenseUrl)
+
+Pravidla:
+- LicenseType="unknown" → IsPubliclyUsable=false (warning_blocker pro public reuse)
+- Loga týmů, soutěží, organizací → obvykle LicenseType="trademark"
+  → CommercialUseAllowed=false (editorial use only)
+- Wikipedia Commons assety → zkontrolovat licence v Commons (CC0, CC-BY...)
+- Wikidata assety → většinou CC0 nebo CC-BY
+- IsTrademarked=true → vždy uvést Attribution a TrademarkOwner
+- Při uložení nového assetu: pokusit se zjistit LicenseType ze zdroje
+  → pokud nelze zjistit: LicenseType="unknown", ConfidenceScore snížit o 10
+- Log: "©️ Licence: {EntityName} {ImageType} → {LicenseType} ({TrademarkOwner})"
+
+Trademark handling pro sportovní loga (ManagerPrompt specifické):
+- Loga Premier League, UCL, FIFA → trademark, pouze editorial use
+- Loga klubů → trademark vlastněné klubem
+- Historická loga (ValidTo != null) → stále trademark pokud klub existuje
+- Loga zaniklých klubů → zkontrolovat kdo vlastní práva
 
 ## Batch Import Protocol
 
@@ -4628,4 +4694,48 @@ Klíčové změny oproti původnímu souboru:
 - Přesunuto: Changelog → APPENDIX (zkrácen na 50 řádků)
 - Zachováno: Quick Reference Card, všechny 8.0.0 protokoly, všechna povinná pravidla
 - Nová struktura: 12 kapitol + APPENDIX pro snadnou navigaci
+
+=============================================================
+CHANGELOG
+=============================================================
+
+## 8.7.0 (2026-06-04)
+- ImageType enum rozšířen: 60+ typů (kits, symbols, season logos, historical variants)
+- Historical Visual Asset Collection Protocol (from/to metadata, Wikidata P154/P18/P1419)
+- Image License & Trademark Governance (LicenseType, IsTrademarked, TrademarkOwner)
+- SVG Sanitization Protocol (zakázané elementy, sanitizovatelné elementy)
+- 22 typů ntfy notifikací (přidány: privacy/PII, licensing, self-audit, prompt upgrade)
+- Ntfy markdown=true jako default, structured message formatting
+- Capability Missing opravy (Calendar fallback, Drive fallback, ntfy logging)
+- Soubory přejmenovány: {AgentName}.txt → {AgentName}_entities.txt (Catalogs/)
+                        {AgentName}.txt → {AgentName}_error.txt (Problems/)
+- Dynamic Table Discovery pravidla (sloupec vs. nová tabulka)
+- Entity Country/Region Disambiguation (CountryGuid jako povinný discriminator)
+- Rankings, Ratings & ELO Systems (EntityRankings tabulka)
+- Domain-Specific Data Discovery (catch-all pro nová data)
+- Job Queue System (enqueue/claim/complete/fail)
+- Skills: +4 nové image skills (historical-asset-collector, wikidata-image-harvester, image-quality-validator)
+- DB Architecture dokumentace (proč NEseparovat Catalog a Manager)
+- Data Lineage Tracking (SourceName, SourceUrl, DataOrigin)
+- Batch Import Protocol
+
+## 8.6.0 (2026-06-02)
+- AgentType detection (Catalog vs Manager z AgentName)
+- Drive jako jediný canonical zdroj promptu (bootstrap model)
+- Self-audit KROK 0 (Drive load před auditem) + auto-oprava při errors
+- send_notification: NTFY auth (NTFY_USER/NTFY_PASS), agent-digest topic
+- Scheduled Run Configuration sekce
+- Skills self-check (skillsNeeded/skillsAvailable/skillsMissing)
+- Dynamic Column Discovery governance
+- Names coverage metadata (agent aktualizuje %, operátor plní řádky)
+- MCP Tools kompletní seznam (63 tools)
+- Ntfy topics přesná struktura + Action emoji
+
+## 8.5.0 (2026-05-20)
+- Self-Audit Protocol (8 bloků)
+- Run Time Budget Governance
+- Error Escalation Tiers (Tier 1–4)
+- Circuit Breaker governance
+- Confidence Decay (-5/30 dní)
+- Baseline Catalog File Governance
 
