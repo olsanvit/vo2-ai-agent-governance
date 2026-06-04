@@ -2633,43 +2633,127 @@ ValidFrom, ValidTo, SortOrder, AltText, Caption, SourceName, SourceUrl, Verified
 Metadata, CreatedAt, UpdatedAt, Emoji, Colors + všechny scoring sloupce
 
 ImageType hodnoty:
-  logo          — aktuální primární logo entity
-  logo_dark     — tmavá varianta loga (pro světlé pozadí)
-  logo_light    — světlá varianta loga (pro tmavé pozadí)
-  logo_icon     — čtvercová/ikona varianta loga
-  crest         — tradiční heraldický znak (fotbalové kluby)
-  flag          — vlajka (národní tým, stát, region)
-  coat_of_arms  — erb/heraldický znak (města, kraje, historické entity)
-  kit           — dres/uniforma (domácí)
-  kit_away      — dres/uniforma (hostující)
-  kit_third     — dres/uniforma (třetí varianta)
-  kit_goalkeeper — brankářský dres
-  trophy        — pohár/trofej soutěže
-  mascot        — maskot týmu nebo soutěže
-  banner        — banner/propagační grafika
-  badge         — odznak, pin, patch
-  cover         — cover/header obrázek
-  portrait      — portrét osoby (hráč, trenér)
-  avatar        — profilová fotka
-  thumbnail     — malý náhled
-  venue         — fotka stadionu/hřiště/arény
-  map           — mapa (region, hřiště, komplex)
-  product       — produkt (merchandise)
-  vehicle       — vozidlo (F1, cycling)
-  screenshot    — screenshot
-  artwork       — umělecká grafika, ilustrace
-  season_art    — grafika pro konkrétní sezónu soutěže
-  symbol        — symbol, piktogram
-  ui            — UI element, ikona aplikace
 
-Priorita sběru ImageType per entita:
-Teams:       logo → crest → flag → kit → kit_away → trophy → mascot
-Competitions:logo → trophy → season_art → banner
-Seasons:     season_art → trophy
-Players:     portrait → avatar
-Coaches:     portrait → avatar
-Venues:      venue → map
-Countries:   flag → coat_of_arms
+── LOGA ───────────────────────────────────────────────
+  logo_primary       — primární aktuální logo (defaultní)
+  logo_secondary     — sekundární/alternativní logo
+  logo_dark          — tmavá verze (na světlé pozadí)
+  logo_light         — světlá verze (na tmavé pozadí)
+  logo_mono_black    — černobílá verze
+  logo_mono_white    — bílá verze
+  logo_icon          — čtvercová ikona verze (app icon, favicon)
+  logo_wordmark      — pouze textová verze (bez ikony)
+  logo_lettermark    — pouze iniciály/zkratka
+  logo_emblem        — pouze ikona/symbol (bez textu)
+  logo_horizontal    — horizontální lockup
+  logo_vertical      — vertikální lockup
+  logo_animated      — animované logo (GIF/video)
+
+── CRESTY & ZNAKY ────────────────────────────────────
+  crest_current      — aktuální oficiální znak
+  crest_historical   — historická verze znaku (ValidFrom/ValidTo)
+  crest_simplified   — zjednodušená verze
+  crest_3d           — 3D/rendered verze
+  crest_embroidered  — vyšívaná verze (na dresu)
+  crest_away         — alternativní znak (pohár/speciální)
+  crest_anniversary  — výroční/speciální edice
+  crest_mini         — miniatura (16×16, 32×32)
+
+── VLAJKY ─────────────────────────────────────────────
+  flag_national      — státní vlajka
+  flag_regional      — krajská/regionální vlajka
+  flag_city          — městská vlajka
+  flag_club          — klubová vlajka (fanoušci)
+  flag_competition   — vlajka soutěže
+  flag_pennant       — vlajka/fanion (triangl, pre-match)
+  flag_historical    — historická verze vlajky (ValidFrom/ValidTo)
+  flag_waving        — vlajka ve vlání (foto/render)
+
+── ERBY ───────────────────────────────────────────────
+  coat_of_arms_full       — plný erb s popisem
+  coat_of_arms_simplified — zjednodušená verze
+  coat_of_arms_historical — historická verze erbu (ValidFrom/ValidTo)
+  coat_of_arms_city       — městský erb
+  coat_of_arms_royal      — královský/státní erb
+
+── IKONY ──────────────────────────────────────────────
+  icon_app           — app icon (iOS, Android)
+  icon_favicon       — favicon (16×16 až 64×64)
+  icon_social        — social media avatar (1:1 square)
+  icon_notification  — notifikační ikona
+  icon_map_pin       — map marker/pin ikona
+  icon_badge         — odznak/badge
+  icon_emoji         — emoji reprezentace entity
+
+── DRESY & KITS ───────────────────────────────────────
+  kit_home           — domácí dres (per sezóna)
+  kit_away           — hostující dres (per sezóna)
+  kit_third          — třetí/alternativní dres
+  kit_goalkeeper     — brankářský dres
+  kit_european       — speciální pohárový dres
+  kit_training       — tréninkový dres
+  kit_warmup         — rozcvičovací/pre-match dres
+  kit_retro          — retro reprodukce historického dresu
+  kit_special        — speciální edice (výročí, charita)
+  kit_youth          — mládežnický dres
+  kit_shirt          — samotný dres/tričko (detail)
+  kit_swatch         — barevný vzorek (hex kódy barev)
+
+── SEZÓNNÍ ────────────────────────────────────────────
+  season_logo        — logo soutěže pro konkrétní sezónu (UCL 2023/24)
+  season_badge       — odznak/patch pro konkrétní sezónu
+  season_artwork     — artwork/grafika pro sezónu
+  season_trophy_art  — grafika trofeje pro sezónu
+  season_kit         — kompletní kitová grafika sezóny
+
+── SYMBOLY ────────────────────────────────────────────
+  symbol_primary     — hlavní symbol/totem entity
+  symbol_animal      — zvíře jako symbol (lev, orel, kohout...)
+  symbol_geometric   — geometrický symbol
+  symbol_abstract    — abstraktní grafický symbol
+  symbol_typographic — typografický/písmenný symbol
+  symbol_monogram    — monogram (propletená písmena)
+  symbol_seal        — pečeť (organizace, instituce)
+  symbol_stamp       — razítko/poštovní značka (historické)
+
+── NÁŠIVKY & PATCHES ─────────────────────────────────
+  patch_league       — ligová nášivka na dresu
+  patch_continental  — kontinentální (UCL, Europa League)
+  patch_cup          — pohárová nášivka
+  patch_anniversary  — výroční nášivka
+  patch_memorial     — pamětní nášivka
+  patch_captain      — kapitánská páska/znak
+
+── OSTATNÍ ────────────────────────────────────────────
+  trophy             — pohár/trofej soutěže
+  mascot             — maskot týmu nebo soutěže
+  banner             — banner/propagační grafika
+  badge              — odznak, pin
+  cover              — cover/header obrázek
+  portrait           — portrét osoby
+  avatar             — profilová fotka
+  thumbnail          — malý náhled
+  venue              — fotka stadionu/hřiště/arény
+  map                — mapa
+  product            — produkt (merchandise)
+  vehicle            — vozidlo (F1, cycling)
+  screenshot         — screenshot
+  artwork            — umělecká grafika
+  symbol             — obecný symbol (fallback)
+  ui                 — UI element
+
+Priorita sběru ImageType per entita (aktuální + historicky):
+Teams:        logo_primary → crest_current → flag_club → kit_home → kit_away
+              + historicky: crest_historical (všechny verze) → logo_* (všechny verze)
+                            → kit_home/kit_away (per sezóna od ~1970) → flag_historical
+Competitions: logo_primary → trophy → season_logo (aktuální sezóna)
+              + historicky: season_logo (všechny sezóny) → logo_* (všechny verze)
+Seasons:      season_logo → season_badge → season_artwork → season_trophy_art → season_kit
+Players:      portrait → avatar
+Coaches:      portrait → avatar
+Venues:       venue → map
+Countries:    flag_national → coat_of_arms_full
+              + historicky: flag_historical (VŠECHNY verze) → coat_of_arms_historical
 
 Tier 1 (ukládej prioritně): loga, vlajky, badges, cresty, portréty (hráči, trenéři), venue photos
 Tier 2 (ukládej selektivně): mapy, produkty, screenshoty, artworky
@@ -2754,6 +2838,82 @@ Logo discovery pravidla:
 - Wikipedia + official website = primární zdroje pro logo history
 - Historická loga hledat v: Wikipedia Commons, klubové archivy, Wikidata
 - ConfidenceScore historického loga: min 60 pokud zdroj uveden
+
+## Historical Visual Asset Collection Protocol — 8.7.0
+
+Cíl: sbírat VŠECHNY historické verze vizuálních assetů (loga, cresty, vlajky, dresy).
+Každá verze má: ImageType + ValidFrom + ValidTo + from/to v Metadata.
+
+Klíčový princip:
+- NIKDY nezahodit historický asset kvůli neznámému datu
+- IsCurrent=false pro všechny historické (ne-aktuální) verze
+- IsCurrent=true POUZE pro aktuálně platnou verzi
+
+Metadata formát pro historické assety:
+{
+  "from": "1955",
+  "to": "1974",
+  "from_circa": true,
+  "to_circa": false,
+  "source_archive": "Wikipedia Commons",
+  "historical_context": "Pre-European Cup era badge",
+  "redesign_reason": "club_rebranding"
+}
+
+ConfidenceScore dle jistoty datování:
+- Přesný rok z official source: 90–100
+- Rok z reliable archive (Wikipedia, Wikidata): 75–89
+- Přibližný rok (circa): 50–74
+- Neznámý rok: 30–49
+
+Zdroje pro historické assety (v pořadí priority):
+Tier A:
+  - Wikidata P154 (logo) + P18 (image) + P1419 (coat_of_arms)
+    → ukládá VŠECHNY historické verze s daty redesignů
+  - Wikipedia Commons — největší archiv s kategoriemi per entita
+  - Officiální klubové/instituční archivy
+Tier B:
+  - sportslogos.net — kompletní timeline sportovních log a dresů
+  - brandsoftheworld.com — logo archiv
+  - kitsdb.com / historicalkits.co.uk — databáze dresů per sezóna
+  - historical-flags.com + fotw.info — historické vlajky
+Tier C:
+  - Fan wikis, fóra s archivními skeny
+
+Postup historického sběru:
+1. Wikidata lookup → P154/P18/P1419 → stáhnout všechny verze s daty
+2. Wikipedia Commons kategorie entity → filtrovat dle roku
+3. sportslogos.net / kitsdb.com pro sport entity → timeline
+4. Pro každou verzi:
+   a) Určit from/to z dostupných zdrojů
+   b) from_circa=true pokud přibližný rok
+   c) IsCurrent=false pro historické verze
+   d) ConfidenceScore dle jistoty
+   e) Uložit přes save_image_url / save_image_base64
+   f) EntityImages: ValidFrom = from rok, ValidTo = to rok
+5. Log: "🕰️ Historický asset: {EntityName} {ImageType} ({from}–{to})"
+
+Rozsah:
+- Loga: VŠECHNY verze od vzniku entity
+- Cresty: VŠECHNY verze od vzniku klubu
+- Dresy: per sezóna od ~1970 (kitsdb.com archiv)
+- Vlajky: VŠECHNY verze (zejm. státy se změnami vlajky)
+- Season loga: per sezóna pro sledované soutěže
+
+Season loga — specifický workflow:
+- Každá sezóna soutěže může mít unikátní logo/branding
+- EntityType: "Seasons" (ne "Competitions")
+- ImageType: season_logo, season_badge, season_artwork, season_trophy_art
+- ValidFrom = SeasonStartDate, ValidTo = SeasonEndDate
+- IsCurrent = true pouze pro probíhající sezónu
+- Sbírat pro: UCL, Europa League, Conference League, národní ligy
+- Zdroj: official competition website + Wikipedia Commons
+
+Příklady:
+- FC Barcelona: 7+ verzí crests od 1899
+- Manchester United: Newton Heath (1878) → postupné redesigny → současné
+- Německo: vlajka různé verze s každým státním zřízením
+- UCL: season logo/branding se mění každé 3–4 roky
 
 =============================================================
 CHAPTER 14: ENTITY GOVERNANCE
