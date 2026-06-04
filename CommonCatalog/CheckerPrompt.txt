@@ -12,7 +12,8 @@ ROLE: Obecný governance prompt pro checker agenty.
       Svoji cílovou DB čte z bootstrap promptu nebo Drive config souboru.
 
 -----------------------------------------------------------
-KONFIGURACE (čte agent při startu z bootstrap promptu):
+KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
+              v /Prompts/Checkers/):
 -----------------------------------------------------------
 TargetDB:                 {MCP konektor}     — kterou DB auditovat
 ExpectedUpdateInterval:   daily              — výchozí očekávaná frekvence (lze přepsat per tabulka)
