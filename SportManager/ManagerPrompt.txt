@@ -204,6 +204,52 @@ Agent nesmi:
 CHAPTER 3: STARTUP PROTOCOL
 =============================================================
 
+## Prompt Cache Protocol
+
+Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovná verze:
+
+### Canonical prompt (XxxPrompt.txt + XxxPromptSkills.txt)
+
+1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache
+              WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
+2. DRIVE HEADER → načíst jen první 3 řádky souboru z Drive (pouze hlavičku)
+3. ROZHODNUTÍ:
+   a. cache_version == drive_version  → použít Content z DB cache; stažení přeskočit
+   b. cache_version != drive_version (nebo cache neexistuje)
+      → stáhnout plný obsah z Drive
+      → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
+      → použít nový obsah
+   c. Drive nedostupný + cache existuje  → použít cache; log "prompt_upgrade_blocked"
+   d. Drive nedostupný + cache chybí     → pokračovat s bootstrap verzí; log warning
+
+Stejný protokol platí pro Skills soubor ({PromptFile}Skills.txt).
+
+## Per-agent Files Management
+
+Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a appenduje.
+
+| Soubor | Složka | CREATE | READ | WRITE |
+|--------|--------|--------|------|-------|
+| {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_entities.txt | /Prompts/{AgentType}s/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
+| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| {AgentName}_urls.txt | /Prompts/Urls/ | ✅ pokud chybí | startup + session cache | ✅ append nové URLs (max 500 řádků) |
+| {AgentName}_names.txt | /Prompts/Names/ | ✅ pokud chybí | startup + session cache | ✅ update coverage counts |
+| {AgentName}_categories_{type}.txt | /Prompts/Collectors/ | ✅ pokud chybí | startup + session cache | ✅ update counts; řadit ASC |
+| {AgentName}_mapping.txt | /Prompts/Importers/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
+
+❌ = agent NIKDY nemodifikuje automaticky
+✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
+
+### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
+Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
+
+### error.txt — Řádek: ProblemScore|Category|Description|Timestamp
+Append-only; agent přidává při selhání; max 100 řádků.
+
+
+
 ## Simplified Startup Sequence 8.8.0
 
 Povinné kroky v tomto pořadí:
@@ -219,7 +265,8 @@ Povinné kroky v tomto pořadí:
    Run report do DB nelze ulozit → zaznamenat selhání v textu odpovědi, poslat ntfy urgent
 4. Detekovat MCP_VERSION z running runtime
 5. Detekovat agent version z runtime prompt header (PromptVersion)
-6. VŽDY načíst canonical prompt z Drive (i při version_match — Drive je autoritativní):
+6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache (AgentPromptCache) vs Drive header;
+   stáhnout z Drive jen pokud verze neodpovídá nebo cache chybí:
    a) search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
    b) read_file_content(fileId=<found id>) → extract PromptVersion z body
    c) verify: canonical PromptVersion >= agent version (no downgrade)
