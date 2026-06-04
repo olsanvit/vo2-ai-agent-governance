@@ -1806,15 +1806,19 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(SCORE_COLUMNS, null, 2) }] };
   });
 
-  wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz.", {
+  wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz. Use markdown=true for rich formatting (bold, lists, code blocks). Use click for deep-link URL.", {
     topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest"]),
     title:    z.string(),
     message:  z.string(),
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
     tags:     z.array(z.string()).optional(),
-  }, async ({ topic, title, message, priority = "default", tags = [] }) => {
+    markdown: z.boolean().optional(),
+    click:    z.string().optional(),
+  }, async ({ topic, title, message, priority = "default", tags = [], markdown = true, click }) => {
     const ntfyUrl = `${NTFY_BASE_URL}/${topic}`;
-    const body = JSON.stringify({ title, message, priority, tags });
+    const payload = { title, message, priority, tags, markdown };
+    if (click) payload.click = click;
+    const body = JSON.stringify(payload);
     const headers = { "Content-Type": "application/json" };
     if (NTFY_USER && NTFY_PASS) {
       headers["Authorization"] = "Basic " + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString("base64");
