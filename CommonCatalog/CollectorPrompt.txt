@@ -12,7 +12,8 @@ ROLE: Obecný governance prompt pro collector agenty.
       a svoji konfiguraci čte z bootstrap promptu a Drive config souboru.
 
 -----------------------------------------------------------
-KONFIGURACE (čte agent při startu z bootstrap promptu):
+KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
+              v /Prompts/Collectors/):
 -----------------------------------------------------------
 TargetDB:          {MCP konektor}        — do které DB ukládat
 TargetTable:       {název tabulky}       — do které tabulky ukládat
