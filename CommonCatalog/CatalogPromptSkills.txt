@@ -969,7 +969,7 @@ Limitations: max 10 000 řádků per tabulka; nespouštět pokud db_status != db
 
 ## baseline-catalog-file-manager
 Task types: baseline catalog soubor, Drive Catalogs/, RowCount, LastPopulated aktualizace
-Description: Čte a aktualizuje {AgentName}.txt v Drive /Prompts/Catalogs/
+Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Catalogs/
   (folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi). Načítá přehled tabulek
   (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
@@ -1008,10 +1008,10 @@ Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVO
 Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
 Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
-  Soubor {AgentName}.txt obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
+  Soubor {AgentName}_error.txt obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
   problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
   stav nedokončených kroků (ntfy, Calendar, DB report).
   Spouští se PŘED finálním reportem operátorovi.
 Inputs: AgentName, MCP identifikátor, errors[] s ProblemScore, stav ntfy/Calendar/DB report kroků
-Outputs: soubor {AgentName}.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Outputs: soubor {AgentName}_error.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
 Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")
