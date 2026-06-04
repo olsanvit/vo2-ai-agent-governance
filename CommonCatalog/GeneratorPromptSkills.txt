@@ -1,0 +1,199 @@
+SkillsFor: GeneratorPrompt
+SkillsVersion: 8.7.0
+Generated: 2026-06-04
+
+Skills jsou konfigurovány per agent v Claude.ai.
+Každý Generator agent musí mít aktivních ASPOŇ 10 skills.
+
+!! MAINTENANCE: Při úpravě zkontrolovat konzistenci s CatalogPrompt/ManagerPrompt skills.
+
+=============================================================
+PRAVIDLA POUŽITÍ SKILLS
+=============================================================
+
+- pokud skill pokrývá úkol: použít skill, má přednost před obecným workflow
+- pokud skill odporuje canonical governance: canonical governance má přednost
+- nikdy netvrdit, že skill existuje pokud není dostupný
+- uvést SkillsUsed[] v run reportu
+- skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití
+
+=============================================================
+SKILL DIRECTORY (18 skills)
+=============================================================
+
+-- A. DB & COVERAGE (3) ----------------------------------------
+
+## bot-coverage-analyzer
+Task types: coverage check, bot entity statistics, image coverage %
+Description: Analyzuje pokrytí obrázků pro bot entity v USM.
+  Spočítá: celkový počet bot týmů, počet bez loga, coverage %.
+  Totéž pro bot hráče. Vrátí porovnání a doporučení priority.
+Inputs: DB připojení, název tabulek (Teams, Players nebo ekvivalenty)
+Outputs: teamsCoverage %, playersCoverage %, priority doporučení
+Limitations: pracuje pouze s IsBot = true entitami
+
+## bot-entity-verifier
+Task types: verify IsBot, image missing check, pre-generate validation
+Description: Před každým generováním znovu ověří, že entita splňuje scope:
+  IsBot = true a obrázek skutečně stále chybí (NULL nebo prázdný).
+  Chrání před zápisem na nesprávnou entitu.
+Inputs: EntityGuid nebo jiný identifikátor, tabulka
+Outputs: verified/skip flag, skip reason pokud odmítnut
+Limitations: přímý DB dotaz; nepoužívat cached data ze startup fáze
+
+## missing-image-batch-loader
+Task types: načtení dávky entit bez obrázku, max 10
+Description: Načte seznam max 10 bot entit bez obrázku (LogoUrl nebo PhotoUrl NULL/prázdný).
+  Řadí dle data vytvoření (nejstarší první).
+  Respektuje scope: IsBot = true only.
+Inputs: tabulka, sloupec s URL obrázku, max batch size (default 10)
+Outputs: seznam entit s jejich Guid a dostupnými atributy
+Limitations: max 10 entit per volání; neřadí dle priority scoringu
+
+-- B. PROMPT BUILDING (4) --------------------------------------
+
+## team-logo-prompt-builder
+Task types: sestavení promptu pro týmové logo, BotProfile logic
+Description: Sestaví image prompt pro týmové logo dle specifikace GeneratorPrompt Ch 5.
+  Doplní Name, Code3, Stadium, BotProfile. Přidá sport-specific instrukce
+  a BotProfile barvy. Zajistí "No text, no letters" instrukci.
+Inputs: detail týmu (Name, Code3, Stadium, BotProfile, sport context)
+Outputs: hotový prompt string pro create_image
+Limitations: pokud chybí Name → odmítnout; ostatní atributy jsou volitelné
+
+## player-photo-prompt-builder
+Task types: sestavení promptu pro fotku hráče, sport context
+Description: Sestaví image prompt pro hráčský portrét dle specifikace GeneratorPrompt Ch 5.
+  Doplní FullName, Position, BotArchetype. Přidá sport-specific instrukce.
+  Zajistí "chest-up, one person, realistic" instrukci.
+Inputs: detail hráče (FullName, Position, BotArchetype, sport context)
+Outputs: hotový prompt string pro create_image
+Limitations: pokud chybí FullName → odmítnout; ostatní atributy jsou volitelné
+
+## sport-context-resolver
+Task types: detekce sportu z Position nebo BotArchetype
+Description: Rozpozná sport entity z dostupných atributů (Position, BotArchetype, TeamName).
+  Mapuje na sport-specific prompt rozšíření dle tabulky v Ch 5 GeneratorPrompt.
+Inputs: Position (string), BotArchetype (string, volitelně), TeamName (string, volitelně)
+Outputs: detekovaný sport, prompt extension string, confidence (high/medium/low)
+Limitations: nejistá detekce → confidence=low, použít generic "sport background"
+
+## prompt-refinement-handler
+Task types: upřesnění promptu po quality check fail, retry
+Description: Pokud vygenerovaný obrázek nesplňuje quality rules, upřesní prompt
+  přidáním konkrétních instrukcí k problematickým prvkům.
+  Loga s textem → přidat "Strictly no text, no letters, no numbers".
+  Portrét s více osobami → přidat "Only one athlete, single person".
+Inputs: původní prompt, důvod quality fail
+Outputs: upřesněný prompt pro 1 retry
+Limitations: max 1 refinement per entita; při druhém selhání → skip
+
+-- C. GENERATION & QUALITY (3) ---------------------------------
+
+## image-generator-orchestrator
+Task types: create_image, square format, 1024×1024
+Description: Orchestruje volání create_image. Zajistí vždy čtvercový formát 1:1,
+  cílově 1024×1024. Předá prompt, zkontroluje že výsledek byl vrácen.
+Inputs: prompt string, entity type (logo/photo)
+Outputs: vygenerovaný obrázek (base64 nebo URL), success/fail
+Limitations: závisí na dostupnosti create_image nástroje; bez něj STOP
+
+## logo-quality-checker
+Task types: quality check pro týmová loga
+Description: Ověří, že vygenerované logo splňuje pravidla GeneratorPrompt Ch 6:
+  čtvercový formát, čisté minimalistické logo, žádný text/písmena/čísla,
+  max 3 barvy, vizuálně konzistentní. Vrátí pass/fail s důvodem.
+Inputs: vygenerovaný obrázek, očekávaný styl
+Outputs: pass/fail, fail reason (pro prompt-refinement-handler)
+Limitations: automatická detekce textu v obrázku je heuristická
+
+## photo-quality-checker
+Task types: quality check pro hráčské portréty
+Description: Ověří, že vygenerovaná fotka splňuje pravidla GeneratorPrompt Ch 6:
+  čtvercový formát, realistický styl, jeden hráč, chest-up kompozice,
+  sportovní prostředí. Vrátí pass/fail s důvodem.
+Inputs: vygenerovaný obrázek, typ entity
+Outputs: pass/fail, fail reason (pro prompt-refinement-handler)
+Limitations: detekce počtu osob je heuristická; při nejistotě → pass s nízkou confidence
+
+-- D. RUN ORCHESTRATION (3) ------------------------------------
+
+## generation-run-orchestrator
+Task types: run orchestration, batch execution, time budget
+Description: Orchestruje celý generation run: coverage → priority → load batch →
+  per entity loop (verify → build prompt → generate → check → assign).
+  Sleduje time budget a gracefully stops pokud hrozí timeout.
+Inputs: entity type focus (Teams/Players/Auto), time budget
+Outputs: execution plan, skipped steps, výsledky per entita
+Limitations: nenahrazuje domain-specific logiku prompt buildingu
+
+## image-assigner
+Task types: přiřazení obrázku k entitě v USM, zápis URL nebo base64
+Description: Uloží vygenerovaný obrázek k cílové entitě v USM.
+  Před zápisem ověří: entita stále splňuje scope (IsBot, chybí obrázek).
+  Použije upsert_record nebo update_record dle dostupnosti.
+Inputs: EntityGuid, tabulka, vygenerovaný obrázek (URL nebo base64)
+Outputs: zápis do DB, potvrzení
+Limitations: VŽDY ověřit scope před zápisem; nikdy přepsat existující obrázek
+
+## agent-schedule-manager
+Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules pro Generator agenty.
+  Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu: load přehled a detekovat konflikty ±15 min.
+Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Generator"
+Outputs: upsert do AgentSchedules, přehled agentů
+Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
+
+-- E. REPORTING & NOTIFICATIONS (3) ----------------------------
+
+## generation-run-report-formatter
+Task types: finální run report, formátování výstupu pro AgentRunReports
+Description: Generuje strukturovaný run report: generatedCount, skippedCount,
+  failedCount, entityTypeFocus, teamsCoverage, playersCoverage, errors, highlights.
+Inputs: raw run data
+Outputs: formátovaný report pro upsert_record("AgentRunReports",...)
+Limitations: report musí být uložen i při selhání
+
+## ntfy-notification-sender
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts
+Description: Odesílá markdown-formátované notifikace na ntfy.vo2info.cz.
+  Generator-specific: coverage report, milestone alerts.
+  Max 3 notifikace per run.
+Inputs: kanál, zpráva, priority, tags
+Outputs: notifikace odeslána
+Limitations: max 3/run
+
+## problem-report-writer
+Task types: problem report, Drive zápis při selhání
+Description: Zapíše {AgentName}_error.txt do Drive Problems složky
+  pokud run selhal nebo self-audit našel chyby.
+Inputs: AgentName, errors[] s ProblemScore, stav ntfy/Calendar/DB kroků
+Outputs: {AgentName}_error.txt v Problems složce
+Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
+
+-- F. ADVANCED (3) -----------------------------------------------
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací běh bez zápisů a bez generování
+Description: Řídí DryRun mód. Blokuje INSERT/UPDATE/DELETE a create_image.
+  Simuluje výstupy s "[DRY_RUN]" prefixem. Povoluje DB čtení a Drive čtení.
+Inputs: RunMode: dry_run nebo dry_run=true
+Outputs: simulované výstupy, run report s IsDryRun=true
+Limitations: Calendar eventy NEVYTVÁŘÍ; create_image NEVOLÁ
+
+## next-run-calendar-scheduler
+Task types: plánování příštího runu v Google Calendar, AI Generators
+Description: Vytváří Calendar event v "AI Generators" pro příští scheduled run.
+  list_events → smazat starý event → vytvořit nový.
+Inputs: AgentName, výsledek runu, NextRunAt
+Outputs: Calendar event vytvořen
+Limitations: pouze "AI Generators" kalendář
+
+## coverage-milestone-tracker
+Task types: coverage milestone, 80%/90%/100% alerting
+Description: Sleduje milníky pokrytí obrázků (80%, 90%, 100%) a odesílá ntfy alert
+  při prvním dosažení milníku. Ukládá dosažené milníky do AgentRunReports.Metadata.
+Inputs: teamsCoverage %, playersCoverage %, předchozí milestone stav
+Outputs: ntfy alert pokud nový milestone dosažen, aktualizovaný milestone stav
+Limitations: max 1 ntfy per milestone; nepřekračovat max 3 ntfy/run limit
