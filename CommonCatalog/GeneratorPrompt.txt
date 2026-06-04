@@ -12,7 +12,8 @@ ROLE: Obecný governance prompt pro generator agenty.
       čte z bootstrap promptu nebo Drive config souboru.
 
 -----------------------------------------------------------
-KONFIGURACE (čte agent při startu z bootstrap promptu):
+KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
+              v /Prompts/Generators/):
 -----------------------------------------------------------
 TargetDB:        {MCP konektor}              — která DB
 TargetTables:    {Tabulka1, Tabulka2, ...}   — které tabulky mají obrázky
