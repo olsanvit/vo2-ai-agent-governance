@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "8.8.0";
+const MCP_VERSION = "9.0.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -53,7 +53,47 @@ const metrics = {
   imagesSaved: 0,
   jobsEnqueued: 0,
   migrationsRecorded: 0,
+  idempotencyHits: 0,
+  circuitBreakerTrips: 0,
+  perAgentRequests: {}, // { agentName: count }
+  perToolCalls: {},     // { toolName: count }
 };
+
+// ── Circuit Breaker ────────────────────────────────────────────────────────────
+const circuitBreaker = {
+  failures: 0,
+  lastFailure: null,
+  state: "closed",  // "closed" | "open" | "half-open"
+  threshold: 3,
+  resetTimeoutMs: 60_000,
+};
+function cbRecord(err) {
+  circuitBreaker.failures++;
+  circuitBreaker.lastFailure = Date.now();
+  if (circuitBreaker.failures >= circuitBreaker.threshold) {
+    circuitBreaker.state = "open";
+    metrics.circuitBreakerTrips++;
+    console.warn("[circuit-breaker] OPEN — DB requests blocked for 60s");
+    setTimeout(() => { circuitBreaker.state = "half-open"; circuitBreaker.failures = 0; console.log("[circuit-breaker] HALF-OPEN — testing"); }, circuitBreaker.resetTimeoutMs);
+  }
+}
+function cbSuccess() {
+  if (circuitBreaker.state !== "closed") { circuitBreaker.state = "closed"; circuitBreaker.failures = 0; console.log("[circuit-breaker] CLOSED — DB recovered"); }
+}
+async function cbQuery(...args) {
+  if (circuitBreaker.state === "open") { throw new Error("circuit breaker open — DB temporarily unavailable"); }
+  try { const r = await pool.query(...args); cbSuccess(); return r; }
+  catch (e) { cbRecord(e); throw e; }
+}
+
+// ── Idempotency Cache ─────────────────────────────────────────────────────────
+const idempotencyCache = new Map(); // key → { statusCode, body, timestamp }
+const IDEMPOTENCY_TTL_MS = 5 * 60_000;
+setInterval(() => {
+  const cutoff = Date.now() - IDEMPOTENCY_TTL_MS;
+  for (const [k, v] of idempotencyCache) if (v.timestamp < cutoff) idempotencyCache.delete(k);
+}, 60_000);
+
 
 const runtimeGovernanceState = {
   lastPromptUpgradeLifecycleReport: null,
@@ -1880,6 +1920,26 @@ app.use((req, res, next) => {
     if (!res.headersSent) res.status(503).json({ error: "Request timeout" });
   });
   metrics.requests++;
+  // Per-agent request tracking
+  const agent = req.headers["x-agent-name"] || req.headers["user-agent"] || "unknown";
+  metrics.perAgentRequests[agent] = (metrics.perAgentRequests[agent] || 0) + 1;
+  next();
+});
+
+// ── Idempotency middleware (POST /mcp only) ───────────────────────────────────
+app.use("/mcp", (req, res, next) => {
+  const key = req.headers["x-idempotency-key"];
+  if (!key) return next();
+  const cached = idempotencyCache.get(key);
+  if (cached) {
+    metrics.idempotencyHits++;
+    return res.status(cached.statusCode).json(cached.body);
+  }
+  const origJson = res.json.bind(res);
+  res.json = (body) => {
+    idempotencyCache.set(key, { statusCode: res.statusCode || 200, body, timestamp: Date.now() });
+    return origJson(body);
+  };
   next();
 });
 
@@ -1926,6 +1986,8 @@ app.get("/metrics", (req, res) => {
     uptime: process.uptime(),
     memory: process.memoryUsage(),
     schemaCacheSize: schemaCache.size,
+    idempotencyCacheSize: idempotencyCache.size,
+    circuitBreaker: { state: circuitBreaker.state, failures: circuitBreaker.failures, lastFailure: circuitBreaker.lastFailure },
     promptUpgradeLifecycle: runtimeGovernanceState.lastPromptUpgradeLifecycleReport,
     promptUpgradeLifecycleCheckedAt: runtimeGovernanceState.lastPromptUpgradeLifecycleAt
   });
@@ -1963,9 +2025,32 @@ app.post("/mcp", async (req, res) => {
 });
 
 const PORT = Number(process.env.PORT || 3000);
-app.listen(PORT, "0.0.0.0", () => {
+const httpServer = app.listen(PORT, "0.0.0.0", () => {
   console.log(`VO2QNAPDB MCP ${MCP_VERSION} running on port ${PORT}`);
 });
+
+// ── Graceful Shutdown ─────────────────────────────────────────────────────────
+async function gracefulShutdown(signal) {
+  console.log(`[shutdown] ${signal} received — draining connections...`);
+  httpServer.close(async () => {
+    try {
+      await pool.end();
+      console.log("[shutdown] Pool drained. Exiting cleanly.");
+    } catch (e) {
+      console.error("[shutdown] Pool drain error:", e.message);
+    }
+    process.exit(0);
+  });
+  // Force exit if drain takes too long (prevents SIGPIPE cascades)
+  setTimeout(() => {
+    console.error("[shutdown] Forced exit after 15s timeout");
+    process.exit(1);
+  }, 15_000);
+}
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
+process.on("SIGINT",  () => gracefulShutdown("SIGINT"));
+process.on("SIGPIPE", () => console.warn("[signal] SIGPIPE received — ignored"));
+
 
 async function initDbWithRetry(attempt = 1) {
   try {
