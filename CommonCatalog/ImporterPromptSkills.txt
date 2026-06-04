@@ -1,0 +1,217 @@
+SkillsFor: ImporterPrompt
+SkillsVersion: 8.7.0
+Generated: 2026-06-04
+
+Skills jsou konfigurovány per agent v Claude.ai.
+Každý Importer agent musí mít aktivních ASPOŇ 10 skills.
+Povinné: top-eleven-screenshot-parser, top-eleven-db-importer.
+
+!! MAINTENANCE: Při úpravě zkontrolovat konzistenci s CatalogPrompt/ManagerPrompt skills.
+
+=============================================================
+PRAVIDLA POUŽITÍ SKILLS
+=============================================================
+
+- pokud skill pokrývá úkol: použít skill, má přednost před obecným workflow
+- pokud skill odporuje canonical governance: canonical governance má přednost
+- nikdy netvrdit, že skill existuje pokud není dostupný
+- uvést SkillsUsed[] v run reportu
+- skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití
+
+=============================================================
+SKILL DIRECTORY (20 skills)
+=============================================================
+
+-- A. PARSING (4 — top-eleven-screenshot-parser POVINNÝ) ------
+
+## top-eleven-screenshot-parser
+Task types: klasifikace screenshotu, OCR vytěžení, normalizace dat
+Description: Hlavní parsing skill. Klasifikuje screenshot (player_profile,
+  team_season_overview, team_league, team_cup, elite/golden/ultimate, competition_stats).
+  Vytěží strukturovaná data z jednoho nebo více obrázků. Vrátí normalizovaný
+  datový objekt s jistotou per pole a seznam polí kde hodnota nebyla čitelná.
+  Pro hráče navrhne CorrectForename/CorrectSurname.
+Inputs: obrázek (Drive URL nebo base64), typ screenshotu (pokud znám), sezóna z kontextu
+Outputs: {type, season, data{}, confidencePerField{}, skippedFields[], warnings[]}
+Limitations: speciální schopnost z ikonky bez textu → null; nezapisovat odhad
+
+## screenshot-type-classifier
+Task types: určení typu screenshotu bez plného parsování
+Description: Rychlá klasifikace screenshotu do jednoho z kanonických typů
+  (player_profile, team_season_overview, team_league, team_cup, team_elite_league,
+  team_golden_league, team_ultimate_cup, team_competition_stats).
+  Používá vizuální klíče (modrý header, layout, viditelné texty).
+Inputs: obrázek (Drive URL nebo base64)
+Outputs: screenshot_type, confidence (high/medium/low), visual_cues[]
+Limitations: low confidence → doporučit manuální review; neblokovat parsování
+
+## team-block-anchor-detector
+Task types: detekce kotevního screenshotu, team block management
+Description: Identifikuje kotevní team_season_overview screenshot (modrý "PŘEHLED SEZÓNY",
+  viditelný team_name). Spravuje kontext bloku: dědí team_name a season pro navazující
+  screenshoty; ukončuje dědění při změně typu nebo novém bloku.
+Inputs: screenshot_type, visual_cues, čas souboru, pořadí v rámci složky
+Outputs: is_anchor, block_context{team_name, season}, inherit_from_anchor flag
+Limitations: bez kotevního screenshotu → team_name null; nededit přes hráčský profil
+
+## name-correction-suggester
+Task types: CorrectForename, CorrectSurname, oprava diakritiky
+Description: Po uložení hráče navrhne opravy CorrectForename a CorrectSurname.
+  Zohledňuje: chybějící diakritika, mírný překlep, národnost hráče.
+  Navrhuje jen realistické opravy; pokud nejistý → null.
+Inputs: jméno hráče, citizenship/nationality (pokud dostupná)
+Outputs: correct_forename (string nebo null), correct_surname (string nebo null), confidence
+Limitations: nízká jistota → null; riskantní odhad je horší než prázdné pole
+
+-- B. IMPORT (4 — top-eleven-db-importer POVINNÝ) -------------
+
+## top-eleven-db-importer
+Task types: validace dat, upsert do TopEleven, auditní záznam
+Description: Hlavní import skill. Validuje vytěžená data (typy, povinná pole, sezóna).
+  Provede bezpečný upsert do tabulky TopEleven. Uloží auditní záznam per soubor
+  (zdrojový soubor, sezóna, typ, status, saved_fields[], skipped_fields[], důvod).
+  Rozhodne, zda lze soubor přesunout do cílové složky.
+Inputs: parsovaný datový objekt, business key, cílová tabulka
+Outputs: upsert_result, audit_record, can_move flag
+Limitations: nepřepisuje kvalitnější data horšími; upsert jen při confirmed confidence
+
+## upsert-dedup-guard
+Task types: deduplikace před zápisem, business key check
+Description: Před upsert ověří existenci záznamu dle business key
+  (player: name+season+team_name; team: team_name+season+record_type).
+  Porovná kvalitu existujících vs. nových dat; přepíše jen pokud nová data kvalitnější.
+Inputs: business key, nová data, cílová tabulka
+Outputs: exists/new flag, should_update flag, existing_record (pokud nalezen)
+Limitations: kvalita posuzována dle počtu non-null polí a confidence score
+
+## import-audit-recorder
+Task types: auditní záznam, per-screenshot tracking, stav importu
+Description: Ukládá auditní řádek pro každý zpracovaný soubor. Povinné pole:
+  source_file_id, season, screenshot_type, status, saved_fields[], skipped_fields[].
+  I partial nebo skip musí mít auditní záznam.
+Inputs: zdrojový soubor, výsledek parsování, výsledek importu
+Outputs: uložený auditní řádek v DB
+Limitations: auditní záznam se ukládá i při selhání importu
+
+## schema-setup-guardian
+Task types: tabulka TopEleven, schema check, bezpečné doplnění sloupců
+Description: Ověří existenci tabulky TopEleven a potřebných sloupců.
+  Bezpečně doplní chybějící sloupce (aditivní ALTER TABLE).
+  Zajistí BaseGuid standard a record_type sloupec.
+Inputs: seznam očekávaných sloupců
+Outputs: tabulka připravena, added_columns[], schema_gaps[]
+Limitations: pouze aditivní; nikdy nemaže ani nepřejmenovává existující sloupce
+
+-- C. FILE MANAGEMENT (3) -------------------------------------
+
+## drive-season-file-discoverer
+Task types: procházení Drive složky, seznam nezpracovaných souborů
+Description: Projde zdrojovou Drive složku a podsložky sezón. Vrátí seznam
+  obrázků ke zpracování seřazených dle sezóny ASC.
+  Složku 0 přeskočí v naplánovaném běhu automaticky.
+  Identifikuje soubory dosud nepřesunuté do cílové složky jako kandidáty.
+Inputs: zdrojová složka ID, cílová složka ID, runMode
+Outputs: seznam {file_id, file_name, season, drive_path} seřazený dle sezóny ASC
+Limitations: složka 0 ignorována v naplánovaném běhu; v manuálním testu zachovat
+
+## drive-file-mover
+Task types: přesun zpracovaného screenshotu do cílové složky
+Description: Po úspěšném importu přesune soubor ze zdrojové do cílové Drive složky.
+  Zachová sezónní strukturu ({cílová}/{sezóna}/). Zkontroluje všechny 4 podmínky přesunu.
+  Nikdy nemaže originál bez úspěšné kopie v cíli.
+Inputs: source_file_id, cílová složka ID, sezóna, výsledek importu
+Outputs: moved_file_id nebo skip s důvodem
+Limitations: podmínky přesunu jsou striktní (všechny 4 musí platit); při pochybnosti → skip
+
+## testmode-output-formatter
+Task types: formátování výstupu pro složku 0, testovací mode
+Description: Formátuje výstup manuálního testu složky 0 do přesně dvou sekcí:
+  "Ukládá se" a "Neukládá se". Obsah je konkrétní dle skutečných obrázků.
+Inputs: parsovaná data ze složky 0, confidence per pole
+Outputs: formátovaný textový výstup s přesnými nadpisy dle specifikace
+Limitations: nikdy nezapisuje data ze složky 0 do DB
+
+-- D. VIEWS & REPORTING (3) -----------------------------------
+
+## view-refresh-orchestrator
+Task types: obnova všech canonical views, reporting fáze
+Description: Orchestruje obnovu všech 22 canonical databázových views dle ImporterPrompt Ch 7.
+  Spouští plný refresh (CREATE OR REPLACE VIEW nebo materialized).
+  Zachovává přesné canonical názvy views. Pokud view nelze vytvořit → nezapisuje; zaznamenává.
+Inputs: aktuální stav DB, seznam views k obnovení
+Outputs: {viewsRefreshed[], viewsFailed[], viewsSkipped[]}
+Limitations: spustit jen při plném úspěchu běhu; inkrementální update jen pokud plný refresh není možný
+
+## spreadsheet-exporter
+Task types: export do Google Spreadsheet, canonical sheet names
+Description: Exportuje agregované přehledy do Spreadsheet ve canonical sheet názvech.
+  Pokud list existuje → obnov; nevytvářej nový s podobným názvem.
+  Pokud export selže → neblokuj DB reporting; zapiš do souhrnu.
+Inputs: view data z DB, Spreadsheet ID, seznam sheet názvů
+Outputs: {sheetsUpdated[], sheetsFailed[]}
+Limitations: zapisuje jen ověřené agregované výstupy; ne surová data ze screenshotů
+
+## country-ranking-reporter
+Task types: pořadí zemí, historická výkonnost hráčů per země
+Description: Sestaví pořadí zemí dle historické výkonnosti hráčů z DB.
+  Agregace: výkon, výskyt, další bezpečně podložené metriky.
+  Pokud data nestačí pro přesné pořadí → uvede otevřeně.
+Inputs: tabulka TopEleven (hráčská data s citizenship/nationality)
+Outputs: seřazený seznam zemí s metrikami, confidence note
+Limitations: stav pouze na skutečných datech; žádné odhadnuté hodnoty
+
+-- E. RUN ORCHESTRATION (3) -----------------------------------
+
+## importer-run-orchestrator
+Task types: orchestrace celého import runu, time budget, phase management
+Description: Orchestruje celý běh: discover → sort → per-file loop (classify → parse →
+  validate → import → audit → move) → reporting podmíněně.
+  Sleduje time budget. Paralelní zpracování nezávislých screenshotů kde možné.
+Inputs: seznam souborů, runMode, time budget
+Outputs: execution plan, per-file results, celkový stav
+Limitations: reportingová fáze jen při plném úspěchu; neomezovat catch-up batch
+
+## agent-schedule-manager
+Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules pro Importer agenty.
+  Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu: load přehled a detekovat konflikty ±15 min.
+Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Importer"
+Outputs: upsert do AgentSchedules, přehled agentů
+Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací běh bez zápisů
+Description: Řídí DryRun mód. Blokuje INSERT/UPDATE/DELETE a přesuny souborů.
+  Simuluje výstupy s "[DRY_RUN]" prefixem. Povoluje čtení Drive a DB.
+Inputs: RunMode: dry_run nebo dry_run=true
+Outputs: simulované výstupy, run report s IsDryRun=true
+Limitations: Calendar eventy NEVYTVÁŘÍ; soubory NEPŘESOUVÁ; DB NEZAPISUJE
+
+-- F. REPORTING & NOTIFICATIONS (3) ---------------------------
+
+## importer-run-report-formatter
+Task types: finální run report, formátování pro AgentRunReports
+Description: Generuje strukturovaný run report: filesDiscovered, filesProcessed,
+  filesPartial, filesMoved, viewsRefreshed, spreadsheetUpdated, errors.
+Inputs: raw run data per file + reporting výsledky
+Outputs: formátovaný report pro upsert_record("AgentRunReports",...)
+Limitations: report musí být uložen i při selhání
+
+## ntfy-notification-sender
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts
+Description: Odesílá markdown-formátované notifikace na ntfy.vo2info.cz.
+  Importer-specific: import summary, partial alerts, historical baseline milestone.
+  Max 3 notifikace per run.
+Inputs: kanál, zpráva, priority, tags
+Outputs: notifikace odeslána
+Limitations: max 3/run
+
+## problem-report-writer
+Task types: problem report, Drive zápis při selhání
+Description: Zapíše {AgentName}_error.txt do Drive Problems složky pokud run selhal
+  nebo selhal krok ntfy, Calendar nebo DB report.
+  Spouštět vždy při success=false před uzavřením běhu.
+Inputs: AgentName, errors[] s ProblemScore, stav ntfy/Calendar/DB kroků
+Outputs: {AgentName}_error.txt v Problems složce
+Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
