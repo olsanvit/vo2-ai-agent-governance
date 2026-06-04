@@ -92,14 +92,8 @@ MCP konektory:
 
 Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
-Konfigurace agenta (vyplnit per agent):
-TargetDB:         {MCP konektor — ze seznamu výše}
-TargetTable:      {název tabulky}
-CollectionTypes:  {typ1, typ2}
-MaxPerRun:        20
-
 Drive soubory tohoto agenta:
-- {AgentName}_config.txt                → /Prompts/Collectors/ (TargetDB, TargetTable, CollectionTypes)
+- {AgentName}_config.txt                → /Prompts/Collectors/ (TargetDB, TargetTable, CollectionTypes, MaxPerRun)
 - {AgentName}_entities.txt              → /Prompts/Collectors/ (přehled tabulek)
 - {AgentName}_categories_{type}.txt     → /Prompts/Collectors/ (category listy per CollectionType)
 - {AgentName}_urls.txt                  → /Prompts/Urls/        (priority sources)
@@ -131,16 +125,8 @@ MCP konektory:
 
 Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
 
-Konfigurace agenta (vyplnit per agent):
-TargetDB:       {MCP konektor — ze seznamu výše}
-TargetTables:   {Tabulka1}, {Tabulka2}
-ImageColumn:    {sloupec s URL obrázku}
-ScopeFilter:    {WHERE podmínka nebo prázdné}
-ImageTypes:     {logo, portrait, banner, ...}
-MaxPerRun:      10
-
 Drive soubory tohoto agenta:
-- {AgentName}_config.txt   → /Prompts/Generators/ (TargetDB, TargetTables, ImageTypes, ...)
+- {AgentName}_config.txt   → /Prompts/Generators/ (TargetDB, TargetTables, ImageColumn, ScopeFilter, ImageTypes, MaxPerRun)
 - {AgentName}_prompts.txt  → /Prompts/Generators/ (prompt šablony per ImageType, volitelné)
 - {AgentName}_entities.txt → /Prompts/Generators/ (přehled tabulek)
 - {AgentName}_error.txt    → /Problems/
@@ -170,11 +156,6 @@ MCP konektory:
 - VO2QNAPDBUSM → https://mcp.vo2info.cz/USM/ (DB: UniSportManager)
 
 Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
-
-Konfigurace agenta (vyplnit per agent):
-TargetDB:                {MCP konektor — ze seznamu výše}
-ExpectedUpdateInterval:  daily
-TableFilter:             (prázdné = vše)
 
 Drive soubory tohoto agenta:
 - {AgentName}_config.txt   → /Prompts/Checkers/ (TargetDB, ExpectedUpdateInterval, TableFilter)
@@ -207,17 +188,9 @@ MCP konektory:
 
 Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
 
-Konfigurace agenta (vyplnit per agent):
-TargetDB:         {MCP konektor — ze seznamu výše}
-TargetTable:      {název tabulky}
-SourceFolder:     {Drive folder ID nebo URL}
-ProcessedFolder:  {Drive folder ID nebo URL}
-SubfolderScheme:  {none|by_season|by_date|custom}
-Spreadsheet:      {Spreadsheet ID nebo prázdné}
-
 Drive soubory tohoto agenta:
-- {AgentName}_config.txt   → /Prompts/Importers/ (kompletní konfigurace)
-- {AgentName}_mapping.txt  → /Prompts/Importers/ (mapování polí z obrázků do DB)
+- {AgentName}_config.txt   → /Prompts/Importers/ (TargetDB, TargetTable, SourceFolder, ProcessedFolder, SubfolderScheme, Spreadsheet)
+- {AgentName}_mapping.txt  → /Prompts/Importers/ (mapování polí z obrázků do DB sloupců)
 - {AgentName}_entities.txt → /Prompts/Importers/ (přehled DB tabulek)
 - {AgentName}_error.txt    → /Problems/
 ```
