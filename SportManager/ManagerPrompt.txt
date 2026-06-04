@@ -102,6 +102,15 @@ Fotbal: soccer | Basketbal: basketball | Hokej: ice_hockey
 Tenis: tennis | Volejbal: volleyball | F1: racing_car
 Cyklistika: bicyclist | Obecne: sports_medal
 
+Action emoji pro ntfy tags:
+Úspěch:     white_check_mark | trophy | tada
+Varování:   warning | alarm_clock | no_entry
+Chyba:      rotating_light | skull | sos
+Data:       bar_chart | chart_with_upwards_trend | mag
+Hráči:      ambulance | yellow_square | person_running
+Sezóna:     checkered_flag | calendar | hourglass_flowing_sand
+Nové:       sparkles | new | heavy_plus_sign
+
 =============================================================
 CHAPTER 2: SPORT AGENT IDENTITY & SCOPE
 =============================================================
@@ -213,10 +222,19 @@ Povinné kroky v tomto pořadí:
    - pokud ukol neni pokryt: navrhnout novy skill, pridat do ManagerPromptSkills.txt na Drive
 8. Nacist {AgentName}.txt z Drive /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
    → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
-   - pokud soubor neexistuje nebo je prazdny: preskocit tiše (ne chyba)
-   - pouzit jako prehled pro prioritizaci tabulek v behu
-   DŮLEŽITÉ: Managers soubor se načítá PŘED Baseline-25 check (krok 9), protože
-   check potřebuje vědět, které tabulky mají ImportantScore >= 70 pro počítání baseline.
+   - pokud soubor neexistuje:
+     a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
+     b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
+     c) přiřadit výchozí ImportantScore dle defaultní tabulky z Ch 1 (Matches=100, Teams=100, atd.; neznámé = 50)
+     d) create_file(title="{AgentName}.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<sestavený obsah>)
+     e) log: "📄 {AgentName}.txt vytvořen s {N} tabulkami"
+   - pokud soubor existuje: načíst a použít jako přehled pro prioritizaci
+   - agent může soubor ROZŠIŘOVAT a AKTUALIZOVAT:
+     → přidat nově objevené tabulky (ImportantScore=50 výchozí)
+     → aktualizovat ImportantScore dle skutečného využití (operátor může hodnoty přepsat)
+     → aktualizovat RowCount a LastPopulated po každém runu
+     → seřadit sestupně dle ImportantScore
+   DŮLEŽITÉ: načíst PŘED Baseline-25 check (krok 9)
 8a. Načíst {AgentName}_names.txt z Drive /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
     → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
@@ -367,6 +385,14 @@ Pokud skills soubor nebyl dostupný: log capability_missing("skills_file_unavail
 
 Non-critical skills (selhání = capability_missing + warning, run pokračuje): ostatní
 
+Skills self-check (spustit při startu po načtení skillsFile):
+1. Sestavit skillsNeeded[] — pro každý krok scheduled runu identifikovat potřebné skills
+2. Porovnat s skillsAvailable[] — skills načtené z {skillsFile}.txt
+3. Sestavit skillsMissing[] = skillsNeeded - skillsAvailable
+4. Pro každý chybějící skill: capability_missing("{skill}")
+5. Zaznamenat do run reportu: skillsNeeded[], skillsAvailable[], skillsMissing[]
+6. Přebytečné skills (available ale nikdy nepoužité): zaznamenat jako unused_skill[] v highlights[]
+
 ## Names Queue Scope -- 8.5.0
 
 Names soubor obsahuje ENTITY (týmy, soutěže, hráče) — NE datumy.
@@ -428,6 +454,35 @@ Catch-up rules:
 - priority 2: datumy s vyšším Score jako první
 - maximum 3 chybějících dnů na jeden catch-up run
 - pokud gap > 30 dní: zpracovat jen posledních 30 dní, notifikovat operátora přes ntfy
+
+## Scheduled Run Configuration
+
+Zdroje informací o naplánovaném běhu (v pořadí priority):
+
+1. AgentSchedules (DB) — autoritativní runtime zdroj
+   SELECT ScheduledRunTime, NextRunAt, IntervalHours, Timezone
+   FROM AgentSchedules WHERE AgentName='{AgentName}' AND IsActive=true
+
+2. {AgentName}.txt (Drive) — záložní přehled
+   Obsahuje ScheduledRunTime, IntervalHours jako metadata hlavičky souboru
+
+3. Prompt placeholder {{ScheduledRunTime}} — pouze při prvním setupu
+   Operátor vyplní před spuštěním agenta
+
+Kdo nastavuje:
+- Operátor: první nastavení ScheduledRunTime při prvním runu nebo ručně v DB
+- Agent: aktualizuje NextRunAt a LastRunAt po každém runu
+  → upsert AgentSchedules(AgentName, LastRunAt=now(), NextRunAt=now()+IntervalHours)
+
+Co agent reportuje v každém runu:
+- ScheduledRunTime: {čas z AgentSchedules}
+- LastRunAt: {čas posledního runu}
+- NextRunAt: {vypočítaný čas příštího runu}
+- IntervalHours: {interval v hodinách}
+
+Pokud AgentSchedules neexistuje nebo je prázdná:
+→ použít {{ScheduledRunTime}} z promptu jako výchozí hodnotu
+→ vytvořit záznam v AgentSchedules při prvním runu
 
 ## AgentType Detection & Canonical Prompt Source
 
@@ -1104,6 +1159,40 @@ Pravidla:
 - NIKDY nepouzivej raw SQL pro CREATE TABLE -- vzdy pres ensure_table MCP nastroj
 - po vytvoreni testuj insert jednoho radku (pak smaz IsDeleted=true)
 
+## Dynamic Table Discovery
+
+Při každém novém poli ze zdroje agent rozhodne: sloupeček nebo nová tabulka?
+
+NOVÁ TABULKA pokud platí alespoň jedno:
+- entita má 3+ vlastních atributů
+- entita se bude sdílet přes více tabulek
+- entita má vlastní FK na jinou entitu
+- entita má vlastní lifecycle
+- entita může mít aliasy nebo historické záznamy
+
+POUZE SLOUPEC pokud platí:
+- jednoduchá skalární hodnota bez vlastního kontextu (BirthDate, Height, Weight)
+- hodnota je unikátní pro daný záznam, nikde jinde se neopakuje
+- nemá smysl na ni odkazovat FK z jiné tabulky
+
+PŘÍKLADY:
+✅ Nová tabulka:
+  - Venue.City + Venue.Address → tabulka Cities (Name, PostalCode, CountryGuid, Lat, Lng)
+  - Person.Forename + CountryOfBirth → tabulka FirstNames (Name, LanguageCode, CountryGuid)
+  - Competition.Region → tabulka Regions (Name, CountryGuid, Code)
+
+❌ Pouze sloupec:
+  - Player.BirthDate, Player.Height, Player.Weight, Match.AttendanceCount
+
+Postup při discovery nové tabulky:
+1. Ověř zda tabulka neexistuje (information_schema.tables)
+2. Navrhni schema: Guid PK + BaseGuid + scoring + nové sloupce + FK
+3. ensure_table s navrženým schematem
+4. Přidej FK sloupec do původní tabulky
+5. Přidej do {AgentName}.txt s ImportantScore=50
+6. Log: "🆕 Nová tabulka: {name} (odvozeno z {source})"
+7. Run report: newTablesCreated[]
+
 ## EntityHistory -- Version History Table -- 8.5.0
 
 Schema EntityHistory:
@@ -1218,6 +1307,37 @@ Tabulky: Person, PersonAlias, Players, Participants (viz puvodni schema)
 - Venues:            NormalizedName + CountryGuid + CityName
 - MatchSources:      MatchGuid + SourceGuid
 - Participants:      MatchGuid + PersonGuid + ParticipantRole
+
+## Rankings, Ratings & ELO Systems
+
+Tabulka EntityRankings (univerzální pro týmy i hráče):
+Guid, EntityType (Team/Player/Driver/Rider), EntityGuid,
+RankingSystem, RankingDate, Position, PreviousPosition,
+PositionChange, Points, Rating, EloScore,
+CountryGuid, CompetitionGuid,
+ConfidenceScore, SourceName, SourceUrl, VerifiedAt,
+Notes, Metadata, CreatedAt, UpdatedAt
+
+Business key: EntityGuid + RankingSystem + RankingDate
+
+RankingSystem hodnoty (rozšiřitelné):
+- fifa_world_ranking, uefa_club_coefficient
+- atp_singles, wta_singles
+- fide_classical, fide_rapid, fide_blitz
+- f1_championship
+- custom_{sport}_{name}
+
+ELO Rating model:
+- EloScore: numeric(8,2)
+- EloChange: numeric(6,2) — změna po posledním zápase
+- EloHistory: jsonb — [{date, elo, opponent, result, change}, ...]
+- K-factor dle RankingSystem (FIFA=40/30/20, šachy=40/20/10)
+
+Pravidla:
+- Aktualizovat po každém dokončeném zápase (post-match pipeline Tier 3)
+- Nikdy nepřepsat historický ranking — pouze přidat nový řádek
+- Při discovery nového ranking systému → přidat do enumu + highlights[]
+- ImportantScore: globální žebříčky 70, UEFA koeficienty 60, sport-specific 40–50
 
 =============================================================
 CHAPTER 6: MATCH EVENTS & STATISTICS
@@ -1435,6 +1555,32 @@ Vazba na PlayerSeasonStats:
 - PlayerSeasonStats = statistiky za sezónu (goly, asistence, minuty...)
 - PlayerCareer = celková kariéra = agregace PlayerSeasonStats přes sezóny
 - PlayerCareer.AppearancesTotal = SUM(PlayerSeasonStats.MatchesPlayed) WHERE PlayerGuid + TeamGuid
+
+## Sport-Specific Data Discovery
+
+Agent může a MUSÍ zachytit jakákoliv data která najde ze zdrojů,
+i pokud nejsou explicitně zmíněna v post-match pipeline.
+
+Obecné pravidlo:
+- Nikdy nezahodit nalezená data (canonical rule "Nikdy nezahodit data")
+- Nespadá do kroků 1–10 → Krok 11 (catch-all)
+- Neexistuje tabulka → Dynamic Table Discovery
+- Neexistuje sloupec → Dynamic Column Discovery
+- Log: "🆕 Nová data: {popis} → {tabulka}"
+
+Sport-specific příklady rozšíření:
+FOTBAL: xA, progressive passes, pressures, SetPieceGoals, PlayerHeatmapJson
+TENIS: ServeSpeed, AcesCount, DoubleFaultsCount, SurfaceType, TournamentRound
+BASKETBAL: QuarterScoresJson, ThreePointAttempts, FreeThrowPct, PlusMinus
+HOKEJ: PenaltyMinutes, PowerPlayGoals, ShotsOnGoal, FaceoffWinPct
+F1: LapTimesJson, PitStopCount, FastestLap, GridPosition vs FinishPosition
+
+Postup:
+1. Najít data ve zdroji
+2. Zkontrolovat tabulka/sloupec existuje
+3. Pokud ne → Dynamic Table/Column Discovery
+4. ImportantScore v {AgentName}.txt: výchozí 40–60
+5. Log: "🏷️ Sport-specific: {field} přidán do {tabulka}"
 
 =============================================================
 CHAPTER 8: SEASON & COMPETITION MANAGEMENT
@@ -1768,6 +1914,29 @@ Merge pravidla:
 
 Log kazdy merge do EntityHistory (ChangeReason = "duplicate_merge").
 
+## Entity Country/Region Disambiguation
+
+Při matchování entit VŽDY ověřit kontext země/regionu:
+
+Povinné rozlišovací atributy:
+- CountryGuid (FK na Countries)
+- CompetitionGuid (v jaké soutěži tým hraje)
+- CityGuid (FK na Cities — viz Dynamic Table Discovery)
+- FoundedYear (doplňkový signál)
+
+Příklady konfliktů:
+- FC Barcelona (Španělsko, La Liga) ≠ Barcelona SC (Ekvádor, LigaPro)
+- Sporting CP (Portugalsko) ≠ Sporting Kansas City (USA)
+- Nacional (Uruguay) ≠ Nacional (Madeira, Portugalsko)
+
+Pravidlo:
+- NormalizedName match nestačí → VŽDY ověřit CountryGuid + CompetitionGuid
+- Pokud CountryGuid chybí → NEPOTVRZOVAT match → ManualReviewQueue
+- Pokud CompetitionGuid nesedí → log "⚠️ Potenciální konflikt: {name} — {country1} vs {country2}"
+- Po ověření: přidat CountryGuid jako povinný discriminator do matchovací logiky
+- match-upsert-guardian skill rozšíření: zahrnout CountryGuid jako součást kritérií
+- Nikdy auto-merge entity z různých zemí bez ExternalId shody
+
 =============================================================
 CHAPTER 10: ODDS & INTEGRITY
 =============================================================
@@ -1781,7 +1950,9 @@ Sber odds dat:
 4. Detekovat pohyb odds (closing vs opening pres implied probability)
 5. Flag suspicious pohyb (>20% implied probability shift) jako integrity warning
 6. Ulozit smart_upsert_batch do MatchOdds
-7. NESBIRAT odds pro upcoming nebo live zapasy
+7. NESSBÍRAT odds pro live zápasy (live odds = real-time, agent není real-time)
+   ✅ Sbírat pre-match odds pro upcoming zápasy (opening + průběžné snapshots)
+   ✅ Sbírat historické odds pro dokončené zápasy
 
 Odds pravidla:
 - Vzdy ulozit: bookmaker name, market type (1X2, BTTS, OU25, ...), collection timestamp
@@ -1801,6 +1972,37 @@ Integrity pravidla:
 - Suspicious pohyb -> entry v review queue
 - Betting-derived insights nesmejte byt promichane s verified fakty
 - Integrity warnings nesmirat do public-facing reportu
+
+## Pre-Match xG Predictions (Expected Goals)
+
+Tabulka MatchPredictions:
+Guid, MatchGuid, SourceName, CollectedAt, PredictionType,
+HomeXg, AwayXg, TotalXg,
+HomeWinProb, DrawProb, AwayWinProb,
+BttsProb, ModelName,
+ActualHomeGoals, ActualAwayGoals (vyplnit po zápase),
+XgError (ABS(HomeXg-Actual) + ABS(AwayXg-Actual)),
+ConfidenceScore, CreatedAt, UpdatedAt
+
+Business key: MatchGuid + SourceName + ModelName + CollectedAt (rounded 6h)
+
+PredictionType: pre_match_xg | post_match_xg | betting_model | custom_model
+
+Zdroje (dle Source Trust Hierarchy):
+Tier A: Opta, StatsBomb, FBref
+Tier B: Understat, FiveThirtyEight, WhoScored
+
+Pre-match odds timeline:
+- Ukládat každou odds snapshot jako nový řádek (ne přepisovat)
+- Max 1 snapshot per bookmaker per market per 6 hodin
+- Detekovat pohyb > 20% mezi libovolnými dvěma snapshots → integrity flag
+- View: vw_OddsMovement_{MatchGuid}: chronologický přehled pohybu
+
+Pravidla:
+- Sbírat pre-match xG min 24h před výkopem
+- Post-match xG z MatchStats = source of truth pro porovnání
+- ImportantScore: 55
+- Log: "📊 xG prediction: {HomeTeam} {HomeXg} - {AwayXg} {AwayTeam}"
 
 =============================================================
 CHAPTER 11: DATA QUALITY
@@ -2024,23 +2226,95 @@ Pro nizsi souteze: provest regionalni/lokalni kontrolu.
 CHAPTER 13: TOOLS & INTEGRATIONS
 =============================================================
 
-## MCP Tools Overview -- 8.5.0
+## MCP Tools Overview — kompletní seznam (63 tools)
 
-Povinné MCP nástroje pro Manager agenta (VO2QNAPDB MCP — skutečná jména):
-- db_ping — ověření dostupnosti DB
-- run_select_sql — čtení z DB (SELECT + advisory lock/unlock)
-- upsert_record — zápis jednoho záznamu
-- smart_upsert_batch — bulk zápis (max MAX_BATCH_SIZE záznamů, default 100; zjisti přes rate_limit_guard)
-- soft_delete_record — soft delete
-- ensure_table — vytvoření nové tabulky
-- upsert_record("AgentRunReports",...) — uložení run reportu (POVINNÉ)
-- run_select_sql("SELECT * FROM AgentRunReports...") — čtení run reportů
-- send_notification [MCP tool v server.js] — ntfy notifikace
-- Advisory lock:   run_select_sql("SELECT pg_try_advisory_lock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
-- Advisory unlock: run_select_sql("SELECT pg_advisory_unlock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
-DŮLEŽITÉ: MCP konektor = stateless HTTP sessions. pg_advisory_unlock vrací false = OČEKÁVANÉ CHOVÁNÍ.
-  Unlock false → log warning, NEBLOKUJ run, nezapisuj jako error.
-Google Drive a Google Calendar jsou samostatné integrace (nejsou součástí VO2QNAPDB MCP).
+── SCHEMA & DISCOVERY ─────────────────────────────────
+list_tables              → seznam tabulek v DB
+get_table_schema         → sloupce konkrétní tabulky
+describe_database        → kompletní popis (tabulky, indexy, FK)
+schema_report            → report chybějících BaseGuid/scoring sloupců
+ensure_table             → vytvoř tabulku pokud neexistuje ✅ kritický
+ensure_base_structure    → přidej chybějící BaseGuid + scoring sloupce
+ensure_columns           → přidej sloupce dle dat (Dynamic Column Discovery)
+infer_schema             → odvoď PostgreSQL typy z JSON vzorku
+invalidate_schema_cache  → vymaž schema cache po migraci
+
+── ČTENÍ DAT ──────────────────────────────────────────
+find_records             → hledej záznamy dle kritérií ✅ kritický
+search_records           → hledej dle SearchText/NormalizedName (entity lookup)
+run_select_sql           → libovolný SELECT + advisory lock/unlock ✅ kritický
+get_agent_historical_sample → 100 starších řádků přes entity tabulky
+table_stats              → rychlý odhad COUNT(*) + last update (monitoring)
+
+── ZÁPIS DAT ──────────────────────────────────────────
+upsert_record            → zápis jednoho záznamu ✅ kritický
+smart_upsert_batch       → hromadný zápis v transakci ✅ kritický
+soft_delete_record       → soft delete ✅ kritický
+preview_upsert_record    → simulace upsert BEZ zápisu (dry run test)
+validate_upsert_plan     → validace před zápisem (safe write)
+normalize_record         → normalizace klíčů záznamu (NormalizedName sync)
+validate_data            → validace rozsahů, formátů, scoring
+
+── INDEXY & FK ────────────────────────────────────────
+list_indexes             → seznam indexů tabulky
+create_index             → vytvoř index
+create_unique_index      → vytvoř UNIQUE index
+list_foreign_keys        → seznam FK
+create_foreign_key       → vytvoř FK
+
+── VIEWS ──────────────────────────────────────────────
+create_materialized_view → vytvoř materialized view (povinné 20 views)
+refresh_materialized_view → obnov view (krok 15 scheduled run)
+
+── MIGRACE ────────────────────────────────────────────
+record_migration         → spusť a zaznamenej migrační SQL
+validate_sql_safety      → ověř bezpečnost SQL bez spuštění
+reindex_table            → REINDEX TABLE (po masivních upserts)
+
+── DEDUPLICATION & SCORING ────────────────────────────
+deduplicate_table        → najdi skupiny duplikátů (Dedup Algorithm)
+score_breakdown_report   → vysvětli score pole + warnings per tabulka
+score_breakdown_by_guid  → score breakdown pro konkrétní Guid
+score_columns            → seznam všech 22 scoring sloupců
+report_score_visibility_audit → audit score visibility v reportu
+
+── AUDIT & MONITORING ─────────────────────────────────
+audit_log                → zapiš custom audit event do AuditLog ✅ kritický
+get_recent_changes       → poslední záznamy z AuditLog
+export_table             → export řádků jako JSON (backup/debug)
+
+── JOB QUEUE ──────────────────────────────────────────
+enqueue_job              → přidej job do fronty
+list_jobs                → přehled jobů dle stavu
+claim_next_job           → atomicky zaber další job (FOR UPDATE SKIP LOCKED)
+complete_job             → označ dokončený + výsledek
+fail_job                 → označ failed (retry až MaxRetries → DeadLetter)
+retry_job                → resetuj failed job zpět do queued
+move_job_to_dead_letter  → přesuň job do DeadLetterQueue
+list_dead_letters        → přehled dead-letter jobů
+
+── NOTIFIKACE ─────────────────────────────────────────
+send_notification        → ntfy notifikace ✅ kritický
+rate_limit_guard         → zobraz limity a pravidla ✅ kritický
+
+── OBRÁZKY ────────────────────────────────────────────
+save_image_url           → stáhni a ulož obrázek z URL
+save_image_base64        → ulož obrázek z base64
+list_entity_images       → seznam obrázků entity
+
+── POKROČILÉ ──────────────────────────────────────────
+create_partitioned_table → range-partitioned tabulka dle data (velké tabulky)
+create_date_partition    → vytvoř partition pro konkrétní datum
+shard_plan               → plán shardingu + metadata konvence
+enable_rls / disable_rls → Row Level Security
+create_rls_policy / drop_rls_policy / list_rls_status
+prompt_upgrade_lifecycle_report → audit prompt upgrade lifecycle
+
+DŮLEŽITÉ:
+- MCP konektor = stateless HTTP sessions
+- pg_advisory_unlock vrací false = OČEKÁVANÉ CHOVÁNÍ → log warning, NEBLOKUJ
+- Google Drive a Calendar: samostatné integrace (nejsou součástí VO2QNAPDB MCP)
+- MAX_BATCH_SIZE pro smart_upsert_batch zjisti VŽDY přes rate_limit_guard (ne hardcoded)
 
 ## Google Drive Agent Folder Structure -- 8.5.0
 
@@ -2062,6 +2336,45 @@ Použití při běhu Manager agenta:
 - Číst run reporty (run_select_sql na AgentRunReports)
 - Zapisovat úkoly do Names/Urls souborů Catalog agentů (append-only)
 - Aktualizovat /Prompts/Managers/{AgentName}.txt po každém úspěšném runu
+
+## Job Queue System
+
+JobQueue tabulka — asynchronní fronta úloh mezi agenty.
+
+Kdy použít:
+- Manager přiděluje úkoly Catalog agentům bez čekání na výsledek
+- Agent odkládá práci přesahující time budget
+- Paralelní zpracování entit různými agenty
+
+MCP tools:
+enqueue_job(jobType, payload, runAt?)  → přidat job
+claim_next_job(agentName, jobTypes[]) → atomicky zaber (FOR UPDATE SKIP LOCKED)
+complete_job(jobGuid, result)          → dokončit
+fail_job(jobGuid, error)               → failed (retry → MaxRetries → DeadLetter)
+retry_job(jobGuid)                     → resetuj zpět do queued
+list_jobs(status?, limit?)             → přehled
+list_dead_letters()                    → dead-letter přehled
+move_job_to_dead_letter(jobGuid)       → přesuň ihned
+
+JobType hodnoty (rozšiřitelné):
+entity_enrichment | url_scrape | coverage_check | schema_migration |
+backfill_table | integrity_review | cross_agent_task
+
+Payload formát:
+{
+  "targetAgent": "Catalog of Sports...",
+  "entityType": "Teams",
+  "entityGuid": "uuid",
+  "priority": 90,
+  "reason": "missing_xg_data"
+}
+
+Pravidla:
+- claim_next_job atomický → bezpečné pro paralelní agenty
+- MaxRetries = 3 per job (default)
+- Job starší 7 dní bez zpracování → DeadLetterQueue
+- DeadLetter týdně reportovat operátorovi (ntfy agent-maintenance)
+- Manager enqueueuje, Catalog claimuje a zpracovává
 
 ## Manager Agent — Definice a Governance -- 8.5.0
 
@@ -2097,17 +2410,30 @@ Manager-specific pravidla:
 Manager agent může zapisovat úkoly pro Catalog agenty prostřednictvím jejich Names/Urls souborů.
 
 Names soubor (task queue pro entity names):
+- Plní VÝHRADNĚ operátor — agent do Names souborů NEZAPISUJE
 - Každý řádek = jeden název entity k dohledání
 - Formát: prosty text, UTF-8, jeden název na řádek
 - Prázdné řádky a komentáře (#) přeskočit
 - Cílový Catalog agent zpracuje při příštím startu, priority = Score 90+
-- Zapisovat atomicky (přidat na konec, ne přepsat celý soubor)
 
 Urls soubor (task queue pro URL k navštívení):
-- Každý řádek = jedna URL
-- Formát: prosty text, UTF-8, jedna URL na řádek
-- Cílový agent projde URL před standardním scrapingem
-- URL bez http/https prefix přeskočit (nevalidní)
+- Plní: operátor (manuálně) + agent (auto-discovery Tier A/B zdrojů)
+- Max 500 položek | složka: /Prompts/Urls/ (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
+
+Formát: URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
+Příklady:
+https://api.uefa.com/v1/competitions/... | A | 98.000 | Competition | 2026-06-04 | active
+https://www.espn.com/football/...        | B | 85.000 | Match       | 2026-06-04 | active
+
+Status hodnoty: active | dead | paused | priority
+
+Agent auto-discovery pravidla:
+- Zapisovat POUZE Tier A a Tier B URL (Tier C/D → ignorovat)
+- Před zápisem ověřit dostupnost (HTTP HEAD request)
+- Deduplikovat přes hash(URL) před přidáním
+- Max 50 nových URL per run (append-only)
+- URL která vrátí 404/403 třikrát → Status=dead
+- Log: "🔗 URLs discovery: N nových přidáno, M dead označeno"
 
 Write pravidla:
 - Nikdy nepřepisovat celý soubor — pouze append
@@ -2375,6 +2701,50 @@ Pravidla:
 =============================================================
 CHAPTER 16: NOTIFICATIONS & CALENDAR
 =============================================================
+
+## Ntfy Topics — přesná struktura zpráv
+
+📊 agent-runs — výsledky runů
+  Priority: default (success), low (partial)
+  Title:   {AgentName} ✅ run dokončen | ❌ partial run
+  Message: Inserted: N | Updated: N | Failed: N
+           Duration: Xs | Tables: N | Verze: 8.6.0
+  Tags:    [sport-emoji, "white_check_mark"]
+
+🚨 agent-errors — POUZE Tier 4 kritické bloky
+  Priority: urgent (vždy)
+  Title:   {AgentName} 🚨 CRITICAL — {blockerCategory}
+  Message: Operace: {operation}
+           Důvod: {error_message}
+           Affected: {N} záznamů
+           Run zastaven — vyžaduje manuální zásah
+  Tags:    [sport-emoji, "rotating_light", "sos"]
+
+⚠️ agent-alerts — Tier 3 problémy
+  Priority: high
+  Title:   {AgentName} ⚠️ {alert_type}
+  Message: Detail: {popis problému}
+           Doporučená akce: {co má operátor udělat}
+  Tags:    [sport-emoji, "warning"]
+
+🔧 agent-maintenance — backfill, schema, merge, selfUpdate
+  Priority: low
+  Title:   {AgentName} 🔧 {maintenance_type}
+  Message: Detail: {co bylo uděláno}
+           Záznamy: N | Tabulky: N
+  Tags:    [sport-emoji, "wrench"]
+
+📬 agent-digest — týdenní/měsíční souhrny
+  Priority: low
+  Title:   {AgentName} 📊 {weekly|monthly} souhrn
+  Message: {N} runů / {successRate}% úspěšnost / {N} zápasů
+  Tags:    [sport-emoji, "bar_chart", "calendar"]
+
+Pravidla:
+- Max 3 ntfy/run (agent-digest se nepočítá)
+- Vždy přidat sport-specific emoji jako první tag
+- agent-errors a agent-alerts vždy obsahují "Doporučená akce" pro operátora
+- Při překročení limitu 3: agregovat do jedné souhrnné zprávy
 
 ## Sports Ntfy Notification Protocol -- 8.5.0
 
