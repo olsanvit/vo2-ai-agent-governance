@@ -72,9 +72,9 @@ Drive soubory tohoto agenta:
 ## Pro Collector agenta (nastavit jako System Prompt v Claude.ai)
 
 ```
-Agent: 8.8.0 [COLLECTION_NAME] Collector
+Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 8.8.0
+PromptVersion: 9.0.0
 
 Jsi Collector agent. Tvůj canonical prompt je na Google Drive.
 
@@ -105,9 +105,9 @@ Drive soubory tohoto agenta:
 ## Pro Generator agenta (nastavit jako System Prompt v Claude.ai)
 
 ```
-Agent: 8.8.0 [APP_NAME] Image Generator
+Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 8.8.0
+PromptVersion: 9.0.0
 
 Jsi Generator agent. Tvůj canonical prompt je na Google Drive.
 
@@ -137,9 +137,9 @@ Drive soubory tohoto agenta:
 ## Pro Checker agenta (nastavit jako System Prompt v Claude.ai)
 
 ```
-Agent: 8.8.0 [APP_NAME] Checker
+Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 8.8.0
+PromptVersion: 9.0.0
 
 Jsi Checker agent. Tvůj canonical prompt je na Google Drive.
 
@@ -168,9 +168,9 @@ Drive soubory tohoto agenta:
 ## Pro Importer agenta (nastavit jako System Prompt v Claude.ai)
 
 ```
-Agent: 8.8.0 [APP_NAME] Importer
+Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 8.8.0
+PromptVersion: 9.0.0
 
 Jsi Importer agent. Tvůj canonical prompt je na Google Drive.
 
@@ -197,6 +197,60 @@ Drive soubory tohoto agenta:
 
 ---
 
+
+## Security Model (9.0.0)
+
+| AgentType | VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM |
+|-----------|-------------|-------------|--------------|--------------|
+| Catalog   | READ+WRITE  | READ+WRITE  | READ+WRITE   | READ+WRITE   |
+| Manager   | READ+WRITE  | READ+WRITE  | READ+WRITE   | READ+WRITE   |
+| Collector | READ+WRITE  | ❌          | ❌           | ❌           |
+| Checker   | READ (audit)| READ (audit)| READ (audit) | READ (audit) |
+| Generator | READ        | ❌          | ❌           | READ+WRITE   |
+| Importer  | READ        | READ+WRITE  | READ+WRITE   | READ+WRITE   |
+
+Checker NIKDY neprovádí zápisy (výjimka: bezpečné aditivní schema opravy pokud explicitně povoleno).
+Agent který se pokusí o operaci mimo svůj scope → log "security_violation" + ntfy agent-errors.
+
+## Environment Support (9.0.0)
+
+Bootstrap rozšíření — přidat do každého bootstrap promptu:
+```
+Environment: prod
+```
+
+Agent čte Environment z _config.txt. Bootstrap hodnota je výchozí (prod).
+
+| Environment | Chování |
+|-------------|---------|
+| prod | Normální běh, plné zápisy, Calendar, ntfy na agent-* topics |
+| dev | DryRun, žádné Calendar eventy, ntfy na agent-dev topic |
+| staging | DryRun, omezené zápisy, ntfy na agent-staging topic |
+
+## Agent Deprecation Lifecycle (9.0.0)
+
+Operátor nastaví v {AgentName}_config.txt pole status:
+
+| status | Chování |
+|--------|---------|
+| active | Normální běh (výchozí) |
+| deprecated | Běží, každý run logován jako deprecated, ntfy agent-alerts |
+| disabled | Startup okamžitě ukončen: "Agent disabled by operator" |
+
+Při archivaci: Drive soubory přesunout do /Archive/{AgentName}/.
+Data v DB nikdy nemazat.
+
+## Nové systémové tabulky v 9.0.0
+
+| Tabulka | DB | Účel |
+|---------|-----|------|
+| AgentHealthReport | AIData | Centrální zdraví všech agentů |
+| PromptVersionPin | AIData | Pinování verze promptu per AgentType |
+| SharedSourceRegistry | AIData | Cross-collector deduplication zdrojů |
+| ImageHistory | per TargetDB | Verzování generovaných obrázků |
+| ScreenshotImportLog | per TargetDB | Hash-based deduplication screenshotů |
+
+
 ## Pravidla detekce typu
 
 Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
@@ -219,7 +273,7 @@ Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
 ## Self-audit (paste do libovolného agenta)
 
 ```
-Proveď kompletní self-audit (verze 8.8.0).
+Proveď kompletní self-audit (verze 9.0.0).
 
 KROK 0: Načti svůj prompt z Drive:
 - Drive složka ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -247,7 +301,7 @@ AgentPromptCache (
   Guid        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   AgentType   text NOT NULL,      -- "Catalog", "Manager", "Collector", ...
   PromptFile  text NOT NULL,      -- "CatalogPrompt", "CollectorPromptSkills", ...
-  PromptVersion text NOT NULL,    -- "8.8.0"
+  PromptVersion text NOT NULL,    -- "9.0.0"
   Content     text NOT NULL,      -- plný obsah souboru
   CachedAt    timestamptz NOT NULL DEFAULT now(),
   UNIQUE(AgentType, PromptFile)
