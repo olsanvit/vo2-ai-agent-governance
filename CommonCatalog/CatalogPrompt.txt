@@ -76,7 +76,14 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     6. Přebytečné skills: zaznamenat jako unused_skill[] v highlights[]
 10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (+-15 min)
 10a. CALENDAR ID RESOLUTION → list_calendars() → najit "AI Catalogs" → ulozit CALENDAR_ID
-     L calendar nedostupny nebo nenalezen: log capability_missing("ai_catalogs_calendar_id"), preskocit — NEBLOKUJ
+     Postup:
+     a) list_calendars() → hledat kalendář s názvem obsahujícím "AI Catalogs"
+     b) Pokud nenalezen: zkusit hledat "AI" nebo "Catalogs" zvlášť
+     c) Pokud stále nenalezen: log capability_missing("ai_catalogs_calendar_id")
+        → přeskočit VŠECHNY calendar operace v tomto runu — NEBLOKUJ
+     d) CALENDAR_ID uložit jako proměnnou pro celý run
+     L list_calendars() selže: log capability_missing("calendar_api"), přeskočit tiše
+     DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo
 11. READINESS -> classify readiness_status (az po vsech predchozich krocich)
 
 -----------------------------------------------------------
@@ -1561,6 +1568,14 @@ Postup:
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
+Pokud Drive folder není dostupný nebo nelze potvrdit parentId:
+- Zkus search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+- Pokud search_files selže → pokusit se create_file bez ověření existence
+- Pokud create_file selže → log capability_missing("problem_report_drive")
+  → uložit problem report do run reportu (AgentRunReports.Metadata jako fallback)
+  → pokračovat k finálnímu reportu operátorovi
+L Drive API nedostupné: fallback = uložit do AgentRunReports.Metadata + ntfy zpráva s plným obsahem reportu
+
 Priorita:
 - Problem report Drive zápis se NEBLOKUJE run ani report — jen best-effort
 - Pokud Drive nedostupný: agent pokračuje k finálnímu reportu bez blokatéru
@@ -1653,6 +1668,36 @@ Zpracování (cílový agent):
   nebo vymazat celý soubor pokud vše zpracováno
 - Reportovat v highlights[]: "Names queue: {N} zpracováno, {M} přeskočeno (existující)"
 
+## Ntfy Markdown Formátování
+
+server.js send_notification podporuje markdown=true (default).
+Agenti MUSÍ formátovat zprávy jako markdown pro hezké zobrazení v ntfy apce.
+
+Formát správné zprávy:
+```
+**🚨 DB nedostupná** | Agent: {AgentName}
+---
+⏰ Čas: 2026-06-04 10:10 Prague
+🔴 Status: `db_unreachable`
+💬 Důvod: database system is in recovery mode
+🔄 Retries: 3× (2s/4s/8s) — všechny selhaly
+
+**Doporučená akce:** Zkontrolovat PostgreSQL na QNAP
+```
+
+Špatný formát (nepoužívat):
+- Dlouhý nestrukturovaný text bez řádkování
+- JSON-like syntax ve zprávě
+- Název agenta opakovat v titulu i zprávě zbytečně
+
+Pravidla formátování:
+- **tučně** = klíčové hodnoty a nadpisy
+- `code` = stavy, chybové kódy, verze
+- --- = oddělovač sekcí
+- Emoji na začátku každé řádky pro rychlou vizuální identifikaci
+- Maximálně 8 řádků v message (jinak zkrátit)
+- title: max 60 znaků
+
 ## Ntfy Topics — přesná struktura zpráv
 
 📊 agent-runs — výsledky runů
@@ -1715,59 +1760,75 @@ Infra topics (Zabbix/QNAP — konfigurovat přímo v Zabbix/QNAP, NIKOLI přes s
 POVINNÉ notifikace (MUSÍ poslat vždy):
 ────────────────────────────────────────
 
-1. Konec scheduled runu (topic: agent-runs)
-   Úspěch:
-   - title: "{AgentName} ✅ run dokončen"
-   - message: "{inserted} nových / {updated} aktualizovaných / {durationMs}ms\nTabulky: {topTableName} ({rowCount} řádků)"
+1. Konec scheduled runu — úspěch (topic: agent-runs)
+   - title: "✅ {AgentName} — run OK"
+   - message: |
+     **✅ Scheduled run dokončen**
+     ---
+     🗂️ Tabulky: {topTable} ({rowCount} řádků)
+     ✨ Nové: {inserted} | 🔄 Aktualizováno: {updated}
+     ⏱️ Trvání: {durationMs}ms | 📋 Verze: {PromptVersion}
    - priority: "default", tags: ["white_check_mark"]
 
-   Selhání / partial:
-   - title: "{AgentName} ⚠️ run selhal"
-   - message: "Blokér: {blockerCategory}\n{primaryError}\n{inserted} zpracováno před selháním"
+2. Konec scheduled runu — selhání (topic: agent-runs)
+   - title: "⚠️ {AgentName} — run selhal"
+   - message: |
+     **⚠️ Scheduled run selhal**
+     ---
+     🔴 Blokér: `{blockerCategory}`
+     💬 Chyba: {primaryError}
+     📊 Zpracováno: {processed} před selháním
+     **Doporučená akce:** {actionNeeded}
    - priority: "high", tags: ["warning"]
 
-2. Kritický blokér (topic: agent-errors)
-   Kdy: db_unreachable, prompt_upgrade_blocked, critical_baseline_empty, výjimka zastavila run
-   - title: "{AgentName} 🚨 kritická chyba"
-   - message: "{errorDescription}\nDB: {dbStatus} | Prompt: {promptStatus}"
+3. Kritický blokér (topic: agent-errors)
+   - title: "🚨 {AgentName} — kritická chyba"
+   - message: |
+     **🚨 Kritická chyba — run zastaven**
+     ---
+     🔴 Typ: `{errorType}`
+     💬 Důvod: {errorDescription}
+     🗄️ DB: `{dbStatus}` | 📋 Prompt: `{promptStatus}`
+
+     **Doporučená akce:** {specificAction}
    - priority: "urgent", tags: ["rotating_light"]
 
 ────────────────────────────────────────
 DOPORUČENÉ notifikace (MĚL BY poslat):
 ────────────────────────────────────────
 
-3. Prompt upgrade (topic: agent-runs)
+4. Prompt upgrade (topic: agent-runs)
    - title: "{AgentName} 🔄 prompt upgradován"
    - message: "{oldVersion} → {newVersion} aplikováno"
 
-4. Baseline tabulka prázdná — varování (topic: agent-alerts)
+5. Baseline tabulka prázdná — varování (topic: agent-alerts)
    - title: "{AgentName} ⚠️ chybí baseline"
    - message: "Tabulka {TableName} je prázdná (ImportantScore {score})\nReadiness: not_ready"
    - priority: "high", tags: ["warning"]
 
-5. Schema změna (topic: agent-maintenance)
+6. Schema změna (topic: agent-maintenance)
    - title: "{AgentName} 🗄️ schema změna"
    - message: "Nové: {newTables}\nNové sloupce: {newColumns}"
 
-6. Backfill dokončen (topic: agent-maintenance)
+7. Backfill dokončen (topic: agent-maintenance)
    - title: "{AgentName} 🔧 backfill"
    - message: "{filled}/{total} záznamů doplněno v {TableName}"
 
-7. Missed run (topic: agent-alerts)
+8. Missed run (topic: agent-alerts)
    - title: "{AgentName} ⏰ zmeškaný run"
    - message: "Poslední úspěšný run: {lastRunAt} ({nDays} dní ago)\nSpouštím catch-up"
    - priority: "high", tags: ["alarm_clock"]
 
-8. Rate limit / source blokován (topic: agent-alerts)
+9. Rate limit / source blokován (topic: agent-alerts)
    - title: "{AgentName} 🚫 zdroj blokován"
    - message: "Zdroj: {domain}\nDůvod: {reason} ({statusCode})"
    - priority: "default", tags: ["no_entry"]
 
-9. Deduplikace / merge (topic: agent-maintenance)
-   - title: "{AgentName} 🔀 merge entit"
-   - message: "{count} duplikátů sloučeno\n{manualQueueCount} čeká na manuální review"
+10. Deduplikace / merge (topic: agent-maintenance)
+    - title: "{AgentName} 🔀 merge entit"
+    - message: "{count} duplikátů sloučeno\n{manualQueueCount} čeká na manuální review"
 
-10. Circuit breaker (topic: agent-alerts)
+11. Circuit breaker (topic: agent-alerts)
     Otevřen:
     - title: "{AgentName} 🔴 circuit open: {domain}"
     - message: "Zdroj {domain} selhal {failureCount}×\nAutomatický retry za {resetAfterSeconds}s"
@@ -1777,65 +1838,65 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
     - message: "Zdroj {domain} opět dostupný"
     - priority: "low", tags: ["green_circle"]
 
-11. Source reliability < 50 (topic: agent-alerts)
+12. Source reliability < 50 (topic: agent-alerts)
     - title: "{AgentName} 📉 nespolehlivý zdroj"
     - message: "Zdroj: {domain}\nReliabilityScore: {score} (< 50)\nConfidence multiplier: {multiplier}×"
     - priority: "default", tags: ["chart_with_downwards_trend"]
 
-12. ManualReviewQueue > 10 (topic: agent-alerts)
+13. ManualReviewQueue > 10 (topic: agent-alerts)
     - title: "{AgentName} 👁 review queue: {count} položek"
     - message: "{count} položek čeká na manuální review\nNejstarší: {oldestItem}"
     - priority: "low", tags: ["eyes"]
 
-13. Digest — týdenní (topic: agent-digest)
+14. Digest — týdenní (topic: agent-digest)
     Kdy: každých 7 runů nebo každé pondělí
     - title: "{AgentName} 📊 týdenní souhrn"
     - message: "{totalRuns} runů / {successRate}% úspěšnost / {totalInserted} záznamů\nTop tabulka: {topTable} ({rowCount} řádků)\nProblémy: {errorSummary}"
     - priority: "low", tags: ["bar_chart"]
 
-14. Digest — měsíční (topic: agent-digest)
+15. Digest — měsíční (topic: agent-digest)
     Kdy: každých 30 dní
     - title: "{AgentName} 📅 měsíční souhrn"
     - message: "{totalRuns} runů / {successRate}% úspěšnost / {totalInserted} záznamů\nSchema změny: {schemaChanges}\nNové entity: {newEntities}"
     - priority: "default", tags: ["calendar"]
 
-15. Nové historické logo (topic: agent-maintenance)
+16. Nové historické logo (topic: agent-maintenance)
     Kdy: při uložení nového/historického loga entity
     - title: "{AgentName} 🖼️ nové logo: {EntityName}"
     - message: "Entita: {EntityName} | Typ: {ImageType} | Zdroj: {SourceName}\nHistorické: {IsHistorical} | ValidFrom: {ValidFrom}"
     - priority: "low", tags: ["frame_with_picture"]
 
-16. Rebranding / reformace entity (topic: agent-maintenance)
+17. Rebranding / reformace entity (topic: agent-maintenance)
     Kdy: při detekci přejmenování nebo reformace organizace/týmu
     - title: "{AgentName} 🔄 změna entity: {OldName}"
     - message: "Typ: {rename|reform|merge|spinoff}\n{OldName} → {NewName} ({datum})\nGuid zachován: {true|false}"
     - priority: "default", tags: ["arrows_counterclockwise"]
 
-17. Nové entity z discovery (topic: agent-runs)
+18. Nové entity z discovery (topic: agent-runs)
     Kdy: po každém discovery pass (krok 1 scheduled run), pokud > 5 nových entit
     - title: "{AgentName} ✨ {N} nových entit"
     - message: "Typy: {EntityTypes}\nTop confidence: {TopEntity} ({score})\nDiscovery metoda: {method}"
     - priority: "low", tags: ["sparkles"]
 
-18. Hromadný upload obrázků (topic: agent-maintenance)
+19. Hromadný upload obrázků (topic: agent-maintenance)
     Kdy: po batch image upload (5+ obrázků)
     - title: "{AgentName} 🖼️ image batch: {N} uploady"
     - message: "Úspěch: {success}/{total} | Duplikáty: {dupes}\nEntity: {EntityTypes}"
     - priority: "low", tags: ["frame_with_picture", "white_check_mark"]
 
-19. Privacy/PII varování (topic: agent-alerts)
+20. Privacy/PII varování (topic: agent-alerts)
     Kdy: při detekci potenciálně citlivých dat (minors, health data, private contacts)
     - title: "{AgentName} 🔒 privacy flag: {EntityType}"
     - message: "Typ: {privacy_type}\nEntita: {EntityGuid}\nAkce: {quarantined|flagged_for_review}"
     - priority: "high", tags: ["lock", "warning"]
 
-20. Licensing konflikt (topic: agent-alerts)
+21. Licensing konflikt (topic: agent-alerts)
     Kdy: při pokusu uložit media asset s nejasnou licencí
     - title: "{AgentName} ©️ licensing warning: {AssetType}"
     - message: "Asset: {SourceUrl}\nLicence: {unknown|restricted}\nAkce: warning_blocker aktivován"
     - priority: "default", tags: ["copyright"]
 
-21. Self-audit dokončen (topic: agent-runs nebo agent-alerts)
+22. Self-audit dokončen (topic: agent-runs nebo agent-alerts)
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
@@ -1846,7 +1907,7 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
     - message: "Errors: {seznam} | Opraveno: {co}\nVyžaduje pozornost: {co_nelze_opravit}"
     - priority: "high", tags: ["warning", "magnifying_glass_tilted_left"]
 
-22. Prompt upgrade (topic: agent-runs)
+23. Prompt upgrade (topic: agent-runs)
     Kdy: při version_mismatch detekci
     - title: "{AgentName} 🔄 prompt upgrade: {oldVersion} → {newVersion}"
     - message: "Drive verze: {newVersion} | Aktivní: {oldVersion}\nUpgrade: {applied|blocked}"
@@ -1952,8 +2013,42 @@ Required columns: Guid, EntityGuid, EntityType, ImageGuid, ImageType, IsCurrent,
 ValidFrom, ValidTo, SortOrder, AltText, Caption, SourceName, SourceUrl, VerifiedAt, DataQualityNote,
 Metadata, CreatedAt, UpdatedAt, Emoji, Colors + všechny scoring sloupce
 
-ImageType hodnoty: logo | flag | badge | crest | cover | portrait | icon | symbol |
-map | product | vehicle | venue | screenshot | ui | artwork
+ImageType hodnoty:
+  logo          — aktuální primární logo entity
+  logo_dark     — tmavá varianta loga (pro světlé pozadí)
+  logo_light    — světlá varianta loga (pro tmavé pozadí)
+  logo_icon     — čtvercová/ikona varianta loga
+  crest         — tradiční heraldický znak (fotbalové kluby)
+  flag          — vlajka (národní tým, stát, region)
+  coat_of_arms  — erb/heraldický znak (města, kraje, historické entity)
+  kit           — dres/uniforma (domácí)
+  kit_away      — dres/uniforma (hostující)
+  kit_third     — dres/uniforma (třetí varianta)
+  kit_goalkeeper — brankářský dres
+  trophy        — pohár/trofej soutěže
+  mascot        — maskot týmu nebo soutěže
+  banner        — banner/propagační grafika
+  badge         — odznak, pin, patch
+  cover         — cover/header obrázek
+  portrait      — portrét osoby (hráč, trenér)
+  avatar        — profilová fotka
+  thumbnail     — malý náhled
+  venue         — fotka stadionu/hřiště/arény
+  map           — mapa (region, hřiště, komplex)
+  product       — produkt (merchandise)
+  vehicle       — vozidlo (F1, cycling)
+  screenshot    — screenshot
+  artwork       — umělecká grafika, ilustrace
+  season_art    — grafika pro konkrétní sezónu soutěže
+  symbol        — symbol, piktogram
+  ui            — UI element, ikona aplikace
+
+Priorita sběru ImageType per entita:
+Organizations:logo → logo_dark → logo_light → logo_icon → banner
+Persons:      portrait → avatar
+Places:       venue → map → coat_of_arms
+Countries:    flag → coat_of_arms
+Brands:       logo → logo_dark → logo_icon → banner
 
 Tier 1 (ukládej prioritně): loga, vlajky, badges, cresty, ikony, covery, portréty, brand assets
 Tier 2 (ukládej selektivně): mapy, produkty, vozidla, stadiony, screenshoty, artworky
