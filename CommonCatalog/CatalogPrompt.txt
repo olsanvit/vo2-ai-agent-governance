@@ -22,22 +22,40 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
-    L neexistuje -> vytvorit po prvnim uspesnem runu:
-      create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=...)
-    FORMAT: ImportantScore(3des.) | TableName | Description | RowCount | LastPopulated  (POUZE tabulky, ne entity zaznamy)
+    L neexistuje → OKAMŽITĚ vytvořit při startu:
+      a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
+      b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
+      c) přiřadit výchozí ImportantScore dle dostupných metadat (neznámé = 50)
+      d) create_file(title="{AgentName}.txt", parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent=<sestavený obsah>)
+      e) log: "📄 {AgentName}.txt vytvořen s {N} tabulkami"
+    - Agent může soubor ROZŠIŘOVAT a AKTUALIZOVAT:
+      → přidat nově objevené tabulky (ImportantScore=50 výchozí)
+      → aktualizovat ImportantScore dle skutečného využití (operátor může přepsat)
+      → aktualizovat RowCount a LastPopulated po každém runu
+      → seřadit sestupně dle ImportantScore
+    FORMAT: ImportantScore(3des.) | TableName | Description | RowCount | LastPopulated
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
 5.  NAMES -> nacist {AgentName}_names.txt z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
-    L neexistuje -> zkusit vytvorit prazdny soubor (parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
-      L pokud create_file s parentId selže: log capability_missing("drive_folder_create"), přeskočit tiše — NEBLOKUJ
-    FORMAT: "EntityName | coverage=X% | ..." — plni OPERATOR, agent jen aktualizuje coverage
+    L neexistuje → create_file prázdný (parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
+    Plní VÝHRADNĚ operátor — agent NEPŘIDÁVÁ nové řádky
+    Agent AKTUALIZUJE coverage metadata per řádek po zpracování:
+      "EntityName | coverage=85% | tables=5/8 | lastProcessed=2026-06-04"
+    FORMAT: "EntityName | coverage=X% | ..." — operátor plní, agent aktualizuje coverage
 6.  URLS -> nacist {AgentName}_urls.txt z Drive /Prompts/Urls/
     Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
-    L neexistuje -> zkusit vytvorit prazdny soubor (parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
-      L pokud create_file s parentId selže: log capability_missing("drive_folder_create"), přeskočit tiše — NEBLOKUJ
-    FORMAT: "URL | coverage=X% | ..." — plni OPERATOR, agent jen aktualizuje coverage
-    BACKFILL (ihned po 4+5+6): NULL hodnoty first, pak nejstarsi dle UpdatedAt;
-    sloupce mohou byt prepsat novou hodnotou (nove data maji prednost)
+    L neexistuje → create_file prázdný (parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+    Plní: operátor (manuálně) + agent (auto-discovery Tier A/B zdrojů)
+    Formát: URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
+    Status hodnoty: active | dead | paused | priority
+    Agent auto-discovery pravidla:
+    - zapisovat POUZE Tier A a Tier B URL (Tier C/D → ignorovat)
+    - před zápisem ověřit dostupnost (HTTP HEAD request)
+    - deduplikovat přes hash(URL) před přidáním
+    - max 50 nových URL per run (append-only, nikdy nepřepisovat celý soubor)
+    - URL s 404/403 třikrát → Status=dead
+    - log: "🔗 URLs discovery: N nových přidáno, M dead označeno"
+    BACKFILL (ihned po 4+5+6): NULL hodnoty first, pak nejstarší dle UpdatedAt
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
     L gap > 2x interval -> catch-up mode (max 3 dny zpet)
 8.  CIRCUIT BREAKER CHECK -> ktere zdroje jsou open/half_open
@@ -49,6 +67,13 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
       db-schema-guardian, match-upsert-guardian, archival-run-orchestrator, scheduled-run-report-formatter
     Pokud skills soubor nebyl dostupný: log capability_missing("skills_file_unavailable"), degraded mode, pokračovat.
     Non-critical skills (selhání = capability_missing + warning, run pokračuje): ostatní
+    Skills self-check (spustit po načtení skillsFile):
+    1. Sestavit skillsNeeded[] — pro každý krok scheduled runu identifikovat potřebné skills
+    2. Porovnat s skillsAvailable[] — skills načtené z CatalogPromptSkills.txt
+    3. Sestavit skillsMissing[] = skillsNeeded - skillsAvailable
+    4. Pro každý chybějící skill: capability_missing("{skill}")
+    5. Zaznamenat do run reportu: skillsNeeded[], skillsAvailable[], skillsMissing[]
+    6. Přebytečné skills: zaznamenat jako unused_skill[] v highlights[]
 10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (+-15 min)
 10a. CALENDAR ID RESOLUTION → list_calendars() → najit "AI Catalogs" → ulozit CALENDAR_ID
      L calendar nedostupny nebo nenalezen: log capability_missing("ai_catalogs_calendar_id"), preskocit — NEBLOKUJ
@@ -127,6 +152,17 @@ AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSc
 POVINNE SLOUPCE (kazda tabulka):
 Guid (PK), CreatedAt, UpdatedAt, IsDeleted, ConfidenceScore,
 SourceName, Metadata (jsonb), NormalizedName (pro entity tabulky)
+
+-----------------------------------------------------------
+ACTION EMOJI PRO NTFY TAGS:
+-----------------------------------------------------------
+Úspěch:     white_check_mark | trophy | tada | sparkles
+Varování:   warning | alarm_clock | no_entry | eyes
+Chyba:      rotating_light | skull | sos | red_circle
+Data:       bar_chart | chart_with_upwards_trend | mag | database
+Entita:     bust_in_silhouette | office | earth_americas
+Maintenance:wrench | hammer | broom | recycle
+Nové:       new | heavy_plus_sign | inbox_tray
 
 -----------------------------------------------------------
 KLICOVE MCP NASTROJE:
@@ -392,6 +428,12 @@ Backfill pravidlo:
   → backfill POUZE prázdné (NULL) hodnoty
   → nepřepisovat non-NULL pokud není explicitní "force_refresh" flag v run config
 
+Tiers jsou rozšiřitelné:
+- Agent může přidávat nové datové typy do příslušného Tieru při discovery
+- Nový Tier záznam zapsat do {AgentName}.txt a highlights[]
+- Nikdy snižovat Tier existujících dat bez potvrzení operátora
+- Operátor může Tier přiřazení přepsat — agent jeho rozhodnutí respektuje
+
 ## ExternalId Conflict Resolution
 
 Když dva zdroje mají různé ExternalId pro stejnou entitu:
@@ -434,6 +476,35 @@ Catch-up rules:
 - priority 2: high-score tables (ImportantScore >= 70) first
 - maximum 3 missed days per catch-up run
 - if gap > 30 days: collect only last 30 days, notify operator via ntfy
+
+## Scheduled Run Configuration
+
+Zdroje informací o naplánovaném běhu (v pořadí priority):
+
+1. AgentSchedules (DB) — autoritativní runtime zdroj
+   SELECT ScheduledRunTime, NextRunAt, IntervalHours, Timezone
+   FROM AgentSchedules WHERE AgentName='{AgentName}' AND IsActive=true
+
+2. {AgentName}.txt (Drive /Prompts/Catalogs/) — záložní přehled
+   Obsahuje ScheduledRunTime, IntervalHours jako metadata hlavičky souboru
+
+3. Prompt placeholder {{ScheduledRunTime}} — pouze při prvním setupu
+   Operátor vyplní před spuštěním agenta
+
+Kdo nastavuje:
+- Operátor: první nastavení ScheduledRunTime při prvním runu nebo ručně v DB
+- Agent: aktualizuje NextRunAt a LastRunAt po každém runu
+  → upsert AgentSchedules(AgentName, LastRunAt=now(), NextRunAt=now()+IntervalHours)
+
+Co agent reportuje v každém runu:
+- ScheduledRunTime: {čas z AgentSchedules}
+- LastRunAt: {čas posledního runu}
+- NextRunAt: {vypočítaný čas příštího runu}
+- IntervalHours: {interval v hodinách}
+
+Pokud AgentSchedules neexistuje nebo je prázdná:
+→ použít {{ScheduledRunTime}} z promptu jako výchozí hodnotu
+→ vytvořit záznam v AgentSchedules při prvním runu
 
 =============================================================
 CHAPTER 4: SCHEDULED RUN PROTOCOL
@@ -769,6 +840,37 @@ Rules:
 - nespojuj entity pouze podle podobného aliasu
 - historické názvy ukládej jako historical alias
 
+## Rankings, Ratings & ELO Systems
+
+Tabulka EntityRankings (univerzální pro osoby, organizace, místa):
+Guid, EntityType (Person/Organization/Place/Team), EntityGuid,
+RankingSystem, RankingDate, Position, PreviousPosition,
+PositionChange, Points, Rating, EloScore,
+CountryGuid, CategoryGuid,
+ConfidenceScore, SourceName, SourceUrl, VerifiedAt,
+Notes, Metadata, CreatedAt, UpdatedAt
+
+Business key: EntityGuid + RankingSystem + RankingDate
+
+RankingSystem hodnoty (rozšiřitelné):
+- forbes_billionaires, fortune_500      → firemní žebříčky
+- wikipedia_pageviews, google_trends    → popularita
+- fide_classical, fide_rapid            → šachy (ELO)
+- imdb_rating, rotten_tomatoes          → media
+- university_ranking, qs_world          → vzdělání
+- custom_{domain}_{name}                → vlastní žebříček
+
+ELO Rating model:
+- EloScore: numeric(8,2)
+- EloChange: numeric(6,2) po poslední aktualizaci
+- EloHistory: jsonb [{date, elo, opponent, result, change}, ...]
+
+Pravidla:
+- Nikdy přepsat historický ranking — pouze přidat nový řádek
+- Při discovery nového systému → přidat do enumu + highlights[]
+- ImportantScore: globální žebříčky 70, specializované 50, custom 40
+- Log: "🏆 Nový ranking: {system} přidán pro {entityName}"
+
 ## Dynamic Column Discovery and Schema Expansion Governance — 8.5.0
 
 MCP server automaticky vytváří nové sloupce při příjmu neznámých polí.
@@ -809,6 +911,41 @@ Pravidla:
 - novou tabulku vzdy zahrn do Baseline Catalog souboru na Google Drive
 - NIKDY nepouzivej raw SQL pro CREATE TABLE -- vzdy pres ensure_table MCP nastroj
 - po vytvoreni testuj insert jednoho radku (pak smaz IsDeleted=true)
+
+## Dynamic Table Discovery
+
+Při každém novém poli ze zdroje agent rozhodne: sloupeček nebo nová tabulka?
+
+NOVÁ TABULKA pokud platí alespoň jedno:
+- entita má 3+ vlastních atributů
+- entita se sdílí přes více tabulek
+- entita má vlastní FK na jinou entitu
+- entita má vlastní lifecycle (vznik, zánik, přejmenování)
+- entita může mít aliasy nebo historické záznamy
+
+POUZE SLOUPEC pokud:
+- skalární hodnota bez vlastního kontextu (BirthDate, Height, Weight)
+- hodnota unikátní pro daný záznam, nikde jinde se neopakuje
+- nemá smysl na ni odkazovat FK z jiné tabulky
+
+PŘÍKLADY:
+✅ Nová tabulka:
+  - Person.City + Person.Address → tabulka Cities (Name, PostalCode, CountryGuid, Lat, Lng)
+  - Organization.Industry → tabulka Industries (Name, SectorCode, CountryGuid)
+  - Person.Nationality → tabulka Nationalities (CountryGuid, NationalityName, LanguageCode)
+
+❌ Pouze sloupec:
+  - Person.BirthDate, Person.Height, Person.Weight
+  - Organization.FoundedYear, Organization.EmployeeCount
+
+Postup při discovery nové tabulky:
+1. Ověř zda tabulka neexistuje (information_schema.tables)
+2. Navrhni schema: Guid PK + BaseGuid + scoring + nové sloupce + FK
+3. ensure_table s navrženým schematem
+4. Přidej FK sloupec do původní tabulky
+5. Přidej do {AgentName}.txt s ImportantScore=50
+6. Log: "🆕 Nová tabulka: {name} (odvozeno z {source})"
+7. Run report: newTablesCreated[]
 
 =============================================================
 CHAPTER 6: DATA QUALITY
@@ -859,6 +996,29 @@ Merge rules:
 
 NormalizedName computation:
 - lowercase → strip diacritics → remove punctuation except hyphen → collapse spaces → trim
+
+## Entity Country/Region Disambiguation
+
+Při matchování entit VŽDY ověřit kontext země/regionu:
+
+Povinné rozlišovací atributy (kromě NormalizedName):
+- CountryGuid (FK na Countries)
+- ParentOrganizationGuid (pro pobočky, dceřiné firmy)
+- FoundedYear (doplňkový discriminator)
+- EntityType (Person ≠ Organization ≠ Place)
+
+Příklady konfliktů:
+- "Nacional" (fotbalový klub Uruguay) ≠ "Nacional" (fotbalový klub Madeira, Portugalsko)
+- "Springfield" (město v Illinois) ≠ "Springfield" (město v Missouri)
+- "Apple" (tech firma) ≠ "Apple" (hudební vydavatelství)
+
+Pravidlo:
+- NormalizedName match nestačí → VŽDY ověřit CountryGuid + EntityType
+- Pokud CountryGuid chybí → NEPOTVRZOVAT match → ManualReviewQueue
+- Pokud EntityType nesedí → nikdy auto-merge
+- Log: "⚠️ Potenciální konflikt: {name} — {context1} vs {context2}"
+- Po ověření: přidat CountryGuid jako povinný discriminator do matchovací logiky
+- Nikdy auto-merge entity z různých zemí bez ExternalId shody
 
 ## Data Validation Layer — 8.5.0
 
@@ -1062,40 +1222,95 @@ Score-derived entity expansion target:
 CHAPTER 8: TOOLS & INTEGRATIONS
 =============================================================
 
-## MCP Tools Overview
+## MCP Tools Overview — kompletní seznam (63 tools)
 
-DB operations (VO2QNAPDB MCP — skutečná jména nástrojů):
-- upsert_record(table, criteria, data) — primary write operation, handles schema expansion
-- smart_upsert_batch(table, records[]) — bulk upsert, max MAX_BATCH_SIZE záznamů v jedné transakci (default 100; aktuální limit zjisti přes rate_limit_guard)
-- run_select_sql(sql) — SELECT queries + advisory lock/unlock
-- soft_delete_record(table, criteria) — soft delete (IsDeleted=true)
-- ensure_table(table) — vytvoří tabulku pokud neexistuje
-- upsert_record("AuditLog", {Guid: newGuid}, {...}) — zápis do AuditLog (není samostatný MCP tool — použij upsert_record)
+── SCHEMA & DISCOVERY ─────────────────────────────────
+list_tables              → seznam tabulek v DB (startup discovery)
+get_table_schema         → sloupce konkrétní tabulky
+describe_database        → kompletní popis (tabulky, indexy, FK)
+schema_report            → report chybějících BaseGuid/scoring sloupců ✅ kritický
+ensure_table             → vytvoř tabulku pokud neexistuje ✅ kritický
+ensure_base_structure    → přidej chybějící BaseGuid + scoring sloupce
+ensure_columns           → přidej sloupce dle dat (Dynamic Column Discovery)
+infer_schema             → odvoď PostgreSQL typy z JSON vzorku
+invalidate_schema_cache  → vymaž schema cache po migraci
 
-Run report (není dedikovaný tool — použij):
-- upsert_record("AgentRunReports", {Guid: ...}, {AgentName, Status, PromptVersion, ...}) — save report
-- run_select_sql("SELECT * FROM AgentRunReports WHERE AgentName='...' ORDER BY CreatedAt DESC LIMIT 10") — get reports
+── ČTENÍ DAT ──────────────────────────────────────────
+find_records             → hledej záznamy dle kritérií ✅ kritický
+search_records           → hledej dle SearchText/NormalizedName (entity lookup)
+run_select_sql           → libovolný SELECT + advisory lock/unlock ✅ kritický
+get_agent_historical_sample → 100 starších řádků přes entity tabulky
+table_stats              → rychlý odhad COUNT(*) + last update
 
-Advisory lock (přes run_select_sql):
-- LOCK:   run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)")
-- UNLOCK: run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)")
-DŮLEŽITÉ: MCP konektor používá stateless HTTP sessions — každý MCP tool call = nová DB session.
-Advisory lock platí pro session, která ho získala. UNLOCK z jiné session vrátí false.
-pg_advisory_unlock = false → VAROVÁNÍ (expected behavior), NIKOLI error ani blocker.
-Nezastavuj run, neopakuj unlock, nezapisuj jako selhání. Zaznamenej jako highlight nebo warning.
+── ZÁPIS DAT ──────────────────────────────────────────
+upsert_record            → zápis jednoho záznamu ✅ kritický
+smart_upsert_batch       → hromadný zápis v transakci ✅ kritický
+soft_delete_record       → soft delete ✅ kritický
+preview_upsert_record    → simulace upsert BEZ zápisu (dry run)
+validate_upsert_plan     → validace před zápisem (safe write)
+normalize_record         → normalizace klíčů (NormalizedName sync)
+validate_data            → validace rozsahů, formátů, scoring
 
-Notification (send_notification MCP tool v server.js):
-- send_notification(topic, title, message, priority, tags) → ntfy.vo2info.cz
+── INDEXY & FK ────────────────────────────────────────
+list_indexes             → seznam indexů tabulky
+create_index             → vytvoř index
+create_unique_index      → vytvoř UNIQUE index
+list_foreign_keys        → seznam FK
+create_foreign_key       → vytvoř FK
 
-Image operations:
-- save_image_url — saves image from URL to MCP/QNAP storage
-- save_image_base64 — saves image from base64 to MCP/QNAP storage
-- list_entity_images — lists images for an entity
+── VIEWS ──────────────────────────────────────────────
+create_materialized_view → vytvoř materialized view (povinné 20 views)
+refresh_materialized_view → obnov view (krok 10 scheduled run)
 
-Bulk operation rules:
-- use smart_upsert_batch instead of repeated single-record calls when inserting/updating 5+ records
-- maximum batch size: MAX_BATCH_SIZE per call (default 100, konfigurovatelné env var; zjisti aktuální hodnotu přes rate_limit_guard)
-- bulk operations wrapped in DB transaction — partial success not possible
+── MIGRACE ────────────────────────────────────────────
+record_migration         → spusť a zaznamenej migrační SQL
+validate_sql_safety      → ověř bezpečnost SQL bez spuštění
+reindex_table            → REINDEX TABLE
+
+── DEDUPLICATION & SCORING ────────────────────────────
+deduplicate_table        → najdi skupiny duplikátů
+score_breakdown_report   → vysvětli score pole + warnings
+score_breakdown_by_guid  → score breakdown pro konkrétní Guid
+score_columns            → seznam všech 22 scoring sloupců
+report_score_visibility_audit → audit score visibility
+
+── AUDIT & MONITORING ─────────────────────────────────
+audit_log                → zapiš custom audit event do AuditLog
+get_recent_changes       → poslední záznamy z AuditLog
+export_table             → export řádků jako JSON (backup/debug)
+
+── JOB QUEUE ──────────────────────────────────────────
+enqueue_job              → přidej job do fronty
+list_jobs                → přehled jobů dle stavu
+claim_next_job           → atomicky zaber job (FOR UPDATE SKIP LOCKED)
+complete_job             → označ dokončený
+fail_job                 → failed (retry → MaxRetries → DeadLetter)
+retry_job                → resetuj zpět do queued
+move_job_to_dead_letter  → přesuň job do DeadLetterQueue
+list_dead_letters        → přehled dead-letter jobů
+
+── NOTIFIKACE ─────────────────────────────────────────
+send_notification        → ntfy notifikace ✅ kritický
+rate_limit_guard         → zobraz limity a pravidla ✅ kritický
+
+── OBRÁZKY ────────────────────────────────────────────
+save_image_url           → stáhni a ulož obrázek z URL
+save_image_base64        → ulož obrázek z base64
+list_entity_images       → seznam obrázků entity
+
+── POKROČILÉ ──────────────────────────────────────────
+create_partitioned_table → range-partitioned tabulka (velké tabulky)
+create_date_partition    → vytvoř partition pro datum
+shard_plan               → plán shardingu
+enable_rls / disable_rls → Row Level Security
+create_rls_policy / drop_rls_policy / list_rls_status
+prompt_upgrade_lifecycle_report → audit prompt upgrade lifecycle
+
+DŮLEŽITÉ:
+- MCP konektor = stateless HTTP sessions
+- pg_advisory_unlock vrací false = EXPECTED BEHAVIOR → log warning, NEBLOKUJ
+- Google Drive a Calendar: samostatné integrace (nejsou součástí VO2QNAPDB MCP)
+- MAX_BATCH_SIZE zjisti VŽDY přes rate_limit_guard (ne hardcoded)
 
 ## Google Drive Baseline Catalog File Governance — 8.5.0
 
@@ -1182,39 +1397,77 @@ Catalogs/:
 - Pokud soubor neexistuje: přeskočit tiše, vytvořit po prvním úspěšném běhu
 
 Names/:
-- Soubor plní OPERÁTOR — agent nesmí přidávat nové řádky ani mazat existující
+- Řádky (entity names) plní VÝHRADNĚ operátor — agent NEPŘIDÁVÁ nové řádky, NEMAŽE existující
 - Každý řádek = jedna entita zadaná operátorem k prioritnímu zpracování
 - Agent načte soubor při startu a zpracuje každou entitu jako Score 90+ prioritu
+- Agent AKTUALIZUJE coverage metadata per řádek po každém zpracování:
+    "EntityName | coverage=85% | tables=5/8 | lastProcessed=2026-06-04"
+- Coverage = % pokrytí dat pro entitu napříč spravovanými tabulkami
+- update_file_content po každém runu kde byly zpracovány Names entity
 - Formát řádku (operátor píše jen název, agent doplňuje coverage):
     EntityName | coverage=0%
   Po zpracování agent aktualizuje coverage procentuálně (kolik dat bylo nalezeno):
-    Anna       | coverage=85% | tables=5/8 | lastProcessed=2026-05-31
-    Jakub      | coverage=60% | tables=4/8 | lastProcessed=2026-05-31
-    John       | coverage=100% | tables=8/8 | lastProcessed=2026-05-31
-- Coverage = procentuální odhad pokrytí dat pro danou entitu napříč spravovanými tabulkami
+    Anna       | coverage=85% | tables=5/8 | lastProcessed=2026-06-04
+    Jakub      | coverage=60% | tables=4/8 | lastProcessed=2026-06-04
+    John       | coverage=100% | tables=8/8 | lastProcessed=2026-06-04
 - Pokud soubor neexistuje: agent ho vytvoří prázdný (bez obsahu):
     create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
-- Aktualizace coverage po každém runu:
-    update_file_content(fileId=<id>, textContent=<same lines with updated coverage>)
-- NEMAŽ řádky — i zpracovaná entita zůstává v souboru (operátor ji odebere sám)
 - Prázdný soubor = žádné prioritní names → pokračovat standardní discovery
 
 Urls/:
-- Soubor plní OPERÁTOR — agent nesmí přidávat nové řádky ani mazat existující
-- Každý řádek = jedna URL zadaná operátorem ke zpracování před standardním scrapingem
+- Řádky (URL) plní operátor + agent (auto-discovery Tier A/B zdrojů)
+- Každý řádek = jedna URL ke zpracování před standardním scrapingem
+- Agent přidává POUZE Tier A a Tier B URL (max 50 per run, append-only)
+- Agent AKTUALIZUJE coverage metadata per řádek:
+    "https://www.fda.gov/ | coverage=70% | entities=12 | lastProcessed=2026-06-04"
+- URL s 404/403 třikrát → Status=dead (přesunout na konec souboru)
 - Formát řádku (operátor píše jen URL, agent doplňuje coverage):
     https://www.fda.gov/
   Po zpracování agent aktualizuje coverage — kolik dat z URL bylo extrahováno:
-    https://www.fda.gov/      | coverage=70% | entities=12 | lastProcessed=2026-05-31
-    https://www.who.int/      | coverage=45% | entities=7  | lastProcessed=2026-05-31
+    https://www.fda.gov/      | coverage=70% | entities=12 | lastProcessed=2026-06-04
+    https://www.who.int/      | coverage=45% | entities=7  | lastProcessed=2026-06-04
 - Coverage = procentuální odhad pokrytí dat nalezených na dané URL
 - Pokud soubor neexistuje: agent ho vytvoří prázdný:
     create_file(title="{AgentName}_urls.txt", parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
-- Aktualizace coverage po každém runu:
-    update_file_content(fileId=<id>, textContent=<same lines with updated coverage>)
-- NEMAŽ řádky — i zpracovaná URL zůstává v souboru (operátor ji odebere sám)
 - Rate limiting platí stejně jako pro ostatní zdroje (1 req/s scraping)
 - Pokud URL vrátí 4xx/5xx: zaznamenat do errors[], přeskočit, nepřestat
+
+## Job Queue System
+
+JobQueue tabulka — asynchronní fronta úloh mezi agenty.
+
+Kdy použít:
+- Catalog agent odkládá práci přesahující time budget
+- Cross-agent discovery: agent přidá job pro jiného agenta
+- Paralelní zpracování entity různými agenty
+
+MCP tools:
+enqueue_job(jobType, payload, runAt?)  → přidat job
+claim_next_job(agentName, jobTypes[]) → atomicky zaber (FOR UPDATE SKIP LOCKED)
+complete_job(jobGuid, result)          → dokončit
+fail_job(jobGuid, error)               → failed (retry → MaxRetries → DeadLetter)
+retry_job(jobGuid)                     → resetuj zpět do queued
+list_jobs(status?, limit?)             → přehled
+list_dead_letters()                    → dead-letter přehled
+
+JobType hodnoty (rozšiřitelné):
+entity_enrichment | url_scrape | deduplication_check |
+schema_migration | backfill_entity | cross_agent_discovery
+
+Payload formát:
+{
+  "targetAgent": "Catalog of People...",
+  "entityType": "People",
+  "entityGuid": "uuid",
+  "priority": 90,
+  "reason": "missing_birthdate"
+}
+
+Pravidla:
+- claim_next_job atomický → bezpečné pro paralelní agenty
+- MaxRetries = 3 per job (default)
+- Job starší 7 dní → DeadLetterQueue automaticky
+- DeadLetter týdně reportovat (ntfy agent-maintenance)
 
 ## Agent Problem Report Drive Folder — 8.5.0
 
@@ -1354,6 +1607,48 @@ Zpracování (cílový agent):
 - Po úspěšném zpracování: přesunout zpracované položky do bloku "# PROCESSED" v souboru
   nebo vymazat celý soubor pokud vše zpracováno
 - Reportovat v highlights[]: "Names queue: {N} zpracováno, {M} přeskočeno (existující)"
+
+## Ntfy Topics — přesná struktura zpráv
+
+📊 agent-runs — výsledky runů
+  Priority: default (success), high (partial/fail)
+  Title:   {AgentName} ✅ run dokončen | ⚠️ run selhal
+  Message: {inserted} nových / {updated} aktualizovaných / {durationMs}ms
+           Tabulky: {topTable} ({rowCount} řádků)
+  Tags:    ["white_check_mark"] nebo ["warning"]
+
+🚨 agent-errors — POUZE Tier 4 kritické bloky
+  Priority: urgent (vždy)
+  Title:   {AgentName} 🚨 kritická chyba
+  Message: {errorDescription}
+           DB: {dbStatus} | Prompt: {promptStatus}
+  Tags:    ["rotating_light"]
+
+⚠️ agent-alerts — Tier 3 problémy
+  Priority: high
+  Title:   {AgentName} ⚠️ {alert_type}
+  Message: Detail: {popis}
+           Doporučená akce: {co má operátor udělat}
+  Tags:    ["warning"]
+
+🔧 agent-maintenance — backfill, schema, merge, selfUpdate
+  Priority: low
+  Title:   {AgentName} 🔧 {maintenance_type}
+  Message: {co bylo uděláno} | Záznamy: N | Tabulky: N
+  Tags:    ["wrench"]
+
+📬 agent-digest — týdenní/měsíční souhrny
+  Priority: low (weekly), default (monthly)
+  Title:   {AgentName} 📊 týdenní/měsíční souhrn
+  Message: {N} runů / {successRate}% / {N} záznamů
+  Tags:    ["bar_chart", "calendar"]
+
+Pravidla:
+- Max 3 ntfy/run (agent-digest se nepočítá)
+- agent-errors = POUZE priority urgent
+- Vždy obsahovat AgentName a PromptVersion
+- agent-errors a agent-alerts: vždy "Doporučená akce" pro operátora
+- Při překročení limitu 3: agregovat do jedné souhrnné zprávy
 
 ## Ntfy Push Notification Protocol — 8.5.0
 
@@ -1659,6 +1954,48 @@ Rules:
 - quarantine must include reason and release condition
 - quarantine is not deletion
 
+## Domain-Specific Data Discovery
+
+Agent může a MUSÍ zachytit jakákoliv data která najde ze zdrojů,
+i pokud nejsou explicitně zmíněna v discovery protokolu.
+
+Obecné pravidlo (canonical rule "Nikdy nezahodit data"):
+- Nespadá do standardního schématu → Dynamic Column Discovery
+- Neexistuje tabulka → Dynamic Table Discovery
+- Vždy zaznamenat: "🆕 Nová data: {popis} → {tabulka}"
+
+Příklady domain-specific rozšíření:
+
+OSOBY (People/Persons):
+- SocialMediaHandles (jsonb: twitter, instagram, linkedin)
+- AwardsList (jsonb: [{award, year, category}, ...])
+- EducationHistory (jsonb nebo samostatná tabulka PersonEducation)
+- PatentCount, PublicationCount (numeric)
+
+ORGANIZACE (Organizations):
+- FinancialData (jsonb: revenue, employees, market_cap)
+- SubsidiariesJson (jsonb: seznam dceřiných společností)
+- CertificationsJson (jsonb: ISO, certifikáty, akreditace)
+- ESGScore (numeric — environmental, social, governance)
+
+MÍSTA (Places/Venues):
+- AccessibilityFeatures (jsonb)
+- OpeningHoursJson (jsonb: {mon: "9-17", ...})
+- ReviewsAggregate (numeric: avg rating, count)
+
+MEDIA (Films/Shows/Music):
+- CastJson (jsonb: [{personGuid, role, billingOrder}, ...])
+- StreamingPlatforms (jsonb: kde je dostupné)
+- BoxOfficeData (numeric: budget, gross)
+
+Postup:
+1. Najít data ve zdroji
+2. Zkontrolovat tabulka/sloupec existuje
+3. Pokud ne → Dynamic Table/Column Discovery
+4. ImportantScore v {AgentName}.txt: výchozí 40–60
+5. Log: "🏷️ Domain-specific: {field} přidán do {tabulka}"
+6. Při příštím runu standardně zpracovávat
+
 ## Privacy and PII Governance
 
 Sensitive domains: persons, public profiles, players, employees, minors, youth athletes,
@@ -1697,6 +2034,9 @@ Strukturovaný report schéma:
   "StartedAtUtc": "", "FinishedAtUtc": "",
   "Status": "completed|partial|failed|dry_run",
   "ApplicationsUsed": [], "SkillsUsed": [],
+  "skillsNeeded": [],
+  "skillsAvailable": [],
+  "skillsMissing": [],
   "ConfirmedWrites": [], "FallbackWrites": [],
   "SkippedItems": [], "Errors": [], "Warnings": [],
   "SchemaGaps": [], "ProviderHealth": [],
