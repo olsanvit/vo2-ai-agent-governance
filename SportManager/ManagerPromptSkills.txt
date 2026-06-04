@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 8.6.0
+SkillsVersion: 8.7.0
 Generated: 2026-06-02
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
