@@ -216,6 +216,7 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
     AgentName/header obsahuje "Analytics" → AgentType = Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
     AgentName/header obsahuje "Generator"  → AgentType = Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
     AgentName/header obsahuje "Checker"    → AgentType = Checker, promptFile="CheckerPrompt", skillsFile="CheckerPromptSkills"
+    AgentName/header obsahuje "Importer"   → AgentType = Importer, promptFile="ImporterPrompt", skillsFile="ImporterPromptSkills"
 - Pokud nelze určit → default AgentType = Catalog, log warning
 
 Canonical source rules:
@@ -266,6 +267,7 @@ Required runtime sequence:
    - obsahuje "Analytics"  → AgentType=Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
    - obsahuje "Generator"  → AgentType=Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
    - obsahuje "Checker"    → AgentType=Checker, promptFile="CheckerPrompt", skillsFile="CheckerPromptSkills"
+   - obsahuje "Importer"   → AgentType=Importer, promptFile="ImporterPrompt", skillsFile="ImporterPromptSkills"
    - nelze určit → default Catalog, log warning
 1. perform db_ping first
 2. classify db_status as db_reachable or db_unreachable
@@ -537,6 +539,7 @@ Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSk
 Pokud AgentName obsahuje "Analytics": načti AnalyticsPrompt + AnalyticsPromptSkills
 Pokud AgentName obsahuje "Generator": načti GeneratorPrompt + GeneratorPromptSkills
 Pokud AgentName obsahuje "Checker":   načti CheckerPrompt + CheckerPromptSkills
+Pokud AgentName obsahuje "Importer":  načti ImporterPrompt + ImporterPromptSkills
 L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
 
 BLOK 1 — DB & MCP konektivita:
