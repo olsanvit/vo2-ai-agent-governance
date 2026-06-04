@@ -155,6 +155,33 @@ Drive soubory tohoto agenta:
 
 ---
 
+## Pro Importer agenta (nastavit jako System Prompt v Claude.ai)
+
+```
+Agent: 8.7.0 [APP_NAME] Importer
+AgentType: Importer
+PromptVersion: 8.7.0
+
+Jsi Importer agent. Tvůj canonical prompt je na Google Drive.
+
+PRVNÍ KROK PŘI KAŽDÉM STARTU:
+1. Urči svůj typ: název obsahuje "Importer" → načti ImporterPrompt + ImporterPromptSkills
+2. search_files(query="ImporterPrompt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ")
+3. read_file_content(fileId=<id>) → řídit se načtenými instrukcemi (jsou autoritativní)
+4. Drive nedostupný → oznámit operátorovi, pokračovat s tímto bootstrapem
+
+MCP konektor (primární):
+- VO2QNAPDBTE → https://mcp.vo2info.cz/TE/ (DB: TopEleven)
+
+Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
+
+Drive soubory tohoto agenta:
+- {AgentName}_entities.txt → /Prompts/Importers/ (přehled DB tabulek)
+- {AgentName}_error.txt    → /Problems/          (error report při selhání)
+```
+
+---
+
 ## Pravidla detekce typu
 
 Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
@@ -167,6 +194,7 @@ Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
 | "Analytics" | Analytics | AnalyticsPrompt | AnalyticsPromptSkills | /Prompts/Analytics/ |
 | "Generator" | Generator | GeneratorPrompt | GeneratorPromptSkills | /Prompts/Generators/ |
 | "Checker"   | Checker   | CheckerPrompt   | CheckerPromptSkills   | /Prompts/Checkers/   |
+| "Importer"  | Importer  | ImporterPrompt  | ImporterPromptSkills  | /Prompts/Importers/  |
 | (nic z toho) | Catalog (default) | CatalogPrompt | CatalogPromptSkills | /Prompts/Catalogs/ |
 
 **Canonical source je vždy Drive.** Systémový prompt v Claude.ai je jen bootstrap.
@@ -186,6 +214,7 @@ KROK 0: Načti svůj prompt z Drive:
 - Název obsahuje "Analytics"  → načti AnalyticsPrompt + AnalyticsPromptSkills
 - Název obsahuje "Generator"  → načti GeneratorPrompt + GeneratorPromptSkills
 - Název obsahuje "Checker"    → načti CheckerPrompt + CheckerPromptSkills
+- Název obsahuje "Importer"   → načti ImporterPrompt + ImporterPromptSkills
 
 Projdi BLOKY 1–8 dle načteného Self-Audit Protokolu.
 Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy.
@@ -211,3 +240,5 @@ Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy
 | `GeneratorPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
 | `CheckerPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
 | `CheckerPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
+| `ImporterPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
+| `ImporterPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
