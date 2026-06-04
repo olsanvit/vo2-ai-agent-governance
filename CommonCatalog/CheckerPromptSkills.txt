@@ -1,0 +1,179 @@
+SkillsFor: CheckerPrompt
+SkillsVersion: 8.7.0
+Generated: 2026-06-04
+
+Skills jsou konfigurovány per agent v Claude.ai.
+Každý Checker agent musí mít aktivních ASPOŇ 8 skills.
+Povinné: database-table-audit, table-freshness-report.
+
+!! MAINTENANCE: Při úpravě zkontrolovat konzistenci s CatalogPrompt/ManagerPrompt skills.
+
+=============================================================
+PRAVIDLA POUŽITÍ SKILLS
+=============================================================
+
+- pokud skill pokrývá úkol: použít skill, má přednost před obecným workflow
+- pokud skill odporuje canonical governance: canonical governance má přednost
+- nikdy netvrdit, že skill existuje pokud není dostupný
+- uvést SkillsUsed[] v run reportu
+- skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití
+
+=============================================================
+SKILL DIRECTORY (16 skills)
+=============================================================
+
+-- A. AUDIT CORE (2 — POVINNÉ) --------------------------------
+
+## database-table-audit
+Task types: audit databáze, seznam tabulek, počty řádků, metadata
+Description: Hlavní audit skill. Ověří dostupnost DB, načte seznam všech tabulek
+  v public schema, pro každou tabulku zjistí počet řádků, datum poslední aktualizace
+  (MAX(UpdatedAt) nebo MAX(CreatedAt) jako fallback) a seznam sloupců.
+  Vrátí strukturovaný přehled pro další zpracování.
+Inputs: DB připojení, volitelně: seznam konkrétních tabulek nebo schema filtr
+Outputs: seznam tabulek s {name, rowCount, lastUpdated, columns[], available}
+Limitations: MAX(UpdatedAt) není dostupný pokud tabulka sloupec nemá; fallback na CreatedAt;
+  pokud ani to → lastUpdated="nedostupné"
+
+## table-freshness-report
+Task types: freshness analýza, kategorizace, finální report
+Description: Vyhodnotí stáří dat pro každou tabulku dle kategorií z CheckerPrompt Ch 4.
+  Přiřadí kategorii (V pořádku / Mírné zpoždění / Pozor / Varování / Problém),
+  připraví krátké vysvětlení pro každou tabulku.
+  Sestaví finální report ve formátu z CheckerPrompt Ch 6.
+Inputs: výstup z database-table-audit, aktuální čas, volitelná konfigurace intervalů
+Outputs: kompletní report (Souhrn + Detail tabulek + Bezpečnostní potvrzení)
+Limitations: výchozí interval = 1 den; přesnější intervaly jen pokud jsou explicitně known
+
+-- B. BASEGUID COMPLIANCE (3) ----------------------------------
+
+## baseguid-compliance-checker
+Task types: BaseGuid standard, kontrola povinných sloupců
+Description: Pro každou tabulku ověří přítomnost všech 5 BaseGuid sloupců:
+  Guid (uuid), CreatedAt (timestamptz), UpdatedAt (timestamptz), Emoji (text), Colors (text).
+  Hlásí chybějící sloupce per tabulka. Určí celkový compliance % napříč DB.
+Inputs: seznam tabulek se sloupci (z database-table-audit)
+Outputs: per-table compliance report {tableName, compliant, missingColumns[]}
+Limitations: pouze přítomnost sloupců; neověřuje správnost datových typů automaticky
+
+## safe-schema-patcher
+Task types: bezpečné přidání chybějících BaseGuid sloupců
+Description: Přidá chybějící BaseGuid sloupce bezpečnou aditivní ALTER TABLE operací.
+  Podmínky: dostupný schema nástroj, čistě aditivní změna, tabulka existuje.
+  Výchozí hodnoty: Guid→gen_random_uuid(), CreatedAt/UpdatedAt→now(), Emoji/Colors→''.
+  NIKDY neodstraňuje existující sloupce, nemění datové typy, nepřejmenovává Id.
+Inputs: tabulka, seznam chybějících sloupců, konfirmace od uživatele nebo explicit_safe_patch=true
+Outputs: přidané sloupce[], schema_gap pokud nelze provést
+Limitations: vyžaduje confirm pokud uživatel výslovně nepožádal; odmítne jakoukoliv destruktivní operaci
+
+## schema-gap-reporter
+Task types: schema gap, hlášení nesplnitelných oprav
+Description: Zaznamenává tabulky kde BaseGuid sloupce chybí a doplnění nebylo možné
+  (nástroj nedostupný, riziko destrukce, uživatel nepožádal).
+  Generuje jasné schema_gap záznamy do reportu.
+Inputs: seznam tabulek s compliance výsledky, výsledky safe-schema-patcher
+Outputs: seznam schema_gap záznamů {tableName, missingColumns[], reason}
+Limitations: pouze reportovací skill; neprovádí žádné DB operace
+
+-- C. ANALYSIS (3) ---------------------------------------------
+
+## db-null-audit
+Task types: NULL analýza, datová kvalita, prioritizace
+Description: Skenuje tabulky a reportuje NULL hodnoty per klíčový sloupec.
+  Prioritizuje sloupce: Guid, UpdatedAt, CreatedAt (kritické), pak ostatní.
+Inputs: seznam tabulek nebo ALL
+Outputs: NULL audit report (tabulka, sloupec, NULL ratio, priority rank)
+Limitations: max 200 tabulek na run; aproximativní NULL count
+
+## cross-db-consistency-checker
+Task types: konzistence přes více DB, entity existence check
+Description: Ověří konzistenci entit přes více MCP připojení.
+  Typický případ: entita odkazovaná v VO2QNAPDBAI existuje v VO2QNAPDBUSM?
+  Vrátí seznam broken references.
+Inputs: zdrojová DB, cílová DB, tabulky k porovnání, join key
+Outputs: broken references[], orphan records[], consistency score
+Limitations: pouze pro přímé FK/reference; neprovádí deep-merge
+
+## row-count-anomaly-detector
+Task types: anomálie v počtech řádků, neočekávaný pokles/nárůst
+Description: Porovná aktuální počty řádků s historickými hodnotami z AgentRunReports.
+  Upozorní na neočekávané poklesy (možná nechtěné mazání) nebo velké nárůsty.
+  Threshold: pokles > 5% nebo nárůst > 200% oproti poslednímu auditu.
+Inputs: aktuální rowCounts, historické runReports
+Outputs: anomálie[], normální tabulky[]
+Limitations: min 2 předchozí audity pro smysluplné porovnání
+
+-- D. RUN ORCHESTRATION (3) ------------------------------------
+
+## audit-run-orchestrator
+Task types: orchestrace celého auditu, time budget, phase management
+Description: Orchestruje celý audit run: db-audit → baseguid-check → schema-patch →
+  freshness-report → suggestions. Sleduje time budget (default 10 min).
+Inputs: target DB, time budget, runMode (full/quick/schema-only)
+Outputs: ordered execution plan, phase results, celkový čas
+Limitations: quick mode přeskočí anomaly detection a cross-db check
+
+## agent-schedule-manager
+Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Description: Spravuje tabulku AgentSchedules pro Checker agenty.
+  Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
+  Na startu: load přehled a detekovat konflikty ±15 min.
+Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Checker"
+Outputs: upsert do AgentSchedules, přehled agentů
+Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
+
+## dry-run-mode-controller
+Task types: DryRun mode, testovací běh bez DB zápisů
+Description: Řídí DryRun mód. Blokuje INSERT/UPDATE/DELETE včetně schema oprav.
+  Simuluje výstupy s "[DRY_RUN]" prefixem. Povoluje DB čtení.
+  V DryRun: schema patch = pouze nahlásit co by bylo přidáno.
+Inputs: RunMode: dry_run nebo dry_run=true
+Outputs: simulované výstupy, run report s IsDryRun=true
+Limitations: Calendar eventy NEVYTVÁŘÍ; schema změny NEPROVÁDÍ
+
+-- E. REPORTING & NOTIFICATIONS (3) ----------------------------
+
+## audit-run-report-formatter
+Task types: finální run report, formátování pro AgentRunReports
+Description: Generuje strukturovaný run report: tablesAudited, tablesByStatus,
+  baseGuidCompliant, schemaGapsFound, columnsPatched, suggestions, errors.
+Inputs: raw audit data
+Outputs: formátovaný report pro upsert_record("AgentRunReports",...)
+Limitations: report musí být uložen i při selhání
+
+## ntfy-notification-sender
+Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts
+Description: Odesílá markdown-formátované notifikace na ntfy.vo2info.cz.
+  Checker-specific: audit summary, problem tables, schema gaps.
+  Max 3 notifikace per run.
+Inputs: kanál, zpráva, priority, tags
+Outputs: notifikace odeslána
+Limitations: max 3/run
+
+## problem-report-writer
+Task types: problem report, Drive zápis při selhání
+Description: Zapíše {AgentName}_error.txt do Drive Problems složky
+  pokud audit selhal nebo self-audit našel chyby.
+Inputs: AgentName, errors[] s ProblemScore, stav ntfy/DB kroků
+Outputs: {AgentName}_error.txt v Problems složce
+Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
+
+-- F. SUGGESTIONS (2) ------------------------------------------
+
+## new-entity-suggester
+Task types: návrhy nových tabulek, entity discovery, katalog doporučení
+Description: Na základě aktuální struktury DB navrhne 10 nových tabulek.
+  Pro každou entitu určí primárního agenta/katalog dle obsahu (ne dle jména).
+  Pokud je zařazení hraniční, uvede 1–2 sekundární alternativy.
+  Nenavrhuje duplikáty existujících tabulek.
+Inputs: seznam existujících tabulek, DB kontext (typ aplikace)
+Outputs: 10 návrhů {name, description, primaryAgent, secondaryAgents[]}
+Limitations: návrhy jsou doporučení, ne závazné instrukce; agent nenavrhuje entity mimo doménu DB
+
+## audit-log-writer
+Task types: AuditLog, change tracking pro schema opravy
+Description: Zapisuje strukturované záznamy do AuditLog pro každou schema operaci.
+  Každý záznam: actor, action (ADD_COLUMN), tableName, columnName, timestamp.
+Inputs: action type, tableName, columnName, before/after
+Outputs: AuditLog záznam
+Limitations: loguje pouze schema změny; neloguje SELECT operace
