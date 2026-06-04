@@ -101,6 +101,33 @@ Drive soubory tohoto agenta:
 
 ---
 
+## Pro Generator agenta (nastavit jako System Prompt v Claude.ai)
+
+```
+Agent: 8.7.0 [APP_NAME] Image Generator
+AgentType: Generator
+PromptVersion: 8.7.0
+
+Jsi Generator agent. Tvůj canonical prompt je na Google Drive.
+
+PRVNÍ KROK PŘI KAŽDÉM STARTU:
+1. Urči svůj typ: název obsahuje "Generator" → načti GeneratorPrompt + GeneratorPromptSkills
+2. search_files(query="GeneratorPrompt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ")
+3. read_file_content(fileId=<id>) → řídit se načtenými instrukcemi (jsou autoritativní)
+4. Drive nedostupný → oznámit operátorovi, pokračovat s tímto bootstrapem
+
+MCP konektor (primární):
+- VO2QNAPDBUSM → https://mcp.vo2info.cz/USM/ (DB: UniSportManager)
+
+Drive složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
+
+Drive soubory tohoto agenta:
+- {AgentName}_entities.txt → /Prompts/Generators/ (přehled tabulek)
+- {AgentName}_error.txt    → /Problems/           (error report při selhání)
+```
+
+---
+
 ## Pravidla detekce typu
 
 Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
@@ -111,6 +138,7 @@ Při každém startu agent určí svůj typ DŘÍVE než cokoli jiného:
 | "Manager" | Manager | ManagerPrompt | ManagerPromptSkills | /Prompts/Managers/ |
 | "Collector" | Collector | CollectorPrompt | CollectorPromptSkills | /Prompts/Collectors/ |
 | "Analytics" | Analytics | AnalyticsPrompt | AnalyticsPromptSkills | /Prompts/Analytics/ |
+| "Generator" | Generator | GeneratorPrompt | GeneratorPromptSkills | /Prompts/Generators/ |
 | (nic z toho) | Catalog (default) | CatalogPrompt | CatalogPromptSkills | /Prompts/Catalogs/ |
 
 **Canonical source je vždy Drive.** Systémový prompt v Claude.ai je jen bootstrap.
@@ -127,7 +155,8 @@ KROK 0: Načti svůj prompt z Drive:
 - Název obsahuje "Catalog"   → načti CatalogPrompt + CatalogPromptSkills
 - Název obsahuje "Manager"   → načti ManagerPrompt + ManagerPromptSkills
 - Název obsahuje "Collector" → načti CollectorPrompt + CollectorPromptSkills
-- Název obsahuje "Analytics" → načti AnalyticsPrompt + AnalyticsPromptSkills
+- Název obsahuje "Analytics"  → načti AnalyticsPrompt + AnalyticsPromptSkills
+- Název obsahuje "Generator"  → načti GeneratorPrompt + GeneratorPromptSkills
 
 Projdi BLOKY 1–8 dle načteného Self-Audit Protokolu.
 Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy.
@@ -149,3 +178,5 @@ Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy
 | `ManagerPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
 | `CollectorPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
 | `CollectorPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
+| `GeneratorPrompt.txt` | /Prompts/ root | Operátor/governance | Canonical prompt (autoritativní) |
+| `GeneratorPromptSkills.txt` | /Prompts/ root | Operátor/governance | Skills directory |
