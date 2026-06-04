@@ -152,7 +152,18 @@ Agent musi preferovat:
 - Pokud Alias neni vyplnen, lookup_name = SportName
 - Pokud Alias je vyplnen, lookup_name = Alias
 - Sport vyhledej v tabulce Sports podle lookup_name
-- Pokud sport neexistuje, zaznamenej chybu do reportu a nepokracuj v DB zapisu
+- Pokud sport NEEXISTUJE v tabulce Sports:
+  1. Zkontroluj zda tabulka Sports existuje (run_select_sql na information_schema.tables)
+  2. Pokud tabulka neexistuje: ensure_table("Sports") → pak pokračuj na bod 3
+  3. Vytvoř záznam sportu:
+     upsert_record("Sports", {NormalizedName: normalize(lookup_name)}, {
+       Name: lookup_name, NormalizedName: normalize(lookup_name),
+       Discriminator: "{SportName}", IsActive: true,
+       ConfidenceScore: 85, SourceName: "agent_bootstrap"
+     })
+  4. Log: "🆕 Sport vytvořen: {SportName} (agent bootstrap)"
+  5. Pokračuj normálně s nově vytvořeným SportGuid
+  L tabulka Sports nelze vytvořit → STOP, blocker "sport_table_unavailable"
 
 ## Match Collection Scope -- KRITICKE PRAVIDLO
 
@@ -259,7 +270,14 @@ Povinné kroky v tomto pořadí:
       + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
 12. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Managers" → uložit CALENDAR_ID
-    L calendar nedostupný nebo nenalezen: log capability_missing("ai_managers_calendar_id"), přeskočit — NEBLOKUJ
+    Postup:
+    a) list_calendars() → hledat kalendář s názvem obsahujícím "AI Managers"
+    b) Pokud nenalezen: zkusit hledat "AI" nebo "Managers" zvlášť
+    c) Pokud stále nenalezen: log capability_missing("ai_managers_calendar_id")
+       → přeskočit VŠECHNY calendar operace v tomto runu — NEBLOKUJ
+    d) CALENDAR_ID uložit jako proměnnou pro celý run
+    L list_calendars() selže: log capability_missing("calendar_api"), přeskočit tiše
+    DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Managers" jako calendar_id parametr přímo
 13. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
 
 Povinne reportovane stavy (oddelene):
@@ -771,6 +789,14 @@ Postup:
    Pokud soubor neexistuje: create_file(title="{AgentName}.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
+
+Pokud Drive folder není dostupný nebo nelze potvrdit parentId:
+- Zkus search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+- Pokud search_files selže → pokusit se create_file bez ověření existence
+- Pokud create_file selže → log capability_missing("problem_report_drive")
+  → uložit problem report do run reportu (AgentRunReports.Metadata jako fallback)
+  → pokračovat k finálnímu reportu operátorovi
+L Drive API nedostupné: fallback = uložit do AgentRunReports.Metadata + ntfy zpráva s plným obsahem reportu
 
 Priorita:
 - Problem report Drive zápis se NEBLOKUJE run ani report — jen best-effort
@@ -2606,8 +2632,44 @@ Povinné sloupce: Guid, EntityGuid, EntityType, ImageGuid, ImageType, IsCurrent,
 ValidFrom, ValidTo, SortOrder, AltText, Caption, SourceName, SourceUrl, VerifiedAt, DataQualityNote,
 Metadata, CreatedAt, UpdatedAt, Emoji, Colors + všechny scoring sloupce
 
-ImageType hodnoty: logo | flag | badge | crest | cover | portrait | icon | symbol |
-map | product | vehicle | venue | screenshot | ui | artwork
+ImageType hodnoty:
+  logo          — aktuální primární logo entity
+  logo_dark     — tmavá varianta loga (pro světlé pozadí)
+  logo_light    — světlá varianta loga (pro tmavé pozadí)
+  logo_icon     — čtvercová/ikona varianta loga
+  crest         — tradiční heraldický znak (fotbalové kluby)
+  flag          — vlajka (národní tým, stát, region)
+  coat_of_arms  — erb/heraldický znak (města, kraje, historické entity)
+  kit           — dres/uniforma (domácí)
+  kit_away      — dres/uniforma (hostující)
+  kit_third     — dres/uniforma (třetí varianta)
+  kit_goalkeeper — brankářský dres
+  trophy        — pohár/trofej soutěže
+  mascot        — maskot týmu nebo soutěže
+  banner        — banner/propagační grafika
+  badge         — odznak, pin, patch
+  cover         — cover/header obrázek
+  portrait      — portrét osoby (hráč, trenér)
+  avatar        — profilová fotka
+  thumbnail     — malý náhled
+  venue         — fotka stadionu/hřiště/arény
+  map           — mapa (region, hřiště, komplex)
+  product       — produkt (merchandise)
+  vehicle       — vozidlo (F1, cycling)
+  screenshot    — screenshot
+  artwork       — umělecká grafika, ilustrace
+  season_art    — grafika pro konkrétní sezónu soutěže
+  symbol        — symbol, piktogram
+  ui            — UI element, ikona aplikace
+
+Priorita sběru ImageType per entita:
+Teams:       logo → crest → flag → kit → kit_away → trophy → mascot
+Competitions:logo → trophy → season_art → banner
+Seasons:     season_art → trophy
+Players:     portrait → avatar
+Coaches:     portrait → avatar
+Venues:      venue → map
+Countries:   flag → coat_of_arms
 
 Tier 1 (ukládej prioritně): loga, vlajky, badges, cresty, portréty (hráči, trenéři), venue photos
 Tier 2 (ukládej selektivně): mapy, produkty, screenshoty, artworky
@@ -2827,6 +2889,36 @@ Pravidla:
 CHAPTER 16: NOTIFICATIONS & CALENDAR
 =============================================================
 
+## Ntfy Markdown Formátování
+
+server.js send_notification podporuje markdown=true (default).
+Agenti MUSÍ formátovat zprávy jako markdown pro hezké zobrazení v ntfy apce.
+
+Formát správné zprávy:
+```
+**🚨 DB nedostupná** | Agent: {AgentName}
+---
+⏰ Čas: 2026-06-04 10:10 Prague
+🔴 Status: `db_unreachable`
+💬 Důvod: database system is in recovery mode
+🔄 Retries: 3× (2s/4s/8s) — všechny selhaly
+
+**Doporučená akce:** Zkontrolovat PostgreSQL na QNAP
+```
+
+Špatný formát (nepoužívat):
+- Dlouhý nestrukturovaný text bez řádkování
+- JSON-like syntax ve zprávě
+- Název agenta opakovat v titulu i zprávě zbytečně
+
+Pravidla formátování:
+- **tučně** = klíčové hodnoty a nadpisy
+- `code` = stavy, chybové kódy, verze
+- --- = oddělovač sekcí
+- Emoji na začátku každé řádky pro rychlou vizuální identifikaci
+- Maximálně 8 řádků v message (jinak zkrátit)
+- title: max 60 znaků
+
 ## Ntfy Topics — přesná struktura zpráv
 
 📊 agent-runs — výsledky runů
@@ -2883,24 +2975,38 @@ Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 POVINNE notifikace:
 
 1. Konec scheduled runu (topic: agent-runs)
-   Uspech:
-   - title: "{AgentName} OK {matchday}. kolo dokonceno"
-   - message: "{matchCount} zapasu / {eventsInserted} udalosti / {statsUpdated} stats\n{topHighlight}\n{durationMs}ms"
-   - priority: "default"
-   - tags: ["white_check_mark", "soccer"] (nebo sport-specificke)
+   Úspěch:
+   - title: "✅ {AgentName} — run OK"
+   - message: |
+     **✅ Scheduled run dokončen**
+     ---
+     ⚽ Sport: {SportName} | 📅 {datum}
+     📊 Zápasy: {matchCount} | 🎯 Events: {eventsInserted}
+     ⏱️ Trvání: {durationMs}ms | 📋 Verze: {PromptVersion}
+   - priority: "default", tags: ["white_check_mark", sport-emoji]
 
-   Selhani:
-   - title: "{AgentName} run selhal -- {matchday}. kolo"
-   - message: "Bloker: {blockerCategory}\n{zpracovano}/{celkem} zapasu OK\n{primaryError}"
-   - priority: "high"
-   - tags: ["warning"]
+   Selhání:
+   - title: "⚠️ {AgentName} — run selhal"
+   - message: |
+     **⚠️ Scheduled run selhal**
+     ---
+     🔴 Blokér: `{blockerCategory}`
+     💬 Chyba: {primaryError}
+     📊 Zpracováno: {processed}/{total} zápasů
+     **Doporučená akce:** {actionNeeded}
+   - priority: "high", tags: ["warning", sport-emoji]
 
-2. Kriticka chyba (topic: agent-errors)
-   Kdy: db_unreachable, run zastaven, critical_baseline_empty
-   - title: "{AgentName} {errorType}"
-   - message: "{errorDescription}"
-   - priority: "urgent"
-   - tags: ["rotating_light"]
+2. Kritický blokér (topic: agent-errors)
+   - title: "🚨 {AgentName} — kritická chyba"
+   - message: |
+     **🚨 Kritická chyba — run zastaven**
+     ---
+     🔴 Typ: `{errorType}`
+     💬 Důvod: {errorDescription}
+     🗄️ DB: `{dbStatus}` | 📋 Prompt: `{promptStatus}`
+
+     **Doporučená akce:** {specificAction}
+   - priority: "urgent", tags: ["rotating_light", sport-emoji]
 
 DOPORUCENE notifikace:
 
