@@ -214,6 +214,7 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
     AgentName/header obsahuje "Manager"   → AgentType = Manager
     AgentName/header obsahuje "Collector" → AgentType = Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
     AgentName/header obsahuje "Analytics" → AgentType = Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
+    AgentName/header obsahuje "Generator"  → AgentType = Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
 - Pokud nelze určit → default AgentType = Catalog, log warning
 
 Canonical source rules:
@@ -261,7 +262,8 @@ Required runtime sequence:
    - obsahuje "Catalog"   → AgentType=Catalog, promptFile="CatalogPrompt", skillsFile="CatalogPromptSkills"
    - obsahuje "Manager"   → AgentType=Manager, promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills"
    - obsahuje "Collector" → AgentType=Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
-   - obsahuje "Analytics" → AgentType=Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
+   - obsahuje "Analytics"  → AgentType=Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
+   - obsahuje "Generator"  → AgentType=Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
    - nelze určit → default Catalog, log warning
 1. perform db_ping first
 2. classify db_status as db_reachable or db_unreachable
@@ -531,6 +533,7 @@ Pokud AgentName obsahuje "Catalog": načti CatalogPrompt + CatalogPromptSkills
 Pokud AgentName obsahuje "Manager": načti ManagerPrompt + ManagerPromptSkills
 Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSkills
 Pokud AgentName obsahuje "Analytics": načti AnalyticsPrompt + AnalyticsPromptSkills
+Pokud AgentName obsahuje "Generator": načti GeneratorPrompt + GeneratorPromptSkills
 L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
 
 BLOK 1 — DB & MCP konektivita:
