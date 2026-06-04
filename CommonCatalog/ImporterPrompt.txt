@@ -12,7 +12,8 @@ ROLE: Obecný governance prompt pro importer agenty.
       strukturu podadresářů, typy dat) čte z bootstrap promptu a Drive config souborů.
 
 -----------------------------------------------------------
-KONFIGURACE (čte agent při startu z bootstrap promptu):
+KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
+              v /Prompts/Importers/):
 -----------------------------------------------------------
 TargetDB:         {MCP konektor}              — do které DB ukládat
 TargetTable:      {název tabulky}             — do které tabulky ukládat
