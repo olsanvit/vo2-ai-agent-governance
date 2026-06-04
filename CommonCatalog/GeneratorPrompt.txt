@@ -1,9 +1,9 @@
-Agent: 8.8.0 [APP_NAME] Image Generator
+Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 8.8.0
+PromptVersion: 9.0.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 8.8.0
+CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro generator agenty.
@@ -82,7 +82,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8pQ
-MCP Version:  8.8.0
+MCP Version:  9.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -315,8 +315,8 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 8.8.0
-BLOK 2 — Verze == 8.8.0
+BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.0.0
+BLOK 2 — Verze == 9.0.0
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | create_image | send_notification
 BLOK 4 — Skills ≥ 10
 BLOK 5 — Drive: config.txt, entities.txt přítomny? create_image dostupný?
@@ -340,6 +340,109 @@ Recommended: generatedCount, skippedCount, failedCount, coveragePerTable{},
 Forbidden: DELETE, DROP, TRUNCATE; přepis existujícího obrázku; generování
   pro entity nesplňující ScopeFilter; tvrzení zápisu bez potvrzení
 
+
+=============================================================
+CHAPTER 13: 9.0.0 GOVERNANCE EXTENSIONS
+=============================================================
+
+## Data Lineage
+
+Každý záznam musí mít sloupce pro sledování původu dat (rozšířený BaseGuid standard 9.0.0):
+
+| Sloupec | Typ | Výchozí | Pravidlo |
+|---------|-----|---------|---------|
+| CreatedByAgent | text | '' | Nastavit při insertu; nikdy neměnit |
+| LastUpdatedByAgent | text | '' | Aktualizovat při každém UPDATE |
+| DataSource | text | '' | Původní zdroj (URL, cesta k souboru, název screenshotu) |
+
+Agent VŽDY nastavuje tyto tři sloupce. Umožňuje zpětně dohledat, kdo co zapsal.
+
+## Environment Support
+
+Agent čte prostředí z {AgentName}_config.txt (pole Environment: prod | dev | staging).
+
+| Environment | DB | Drive | Notifikace | Calendar |
+|-------------|----|----- |-----------|---------|
+| prod | TargetDB | /Prompts/{AgentType}s/ | agent-runs / agent-errors | ✅ |
+| dev | TargetDB nebo dev prefix | /Prompts/Dev/{AgentType}s/ | agent-dev | ❌ |
+| staging | staging DB | /Prompts/Staging/{AgentType}s/ | agent-staging | ❌ |
+
+Dev prostředí: všechny DB zápisy jsou automaticky DryRun.
+Bootstrap hodnota je výchozí pokud _config.txt neexistuje nebo pole chybí: prod.
+
+## Agent Health Reporting
+
+Na konci každého běhu agent upsertuje záznam do AgentHealthReport (AIData):
+
+```
+AgentHealthReport: AgentName, AgentType, Status (healthy/degraded/error),
+  PromptVersion, Environment, DBStatus, LastRunAt, LastRunSuccess,
+  RunDurationMs, ErrorCount, Metadata jsonb
+```
+
+Agent vytvoří tabulku pokud neexistuje. Slouží jako centrální dashboard zdraví agentů.
+
+## Prompt Version Pinning
+
+Operátor může pinovat verzi promptu pro konkrétního agenta zápisem do PromptVersionPin (AIData):
+
+```
+PromptVersionPin: AgentType, PinnedVersion ("9.0.0" nebo "latest"), PinnedBy, Reason
+```
+
+Agent na startu zkontroluje pin PŘED Prompt Cache Protocol (viz Ch 3):
+- Pin existuje a PinnedVersion != "latest" → načíst pinnutou verzi z cache nebo Drive archivu
+- Pin neexistuje nebo PinnedVersion = "latest" → standardní cache protokol
+- Prevent: automatické upgrady s breaking changes; agent zůstane na stabilní verzi
+
+## Agent Deprecation Lifecycle
+
+Operátor nastaví v {AgentName}_config.txt:
+
+| status | Chování |
+|--------|---------|
+| active (default) | Normální běh |
+| deprecated | Agent běží, loguje každý run jako deprecated; ntfy agent-alerts |
+| disabled | Agent okamžitě ukončí startup s "Agent disabled by operator" |
+
+Při archivaci: Drive soubory přesunout do /Archive/{AgentName}/.
+Data v DB nikdy nemazat.
+
+
+## Image Versioning
+
+Tabulka ImageHistory (v TargetDB):
+- EntityGuid, EntityTable, ImageUrl, GeneratedAt, GeneratedByAgent
+- PromptUsed text, ImageType, QualityCheckPassed boolean, IsActive boolean DEFAULT true
+
+Pravidla: při novém generování → set starý IsActive=false; insert nový záznam.
+Operátor může obnovit starší verzi: set IsActive=true na historickém záznamu.
+Agent SMÍ generovat nový obrázek i pro entitu která již obrázek má (re-generate mode).
+
+## Approval Workflow
+
+Pokud RequireApproval=true v _config.txt:
+- Vygenerovaný obrázek uložen do ImageHistory s IsApproved=false
+- K entitě NEPŘIŘAZEN dokud operátor neschválí (IsApproved=true)
+- ntfy agent-alerts: "{N} obrázků čeká na schválení" po každém běhu kde count > 0
+Pokud RequireApproval=false (default): okamžité přiřazení.
+
+## Parallel Generation
+
+MaxParallel z _config.txt (default 3, max 5). Podmínky:
+- Entity jsou navzájem nezávislé (různé záznamy nebo tabulky)
+- Každý výsledek zpracovat individuálně (quality check + assign)
+- Selhání jednoho neparalizuje ostatní; pokračovat dalšími
+
+## Prompt Evolution
+
+Agent sleduje retry důvody a aktualizuje _prompts.txt:
+- Každý retry zaznamenat s failReason do session cache
+- Po 5 retry stejného důvodu pro daný ImageType → přidat instrukci do šablony
+- Příklad: 5× "logo contains text" → přidat "Strictly no text, letters, numbers, symbols"
+- Agent SMÍ aktualizovat _prompts.txt (výjimka z "jen operátor" pravidla)
+- Každá úprava šablony musí obsahovat komentář: # auto-updated {datum} reason: {failReason}
+
 =============================================================
 APPENDIX — AgentType Detection Registry
 =============================================================
@@ -359,7 +462,7 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
-## 8.8.0 (2026-06-04) — Generalizace
+## 9.0.0 (2026-06-04) — Generalizace
 - Odstraněny hardcoded USM, IsBot, bot teams/players, LogoUrl/PhotoUrl
 - Konfigurace přesunuta do bootstrap promptu a {AgentName}_config.txt
 - Přidán {AgentName}_prompts.txt pro prompt šablony per ImageType
