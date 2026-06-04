@@ -1,11 +1,11 @@
-Agent: 8.7.0 [SPORT_NAME] Data Manager
+Agent: 8.8.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 8.7.0
+PromptVersion: 8.8.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.7.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 8.8.0
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -204,7 +204,7 @@ Agent nesmi:
 CHAPTER 3: STARTUP PROTOCOL
 =============================================================
 
-## Simplified Startup Sequence 8.7.0
+## Simplified Startup Sequence 8.8.0
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -262,7 +262,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.7.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (8.8.0)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -600,7 +600,7 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol -- 8.7.0
+## Self-Audit Protocol -- 8.8.0
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -613,14 +613,14 @@ Pokud AgentName obsahuje "Analytics": načti AnalyticsPrompt + AnalyticsPromptSk
 L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
 
 BLOK 1 -- DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.7.0
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 8.8.0
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 8.7.0
-2b. MCP_VERSION z db_ping == 8.7.0
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 8.7.0
+2a. PromptVersion tohoto promptu == 8.8.0
+2b. MCP_VERSION z db_ping == 8.8.0
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 8.8.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 14 kritických):
@@ -629,12 +629,12 @@ ensure_table | find_records | send_notification | save_image_url | save_image_ba
 list_entity_images | rate_limit_guard | schema_report | score_breakdown_report
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 8.7.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 8.8.0 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 8.7.0
+4a. SkillsVersion načteného souboru == 8.8.0
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -667,7 +667,7 @@ BLOK 7 -- DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 8.7.0?
+    → poslední runy mají promptVersion 8.8.0?
 
 BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -691,7 +691,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 8.7.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
+          message="Verze: 8.8.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -2911,7 +2911,7 @@ Logo discovery pravidla:
 - Historická loga hledat v: Wikipedia Commons, klubové archivy, Wikidata
 - ConfidenceScore historického loga: min 60 pokud zdroj uveden
 
-## Historical Visual Asset Collection Protocol — 8.7.0
+## Historical Visual Asset Collection Protocol — 8.8.0
 
 Cíl: sbírat VŠECHNY historické verze vizuálních assetů (loga, cresty, vlajky, dresy).
 Každá verze má: ImageType + ValidFrom + ValidTo + from/to v Metadata.
@@ -3157,7 +3157,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 8.7.0
+           Duration: Xs | Tables: N | Verze: 8.8.0
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3345,7 +3345,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 8.7.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 8.8.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -3511,10 +3511,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 8.7.0
-SchemaVersion: 8.7.0
-RuntimeSafetyVersion: 8.7.0
-PromptVersion: 8.7.0
+GovernanceVersion: 8.8.0
+SchemaVersion: 8.8.0
+RuntimeSafetyVersion: 8.8.0
+PromptVersion: 8.8.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -3677,7 +3677,7 @@ Pravidla:
 
 ## Changelog
 
-- 8.7.0 (2026-06-04): Historical logos, 22 notifications, team history, data lineage, batch import.
+- 8.8.0 (2026-06-04): Historical logos, 22 notifications, team history, data lineage, batch import.
   Historical Logo & Name Governance: přejmenování, reformace, sloučení týmů; sezónní loga.
   22 Notification Types: nové notifikace 14-22 (historical logo, integrity flag, transfer, coverage gap, batch upload, self-audit, cross-agent task, prompt upgrade).
   Data Lineage Tracking: SourceName/SourceUrl/SourceDate/DataOrigin/EntitySources tabulka.
@@ -3782,7 +3782,7 @@ ImportantScore priority: 20.000-30.000 (collect opportunistically)
 CHANGELOG
 =============================================================
 
-## 8.7.0 (2026-06-04)
+## 8.8.0 (2026-06-04)
 - ImageType enum rozšířen: 60+ typů (kits, symbols, season logos, historical variants)
 - Historical Visual Asset Collection Protocol (from/to metadata, sportslogos.net, kitsdb.com)
 - Image License & Trademark Governance (LicenseType, IsTrademarked, TrademarkOwner)
