@@ -237,6 +237,26 @@ Po auditu oprav vše co lze, zapiš {AgentName}_error.txt na Drive a pošli ntfy
 
 ---
 
+
+## AgentPromptCache — DB tabulka pro cache canonical promptů
+
+Tabulka v VO2QNAPDBAI (AIData). Agent ji vytvoří pokud neexistuje.
+
+```sql
+AgentPromptCache (
+  Guid        uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  AgentType   text NOT NULL,      -- "Catalog", "Manager", "Collector", ...
+  PromptFile  text NOT NULL,      -- "CatalogPrompt", "CollectorPromptSkills", ...
+  PromptVersion text NOT NULL,    -- "8.8.0"
+  Content     text NOT NULL,      -- plný obsah souboru
+  CachedAt    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(AgentType, PromptFile)
+)
+```
+
+Při startu agent porovná PromptVersion z cache s hlavičkou souboru na Drive.
+Stáhne plný soubor jen při neshodě nebo chybějící cache. Drive zůstává zdrojem pravdy.
+
 ## Schéma Drive souborů
 
 | Soubor | Složka | Kdo plní | Obsah |
