@@ -20,14 +20,14 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
 2.  PROMPT VERSION -> porovnat s Google Drive + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
-4.  BASELINE CATALOG -> nacist {AgentName}.txt z Drive /Prompts/Catalogs/
+4.  BASELINE CATALOG -> nacist {AgentName}_entities.txt z Drive /Prompts/Catalogs/
     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
     L neexistuje → OKAMŽITĚ vytvořit při startu:
       a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
       b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
       c) přiřadit výchozí ImportantScore dle dostupných metadat (neznámé = 50)
-      d) create_file(title="{AgentName}.txt", parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent=<sestavený obsah>)
-      e) log: "📄 {AgentName}.txt vytvořen s {N} tabulkami"
+      d) create_file(title="{AgentName}_entities.txt", parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent=<sestavený obsah>)
+      e) log: "📄 {AgentName}_entities.txt vytvořen s {N} tabulkami"
     - Agent může soubor ROZŠIŘOVAT a AKTUALIZOVAT:
       → přidat nově objevené tabulky (ImportantScore=50 výchozí)
       → aktualizovat ImportantScore dle skutečného využití (operátor může přepsat)
@@ -121,7 +121,7 @@ SCHEDULED RUN (v tomto poradi):
 10. VIEWS REFRESH   -> CREATE OR REPLACE všechny analytické views
              L view selže → log warning do errors[], pokračovat (views nejsou blocker runu)
 11. SOURCE RELIABILITY UPDATE -> aktualizovat scores zdrojů
-12. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}.txt
+12. BASELINE CATALOG UPDATE -> Drive /Prompts/Catalogs/{AgentName}_entities.txt
              L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
 13. RUN REPORT -> upsert_record("AgentRunReports", ...) (vždy, i při selhání)
              L DB down → zaznamenat selhání v textu odpovědi, pokračovat
@@ -292,7 +292,7 @@ Required runtime sequence:
     - agent musí mít aktivních ASPOŇ 11 skills
     - pokud soubor neexistuje: přeskočit tiše, reportovat capability_missing pro všechny skills
     - pokud úkol není pokryt: navrhnout nový skill, přidat do CatalogPromptSkills.txt na Drive
-12. načíst /Prompts/Catalogs/{AgentName}.txt z Drive (folder: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+12. načíst /Prompts/Catalogs/{AgentName}_entities.txt z Drive (folder: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
     → přehled spravovaných tabulek (ImportantScore, RowCount, LastPopulated)
     - pokud soubor neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
     - použít jako výchozí přehled pro prioritizaci tabulek v běhu
@@ -353,7 +353,7 @@ Mandatory rules:
 
 ODLIŠUJ tyto dva různé případy:
 
-1. Drive soubor ({AgentName}.txt) chybí nebo je prázdný:
+1. Drive soubor ({AgentName}_entities.txt) chybí nebo je prázdný:
    → přeskočit tiše, vytvořit po prvním úspěšném runu
    → NENÍ blocker readiness
 
@@ -388,7 +388,7 @@ Co dělat při prvním runu (v tomto pořadí):
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit score sloupce (numeric(6,3)) ve všech existujících tabulkách
 4. Vytvořit prázdné Drive soubory pokud neexistují:
-   create_file(title="{AgentName}.txt",       parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent="")
+   create_file(title="{AgentName}_entities.txt",       parentId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH", textContent="")
    create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
    create_file(title="{AgentName}_urls.txt",  parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
@@ -437,7 +437,7 @@ Backfill pravidlo:
 
 Tiers jsou rozšiřitelné:
 - Agent může přidávat nové datové typy do příslušného Tieru při discovery
-- Nový Tier záznam zapsat do {AgentName}.txt a highlights[]
+- Nový Tier záznam zapsat do {AgentName}_entities.txt a highlights[]
 - Nikdy snižovat Tier existujících dat bez potvrzení operátora
 - Operátor může Tier přiřazení přepsat — agent jeho rozhodnutí respektuje
 
@@ -492,7 +492,7 @@ Zdroje informací o naplánovaném běhu (v pořadí priority):
    SELECT ScheduledRunTime, NextRunAt, IntervalHours, Timezone
    FROM AgentSchedules WHERE AgentName='{AgentName}' AND IsActive=true
 
-2. {AgentName}.txt (Drive /Prompts/Catalogs/) — záložní přehled
+2. {AgentName}_entities.txt (Drive /Prompts/Catalogs/) — záložní přehled
    Obsahuje ScheduledRunTime, IntervalHours jako metadata hlavičky souboru
 
 3. Prompt placeholder {{ScheduledRunTime}} — pouze při prvním setupu
@@ -557,14 +557,14 @@ BLOK 4 — Skills:
 L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále nelze → capability_missing("skills_file_unavailable")
 
 BLOK 5 — Drive soubory:
-5a. {AgentName}.txt v /Prompts/Catalogs/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+5a. {AgentName}_entities.txt v /Prompts/Catalogs/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
     → existuje? Formát: ImportantScore|TableName|Description|RowCount|LastPopulated
     L chybí → create_file s prázdnou šablonou (struktura dle baseline-catalog-file-manager)
 5b. {AgentName}_names.txt v /Prompts/Names/ (ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
     L chybí → create_file prázdný (OK)
 5c. {AgentName}_urls.txt v /Prompts/Urls/ (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
     L chybí → create_file prázdný (OK)
-5d. {AgentName}.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+5d. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
     → přečíst pokud existuje, ověřit aktuálnost problémů
 
 BLOK 6 — ntfy:
@@ -970,7 +970,7 @@ Postup při discovery nové tabulky:
 2. Navrhni schema: Guid PK + BaseGuid + scoring + nové sloupce + FK
 3. ensure_table s navrženým schematem
 4. Přidej FK sloupec do původní tabulky
-5. Přidej do {AgentName}.txt s ImportantScore=50
+5. Přidej do {AgentName}_entities.txt s ImportantScore=50
 6. Log: "🆕 Nová tabulka: {name} (odvozeno z {source})"
 7. Run report: newTablesCreated[]
 
@@ -1371,7 +1371,7 @@ Baseline entities = database tables, not individual records.
 
 Location:
 - Folder: /Prompts/Catalogs/ (Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
-- Filename: {AgentName}.txt (e.g. PeopleAgent.txt, SportAgent.txt)
+- Filename: {AgentName}_entities.txt (e.g. PeopleAgent.txt, SportAgent.txt)
 
 Catalog file format (PŘESNĚ tento formát — žádné narrative sekce, žádné entity záznamy):
 ```
@@ -1404,7 +1404,7 @@ LastPopulated = ISO8601 date of last run that wrote data to this table
 Lifecycle rules:
 - on startup: read catalog via read_file_content (search by title in folder 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
 - if file does not exist: create after first successful run:
-  create_file(title="{AgentName}.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=<catalog content>)
+  create_file(title="{AgentName}_entities.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=<catalog content>)
 - if file exists: update at end of every successful run:
   pokud je dostupný update_file_content: update_file_content(fileId=<id>, textContent=<updated content>)
   pokud update_file_content není dostupný: create_file s novým obsahem (starý soubor ponech — operátor smaže)
@@ -1413,7 +1413,7 @@ Lifecycle rules:
   (nová tabulka = nový řádek s ImportantScore odhadnutou dle důležitosti, RowCount z DB, LastPopulated=dnes)
 
 Catalog file read procedure:
-1. search_files(query="title = '{AgentName}.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
+1. search_files(query="title = '{AgentName}_entities.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
 2. call read_file_content(fileId=<found id>) to load current catalog
 3. parse table lines (ImportantScore | TableName | Description | RowCount | LastPopulated)
 4. compare with actual DB tables
@@ -1428,7 +1428,7 @@ Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0
 Podsložky:
 - /Prompts/Managers/      — Prompt soubory pro Manager agenty (správci domén)
 - /Prompts/Catalogs/      — Katalogové soubory entit pro jednotlivé agenty
-                            Format: {AgentName}.txt, ImportantScore|TableName|RowCount|LastPopulated
+                            Format: {AgentName}_entities.txt, ImportantScore|TableName|RowCount|LastPopulated
 - /Prompts/Names/         — Soubory se seznamy názvů pro dohledání (per agent)
                             Format: {AgentName}_names.txt, jeden název na řádek
 - /Prompts/Urls/          — Soubory se seznamy URL k prohledání (per agent)
@@ -1437,12 +1437,12 @@ Podsložky:
 Použití složek při běhu:
 
 Managers/:
-- Agent-typ Manager čte svůj prompt z /Prompts/Managers/{AgentName}.txt
+- Agent-typ Manager čte svůj prompt z /Prompts/Managers/{AgentName}_entities.txt
 - Manager agent koordinuje Catalog agenty pro svou doménu
 - Při startup: selfUpdate z Managers/ pokud PromptVersion nesouhlasí
 
 Catalogs/:
-- Každý Catalog agent udržuje svůj soubor /Prompts/Catalogs/{AgentName}.txt
+- Každý Catalog agent udržuje svůj soubor /Prompts/Catalogs/{AgentName}_entities.txt
 - Soubor obsahuje seznam DB tabulek (ImportantScore, RowCount, LastPopulated)
 - Načíst při startu (po DB ping, před discovery) → přehled tabulek pro prioritizaci běhu
 - Aktualizovat na konci každého úspěšného scheduled runu
@@ -1526,7 +1526,7 @@ Pravidla:
 Pokud run NESKONČIL úspěšně (success = false), agent MUSÍ zapsat problem report do Drive.
 
 Drive folder ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
-Soubor: {AgentName}.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
+Soubor: {AgentName}_error.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
 
 Kdy zapsat:
 - success = false v run reportu
@@ -1540,7 +1540,7 @@ MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojen
 - MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPDBMAB
 - UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPDBUSM
 
-Formát souboru {AgentName}.txt:
+Formát souboru {AgentName}_error.txt:
 ```
 Agent:     {AgentName}
 MCP:       {VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM}
@@ -1564,7 +1564,7 @@ Postup:
 1. Sestavit obsah souboru podle formátu výše
 2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
 3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
-   Pokud soubor neexistuje: create_file(title="{AgentName}.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   Pokud soubor neexistuje: create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
@@ -2173,7 +2173,7 @@ Postup:
 3. Použít smart_upsert_batch (max MAX_BATCH_SIZE per call)
 4. Pro > 10 000 záznamů: rozdělit na dávky, ukládat cursor do AgentTableSync
 5. Logovat progress: "Import: {N}/{total} zpracováno"
-6. Po dokončení: aktualizovat {AgentName}.txt v Drive
+6. Po dokončení: aktualizovat {AgentName}_entities.txt v Drive
 7. Ntfy: send_notification(topic="agent-maintenance", title="Batch import dokončen")
 
 Pravidla:
@@ -2379,7 +2379,7 @@ Postup:
 1. Najít data ve zdroji
 2. Zkontrolovat tabulka/sloupec existuje
 3. Pokud ne → Dynamic Table/Column Discovery
-4. ImportantScore v {AgentName}.txt: výchozí 40–60
+4. ImportantScore v {AgentName}_entities.txt: výchozí 40–60
 5. Log: "🏷️ Domain-specific: {field} přidán do {tabulka}"
 6. Při příštím runu standardně zpracovávat
 
@@ -4280,7 +4280,7 @@ Canonical source:
   Google Drive CatalogPrompt document. Only this document is authoritative for governance.
 
 Baseline catalog:
-  Agent's table registry stored in Google Drive /Prompts/Catalogs/{AgentName}.txt.
+  Agent's table registry stored in Google Drive /Prompts/Catalogs/{AgentName}_entities.txt.
   Lists DB tables with ImportantScore, RowCount, LastPopulated.
 
 DiscoveryQueue:

@@ -59,7 +59,7 @@ SCHEDULED RUN (v tomto poradi):
 10. SEASON LIFECYCLE -> nova/ukoncena sezona?
 11. BACKFILL -> max 100/tabulka (vcetne MatchConditions, MatchBroadcast, EntityLocalizations)
 12. VIEWS REFRESH -> standings, top scorers, form, H2H
-13. MANAGERS UPDATE -> Drive /Prompts/Managers/{AgentName}.txt
+13. MANAGERS UPDATE -> Drive /Prompts/Managers/{AgentName}_entities.txt
 13a.DIGEST CHECK -> kazdych 7 runu/pondeli = weekly; kazdych 30 dni = monthly
 14. RUN REPORT + SCHEDULE UPDATE + CALENDAR + NOTIFICATION
     (schedule update = AgentSchedules upsert po upsert_record("AgentRunReports",...); skip if DryRun)
@@ -231,14 +231,14 @@ Povinné kroky v tomto pořadí:
    - agent musi mit aktivnich ASPON 11 skills
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
    - pokud ukol neni pokryt: navrhnout novy skill, pridat do ManagerPromptSkills.txt na Drive
-8. Nacist {AgentName}.txt z Drive /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+8. Nacist {AgentName}_entities.txt z Drive /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
    → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
    - pokud soubor neexistuje:
      a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
      b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
      c) přiřadit výchozí ImportantScore dle defaultní tabulky z Ch 1 (Matches=100, Teams=100, atd.; neznámé = 50)
-     d) create_file(title="{AgentName}.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<sestavený obsah>)
-     e) log: "📄 {AgentName}.txt vytvořen s {N} tabulkami"
+     d) create_file(title="{AgentName}_entities.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<sestavený obsah>)
+     e) log: "📄 {AgentName}_entities.txt vytvořen s {N} tabulkami"
    - pokud soubor existuje: načíst a použít jako přehled pro prioritizaci
    - agent může soubor ROZŠIŘOVAT a AKTUALIZOVAT:
      → přidat nově objevené tabulky (ImportantScore=50 výchozí)
@@ -334,7 +334,7 @@ Postup při prvním runu:
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit sport-specifické tabulky: Competitions, Seasons, Teams, Players, Matches
 4. Vytvořit prázdné Drive soubory pokud neexistují:
-   create_file(title="{AgentName}.txt",       parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent="")
+   create_file(title="{AgentName}_entities.txt",       parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent="")
    create_file(title="{AgentName}_names.txt", parentId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY", textContent="")
    create_file(title="{AgentName}_urls.txt",  parentId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U", textContent="")
 5. Upsert AgentSchedules (AgentName, AgentType="Manager", ScheduledRunTime, Timezone)
@@ -348,7 +348,7 @@ Při prvním runu: readiness = "first_run_init" — run může pokračovat (ne b
 
 ODLIŠUJ Drive soubor od DB tabulky:
 
-1. Drive soubor ({AgentName}.txt v Managers) chybí nebo je prázdný:
+1. Drive soubor ({AgentName}_entities.txt v Managers) chybí nebo je prázdný:
    → přeskočit tiše, vytvořit po prvním úspěšném runu — NENÍ blocker readiness
 
 2. DB tabulka existuje ale RowCount = 0:
@@ -481,7 +481,7 @@ Zdroje informací o naplánovaném běhu (v pořadí priority):
    SELECT ScheduledRunTime, NextRunAt, IntervalHours, Timezone
    FROM AgentSchedules WHERE AgentName='{AgentName}' AND IsActive=true
 
-2. {AgentName}.txt (Drive) — záložní přehled
+2. {AgentName}_entities.txt (Drive) — záložní přehled
    Obsahuje ScheduledRunTime, IntervalHours jako metadata hlavičky souboru
 
 3. Prompt placeholder {{ScheduledRunTime}} — pouze při prvním setupu
@@ -537,7 +537,7 @@ Pokud capability neni potvrzena:
 
 Kazdy sport agent ma v Google Drive pristup k temto slozkam:
 
-- Managers/{AgentName}.txt  -- seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+- Managers/{AgentName}_entities.txt  -- seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
   Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
   Format: ImportantScore|TableName|RowCount|LastPopulated, jedna tabulka na radek
 - Names/{AgentName}_names.txt -- seznam nazvu tymu/soutezi/hracu k prioritnimu dohledani
@@ -550,7 +550,7 @@ Kazdy sport agent ma v Google Drive pristup k temto slozkam:
   Drive folder ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Postup pri startu:
-1. Nacist Managers soubor (/Prompts/Managers/{AgentName}.txt) -> prehled vlastnich DB tabulek agenta
+1. Nacist Managers soubor (/Prompts/Managers/{AgentName}_entities.txt) -> prehled vlastnich DB tabulek agenta
 2. Nacist Names soubor -> pridat do priority queue (Score 90+)
 3. Nacist Urls soubor -> projit pred standardnim web scrapin
 4. Pokud soubor neexistuje nebo je prazdny: preskocit (ne chyba)
@@ -558,7 +558,7 @@ Postup pri startu:
 ## Google Drive Sports Baseline Catalog -- 8.5.0
 
 Sport agenti udrzuji katalogovy soubor v Google Drive.
-Umisteni: /Prompts/Managers/{AgentName}.txt (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+Umisteni: /Prompts/Managers/{AgentName}_entities.txt (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
 
 Katalog obsahuje: AgentName, PromptVersion, LastUpdated, TableCount
 Format radku: ImportantScore | TableName | Description | RowCount | LastPopulated
@@ -577,7 +577,7 @@ RowCount = 0 pro ImportantScore < 70  -> note v highlights, zadny blok
 
 Lifecycle rules:
 - pokud soubor neexistuje: vytvorit po prvnim uspesnem runu:
-  create_file(title="{AgentName}.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<catalog content>)
+  create_file(title="{AgentName}_entities.txt", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO", textContent=<catalog content>)
 - pokud soubor existuje: aktualizovat na konci kazdeho uspesneho runu:
   pokud dostupny update_file_content: update_file_content(fileId=<id>, textContent=<updated content>)
   pokud update_file_content neni dostupny: create_file s novym obsahem (stary soubor ponech)
@@ -636,14 +636,14 @@ BLOK 4 -- Skills:
 L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále nelze → capability_missing("skills_file_unavailable")
 
 BLOK 5 -- Drive soubory:
-5a. {AgentName}.txt v /Prompts/Managers/ (ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
+5a. {AgentName}_entities.txt v /Prompts/Managers/ (ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
     → existuje? Formát: ImportantScore|TableName|Description|RowCount|LastPopulated
     L chybí → create_file s prázdnou šablonou (struktura dle baseline-managers-file-manager)
 5b. {AgentName}_names.txt v /Prompts/Names/ (ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
     L chybí → create_file prázdný (OK)
 5c. {AgentName}_urls.txt v /Prompts/Urls/ (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
     L chybí → create_file prázdný (OK)
-5d. {AgentName}.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+5d. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
     → přečíst pokud existuje, ověřit aktuálnost problémů
 
 BLOK 6 -- ntfy:
@@ -748,7 +748,7 @@ Run status markers:
 Pokud run NESKONČIL úspěšně (success = false), agent MUSÍ zapsat problem report do Drive.
 
 Drive folder ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
-Soubor: {AgentName}.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
+Soubor: {AgentName}_error.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
 
 Kdy zapsat:
 - success = false v run reportu
@@ -762,7 +762,7 @@ MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojen
 - MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPDBMAB
 - UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPDBUSM
 
-Formát souboru {AgentName}.txt:
+Formát souboru {AgentName}_error.txt:
 ```
 Agent:     {AgentName}
 MCP:       {VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM}
@@ -786,7 +786,7 @@ Postup:
 1. Sestavit obsah souboru podle formátu výše
 2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
 3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
-   Pokud soubor neexistuje: create_file(title="{AgentName}.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   Pokud soubor neexistuje: create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
@@ -943,7 +943,7 @@ Automaticke znovuotevreni exhausted datumu:
     L tabulka write selže → log do errors[], přeskočit tabulku, pokračovat další
 15. Views refresh → standings, top scorers, form, H2H
     L view refresh selže → log warning do errors[], pokračovat (views nejsou blocker runu)
-16. Managers update → Drive /Prompts/Managers/{AgentName}.txt (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+16. Managers update → Drive /Prompts/Managers/{AgentName}_entities.txt (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
     L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
 16a.Weekly/monthly digest check:
     Počítání runů pro digest trigger:
@@ -1235,7 +1235,7 @@ Postup při discovery nové tabulky:
 2. Navrhni schema: Guid PK + BaseGuid + scoring + nové sloupce + FK
 3. ensure_table s navrženým schematem
 4. Přidej FK sloupec do původní tabulky
-5. Přidej do {AgentName}.txt s ImportantScore=50
+5. Přidej do {AgentName}_entities.txt s ImportantScore=50
 6. Log: "🆕 Nová tabulka: {name} (odvozeno z {source})"
 7. Run report: newTablesCreated[]
 
@@ -1625,7 +1625,7 @@ Postup:
 1. Najít data ve zdroji
 2. Zkontrolovat tabulka/sloupec existuje
 3. Pokud ne → Dynamic Table/Column Discovery
-4. ImportantScore v {AgentName}.txt: výchozí 40–60
+4. ImportantScore v {AgentName}_entities.txt: výchozí 40–60
 5. Log: "🏷️ Sport-specific: {field} přidán do {tabulka}"
 
 =============================================================
@@ -1778,7 +1778,7 @@ Postup:
 3. Použít smart_upsert_batch (max MAX_BATCH_SIZE per call)
 4. Pro > 10 000 záznamů: rozdělit na dávky, ukládat cursor do AgentTableSync
 5. Logovat progress: "Import: {N}/{total} zpracováno"
-6. Po dokončení: aktualizovat {AgentName}.txt v Drive
+6. Po dokončení: aktualizovat {AgentName}_entities.txt v Drive
 7. Ntfy: send_notification(topic="agent-maintenance", title="Batch import dokončen")
 
 Pravidla:
@@ -2417,18 +2417,18 @@ Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0
 
 Podsložky:
 - /Prompts/Managers/          — Prompt soubory pro Manager agenty
-- /Prompts/Managers/{AgentName}.txt — Seznam vlastních DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+- /Prompts/Managers/{AgentName}_entities.txt — Seznam vlastních DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
                                 Format: ImportantScore|TableName|RowCount|LastPopulated, jedna tabulka na řádek
-- /Prompts/Catalogs/{AgentName}.txt — Katalogový soubor tabulek Catalog agenta
+- /Prompts/Catalogs/{AgentName}_entities.txt — Katalogový soubor tabulek Catalog agenta
                                 Format: ImportantScore|TableName|RowCount|LastPopulated
 - /Prompts/Names/{AgentName}_names.txt — Task queue pro entity names (sdílená složka — Manager i Catalog agenti)
 - /Prompts/Urls/{AgentName}_urls.txt   — Task queue pro URL k projití (sdílená složka — Manager i Catalog agenti)
 
 Použití při běhu Manager agenta:
-- Načíst /Prompts/Managers/{AgentName}.txt → přehled vlastních DB tabulek agenta
+- Načíst /Prompts/Managers/{AgentName}_entities.txt → přehled vlastních DB tabulek agenta
 - Číst run reporty (run_select_sql na AgentRunReports)
 - Zapisovat úkoly do Names/Urls souborů Catalog agentů (append-only)
-- Aktualizovat /Prompts/Managers/{AgentName}.txt po každém úspěšném runu
+- Aktualizovat /Prompts/Managers/{AgentName}_entities.txt po každém úspěšném runu
 
 ## Job Queue System
 
