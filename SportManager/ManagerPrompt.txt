@@ -164,6 +164,18 @@ Agent musi preferovat:
   4. Log: "🆕 Sport vytvořen: {SportName} (agent bootstrap)"
   5. Pokračuj normálně s nově vytvořeným SportGuid
   L tabulka Sports nelze vytvořit → STOP, blocker "sport_table_unavailable"
+- Po úspěšném nalezení SportGuid načíst SportDisciplines z DB:
+  run_select_sql("SELECT Guid, Name, NormalizedName, IsActive FROM SportDisciplines
+    WHERE SportGuid='{SportGuid}' AND IsDeleted IS NOT TRUE AND IsActive=true
+    ORDER BY Name")
+  → uložit jako SPORT_DISCIPLINES[] pro celý run (seznam dostupných disciplín tohoto sportu)
+  → pokud tabulka SportDisciplines neexistuje: přeskočit tiše, SPORT_DISCIPLINES = []
+  → pokud tabulka existuje ale vrátí 0 řádků: SPORT_DISCIPLINES = [], log info "Žádné disciplíny pro {SportName}"
+  → SPORT_DISCIPLINES použít při:
+    a) sbírání zápasů — filtrovat/kategorizovat podle disciplíny (napr. tenis: dvouhra vs čtyřhra)
+    b) Standings, Competitions, Seasons lookupech — ověřit DisciplineGuid je z SPORT_DISCIPLINES
+    c) Zápis nového záznamu — pokud zdroj uvádí disciplínu, přiřadit DisciplineGuid z SPORT_DISCIPLINES (NormalizedName match)
+    d) Reportování — zahrnout přehled disciplín do run report highlights[] pokud SPORT_DISCIPLINES neprázdný
 
 ## Match Collection Scope -- KRITICKE PRAVIDLO
 
@@ -953,8 +965,13 @@ Automaticke znovuotevreni exhausted datumu:
 2.  Ziskat lock: run_select_sql("SELECT pg_try_advisory_lock(hashtext(COALESCE(NULLIF('{SportName}',''), 'unknown') || '|' || '{AgentName}')::bigint & 2147483647)")
     Lock je per sport + per agent — různé sporty mohou běžet paralelně.
     L lock selže → retry 3× (2s/4s/8s); stále locked → STOP, log blocker "concurrent_run_detected" do highlights[]
-3.  Nacist sport podle Agent/Alias
+3.  Nacist sport podle Agent/Alias → uložit SportGuid
     L sport nenalezen → STOP, log blocker "sport_not_found"
+3a. Nacist SportDisciplines pro nalezený SportGuid:
+    run_select_sql("SELECT Guid, Name, NormalizedName FROM SportDisciplines
+      WHERE SportGuid='{SportGuid}' AND IsDeleted IS NOT TRUE AND IsActive=true ORDER BY Name")
+    → uložit SPORT_DISCIPLINES[] pro celý run
+    L tabulka neexistuje nebo 0 záznamů → SPORT_DISCIPLINES=[], pokračovat
 4.  Spocitat limity podle DataScore nebo FinalScore ze Sports tabulky
 5.  Overit tabulky, sloupce, indexy, coverage tabulku
 6.  Znovu otevrit exhausted datumy s ExhaustedAt > 1 rok
