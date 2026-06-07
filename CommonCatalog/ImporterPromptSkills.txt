@@ -175,7 +175,7 @@ Limitations: reportingová fáze jen při plném úspěchu; neomezovat catch-up 
 Task types: AgentSchedules, přehled agentů, detekce konfliktů
 Description: Spravuje tabulku AgentSchedules pro Importer agenty.
   Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu: load přehled a detekovat konflikty ±15 min.
+  Na startu: load přehled a detekovat konflikty ±1 min.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Importer"
 Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun

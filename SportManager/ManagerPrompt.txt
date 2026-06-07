@@ -350,7 +350,7 @@ Povinné kroky v tomto pořadí:
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
 11. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
-    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±15 min → log warning v startup diagnostics
+    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±1 min → log warning v startup diagnostics
       + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
 12. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Managers" → uložit CALENDAR_ID
@@ -3829,7 +3829,7 @@ CREATE TABLE IF NOT EXISTS AgentSchedules (
 Pravidla:
 - Business key: AgentName UNIQUE — každý agent má max 1 záznam
 - Na konci každého runu: UPSERT (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt=now()+IntervalHours)
-- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±15 min okně → log warning)
+- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±1 min okně → log warning)
 - DryRun: UPSERT se neprovede
 
 ## Canonical Precedence Rules
@@ -3872,7 +3872,7 @@ Pravidla:
   AgentSchedules konflikt: přidán návrh posunu v highlights[].
   Lock formula: COALESCE + separator '|' zabraňuje prázdnému SportName a prefix collision.
 
-- 8.4.0 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±15 min.
+- 8.4.0 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±1 min.
   agent-schedule-manager skill (120. skill). Startup krok 10: načtení AgentSchedules + conflict check.
   Run protokol krok 17.a2: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.4.0.
 - 8.0.0 (2026-05-27): Drive folder structure (Names, Urls, Manager). PlayerCareer tabulka kariery hrace. Match conditions (pocasi, stav hriste). Startup Sequence header opraven. (Names, Urls, Manager). Sport agent Names = tymy/souteze/hraci k dohledani. Urls = live score pages, league tables. Canonical Drive ID aktualizovan.

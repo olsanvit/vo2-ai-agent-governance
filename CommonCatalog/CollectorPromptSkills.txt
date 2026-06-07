@@ -269,7 +269,7 @@ Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován
 Task types: AgentSchedules, přehled agentů, detekce konfliktů
 Description: Spravuje tabulku AgentSchedules pro Collector agenty.
   Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu: load přehled a detekovat konflikty ±15 min.
+  Na startu: load přehled a detekovat konflikty ±1 min.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Collector"
 Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun

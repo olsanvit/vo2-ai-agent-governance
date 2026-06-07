@@ -1099,11 +1099,11 @@ Limitations: nesmí přepisovat celý soubor; max 50 položek per zápis; soubor
 Task types: AgentSchedules, denní čas spuštění, přehled agentů, detekce konfliktů
 Description: Spravuje tabulku AgentSchedules — ukládá denní plánovaný čas spuštění každého agenta.
   Na konci každého runu provede UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu načte přehled všech aktivních agentů a detekuje konflikty (±15 min od sebe).
+  Na startu načte přehled všech aktivních agentů a detekuje konflikty (±1 min od sebe).
   Slouží k přehledu "kdo se kdy pouští" a prevenci přetížení v jednu dobu.
 Inputs: AgentName, ScheduledRunTime (time, Europe/Prague), IntervalHours, AgentType (Catalog/Manager)
 Outputs: upsert do AgentSchedules, startup report konfliktů, přehled tabulky agentů
-Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±15 min; NEZDVOJIT upsert při DryRun
+Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±1 min; NEZDVOJIT upsert při DryRun
 
 ## problem-report-writer
 Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta

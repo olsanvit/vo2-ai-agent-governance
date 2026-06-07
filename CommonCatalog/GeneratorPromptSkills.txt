@@ -140,7 +140,7 @@ Limitations: VŽDY ověřit scope před zápisem; nikdy přepsat existující ob
 Task types: AgentSchedules, přehled agentů, detekce konfliktů
 Description: Spravuje tabulku AgentSchedules pro Generator agenty.
   Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu: load přehled a detekovat konflikty ±15 min.
+  Na startu: load přehled a detekovat konflikty ±1 min.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Generator"
 Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
