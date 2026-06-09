@@ -1,6 +1,6 @@
 SkillsFor: CollectorPrompt
-SkillsVersion: 8.7.0
-Generated: 2026-06-04
+SkillsVersion: 9.0.0
+Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
 Každý Collector agent musí mít aktivních ASPOŇ 11 skills.

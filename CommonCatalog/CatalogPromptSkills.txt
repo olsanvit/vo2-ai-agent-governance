@@ -738,13 +738,13 @@ Limitations: safe mode pouze non-destructive fixes; aggressive vyžaduje potvrze
 
 ## next-run-calendar-scheduler
 Task types: plánování příštího runu v Google Calendar, AI Catalogs
-Description: Vytváří Calendar event pro příští scheduled run v kalendáři "AI Catalogs".
+Description: Vytváří Calendar event pro příští scheduled run. CALENDAR_ID musí být vyřešen přes list_calendars() (hledat kalendář obsahující "AI Catalogs") — NIKDY nepoužívat text "AI Catalogs" přímo jako calendar_id parametr.
   Před vytvořením: list_events → smazat starý event se stejným AgentName → vytvořit nový.
   Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
   Při úspěšném runu suffix " ✅", při selhání " ❌".
 Inputs: agent name, výsledek runu, čas příštího scheduled runu (NextRunAt)
-Outputs: Calendar event vytvořen v "AI Catalogs", potvrzení
-Limitations: pouze kalendář "AI Catalogs"; nemaže historické eventy (jen budoucí duplicity)
+Outputs: Calendar event vytvořen (CALENDAR_ID z list_calendars), potvrzení
+Limitations: pokud list_calendars() selže → capability_missing("calendar_list_calendars"), Calendar přeskočit — NEBLOKUJ datový běh; nemaže historické eventy (jen budoucí duplicity)
 
 ## run-interval-calculator
 Task types: interval výpočtu, freshness SLA, next run time
@@ -783,7 +783,7 @@ Task types: Calendar konflikty, duplicate events, AI Catalogs cleanup
 Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta
   v kalendáři "AI Catalogs". list_events → smazat starší duplicitní budoucí eventy.
   Zajišťuje právě JEDNU budoucí událost per agent.
-Inputs: AgentName, calendar="AI Catalogs"
+Inputs: AgentName, CALENDAR_ID (z list_calendars — NIKDY nepoužívat "AI Catalogs" přímo jako calendar_id parametr)
 Outputs: seznam duplicit, smazané eventy, canonical next-run event
 Limitations: neupravuje eventy jiných agentů; pouze pro daného agenta
 

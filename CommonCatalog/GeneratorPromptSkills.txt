@@ -1,6 +1,6 @@
 SkillsFor: GeneratorPrompt
-SkillsVersion: 8.7.0
-Generated: 2026-06-04
+SkillsVersion: 9.0.0
+Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
 Každý Generator agent musí mít aktivních ASPOŇ 10 skills.
@@ -184,11 +184,11 @@ Limitations: Calendar eventy NEVYTVÁŘÍ; create_image NEVOLÁ
 
 ## next-run-calendar-scheduler
 Task types: plánování příštího runu v Google Calendar, AI Generators
-Description: Vytváří Calendar event v "AI Generators" pro příští scheduled run.
+Description: Vytváří Calendar event pro příští scheduled run. CALENDAR_ID musí být vyřešen přes list_calendars() (hledat "AI Generators") — NIKDY nepoužívat "AI Generators" přímo jako calendar_id.
   list_events → smazat starý event → vytvořit nový.
 Inputs: AgentName, výsledek runu, NextRunAt
 Outputs: Calendar event vytvořen
-Limitations: pouze "AI Generators" kalendář
+Limitations: pokud list_calendars() selže → capability_missing("calendar_list_calendars"), přeskočit Calendar — NEBLOKUJ datový běh
 
 ## coverage-milestone-tracker
 Task types: coverage milestone, 80%/90%/100% alerting
