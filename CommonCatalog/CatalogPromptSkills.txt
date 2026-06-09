@@ -968,13 +968,21 @@ Outputs: .jsonl soubory na Drive /Prompts/Backups/{AgentName}/, ntfy potvrzení
 Limitations: max 10 000 řádků per tabulka; nespouštět pokud db_status != db_reachable
 
 ## baseline-catalog-file-manager
-Task types: baseline catalog soubor, Drive Catalogs/, RowCount, LastPopulated aktualizace
+Task types: baseline catalog soubor, Drive Catalogs/, RowCount, LastPopulated aktualizace, bootstrap
 Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Catalogs/
   (folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi). Načítá přehled tabulek
   (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
+  Formát řádku: ImportantScore | TableName | Description | RowCount | LastPopulated
+  BOOTSTRAP: pokud soubor neexistuje (404 / file_not_found) → vytvořit nový soubor automaticky:
+    1. SELECT tablename, COUNT(*) FROM pg_tables pro všechny public tabulky v agent DB
+    2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
+    3. create_file({AgentName}_entities.txt, parent_folder_id=1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi, content=...)
+    4. Pokud create_file selže → capability_missing("drive_create_with_parent"), pokračovat degraded (ne blocked)
+  DRIVE SELF-TEST: na startu ověřit create_file capability pokusem o vytvoření prázdného souboru
+    _capability_test.txt; pokud selže → zaznamenat a pokračovat bez Drive zápisů (degraded, ne blocked).
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
-Outputs: přečtený katalog (startup), aktualizovaný katalog zapsaný na Drive (end of run)
-Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří nové záznamy tabulek
+Outputs: přečtený katalog (startup), aktualizovaný katalog zapsaný na Drive (end of run), bootstrap log
+Limitations: neaktualizuje pokud db_status = db_unreachable; nevytváří nové řádky do existujícího souboru (append zakázán); DryRun = nezapisuje; bootstrap vyžaduje DB přístup pro COUNT(*)
 
 ## cross-agent-task-writer
 Task types: cross-agent zápis, Names soubory, Urls soubory, task assignment jiným agentům

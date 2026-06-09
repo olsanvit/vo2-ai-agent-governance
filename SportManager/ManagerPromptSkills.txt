@@ -1005,14 +1005,21 @@ Limitations: vyžaduje min 10 runů pro benchmark; nové agenty mají insufficie
 -- N. ADVANCED OPERATIONS (12) -----------------------------------
 
 ## manager-baseline-file-manager
-Task types: baseline soubor agenta, Drive /Prompts/Managers/, RowCount, LastPopulated aktualizace
+Task types: baseline soubor agenta, Drive /Prompts/Managers/, RowCount, LastPopulated aktualizace, bootstrap
 Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Managers/
   (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO). Načítá přehled sportovních tabulek
   (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
   Formát řádku: ImportantScore | TableName | Description | RowCount | LastPopulated
+  BOOTSTRAP: pokud soubor neexistuje (404 / file_not_found) → vytvořit nový soubor automaticky:
+    1. SELECT tablename, COUNT(*) FROM pg_tables JOIN ... pro všechny public tabulky
+    2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
+    3. create_file({AgentName}_entities.txt, parent_folder_id=1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO, content=...)
+    4. Pokud create_file selže → capability_missing("drive_create_with_parent"), pokračovat degraded (ne blocked)
+  DRIVE SELF-TEST: na startu ověřit create_file capability pokusem o vytvoření prázdného souboru
+    _capability_test.txt; pokud selže → zaznamenat a pokračovat bez Drive zápisů (degraded, ne blocked).
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
-Outputs: přečtený katalog (startup), aktualizovaný soubor zapsaný na Drive (end of run)
-Limitations: neaktualizuje pokud db_status = db_unreachable; soubor nevytváří nové záznamy tabulek; DryRun = nezapisuje
+Outputs: přečtený katalog (startup), aktualizovaný soubor zapsaný na Drive (end of run), bootstrap log
+Limitations: neaktualizuje pokud db_status = db_unreachable; nevytváří nové řádky do existujícího souboru (append zakázán); DryRun = nezapisuje; bootstrap vyžaduje DB přístup pro COUNT(*)
 
 ## dry-run-mode-controller
 Task types: DryRun mode, testovací beh bez DB zápisů, simulace
