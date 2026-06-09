@@ -2,7 +2,7 @@ Agent: 9.0.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.0.0
+PromptVersion: 9.1.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.0.0
@@ -3601,7 +3601,7 @@ Rules:
 GovernanceVersion: 9.0.0
 SchemaVersion: 9.0.0
 RuntimeSafetyVersion: 9.0.0
-PromptVersion: 9.0.0
+PromptVersion: 9.1.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range

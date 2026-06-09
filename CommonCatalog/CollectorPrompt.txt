@@ -1,6 +1,6 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.0.0
+PromptVersion: 9.1.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.0.0
@@ -327,8 +327,9 @@ Kořenová složka: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 ## Google Calendar Integration
 
-Kalendář: "AI Collectors"
-Nenalezen → capability_missing, přeskočit tiše
+CALENDAR_ID: vždy přes list_calendars() → hledat "AI Collectors" v Name/Summary
+NIKDY nepoužívat "AI Collectors" přímo jako calendar_id parametr
+Nenalezen / list_calendars selže → capability_missing("calendar_list_calendars"), přeskočit tiše
 
 =============================================================
 CHAPTER 8: NOTIFICATIONS
@@ -590,3 +591,15 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
   db_report: saved | failed (+ fallback: ntfy_content / response_text)
 
 💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
+
+=============================================================
+PATCH 9.1.0 — COLLECTOR CALENDAR GOVERNANCE ADDENDUM
+=============================================================
+
+## Google Calendar — CALENDAR_ID Resolution (9.1.0)
+
+Opraveno v 9.1.0: Quick Reference sekce "Google Calendar Integration" nyní explicitně
+zakazuje použití "AI Collectors" jako přímý calendar_id parametr.
+
+Povinné: list_calendars() → hledat "AI Collectors" v Name/Summary → CALENDAR_ID proměnná
+Pokud list_calendars selže: capability_missing("calendar_list_calendars") — přeskočit tiše
