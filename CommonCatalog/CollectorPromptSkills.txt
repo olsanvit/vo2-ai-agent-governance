@@ -1,5 +1,5 @@
 SkillsFor: CollectorPrompt
-SkillsVersion: 9.1.0
+SkillsVersion: 9.2.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -319,3 +319,53 @@ analogickou s Catalog a Manager agenty:
 - SELECT pg_tables → seed entities s ImportantScore=50 defaultem
 - create_file selhání → capability_missing + degraded (ne blocked)
 - DRIVE SELF-TEST na startu
+
+=============================================================
+PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
+=============================================================
+(additive patch — nenahrazuje PATCH 9.1.0 Collector Bootstrap Addendum)
+
+## agent-schedule-manager — 9.2.0 Update
+(přepisuje ±1 min conflict window)
+
+Conflict detection window: ±15 minut (canonical od 9.2.0).
+Vkládat/aktualizovat AgentSchedules POUZE při db_reachable.
+Reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán.
+
+## baseline-collector-file-manager — 9.2.0 Update
+(doplňuje PATCH 9.1.0 BOOTSTRAP a DRIVE SELF-TEST)
+
+Canonical soubor: {AgentName}_entities.txt (VÝHRADNĚ singular)
+Canonical formát: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
+Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back.
+Pokud create selže: capability_missing("drive_text_create_with_parent"), pokračovat degraded.
+Povinné reportování stavu: exact_file_found | created | creation_failed | used_source | reason
+
+## problem-report-writer — 9.2.0 Update
+
+Soubor {AgentName}_error.txt (VÝHRADNĚ singular, NIKDY _errors.txt)
+Formát: ProblemScore | Category | Description | Timestamp | StepStatus
+Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back.
+Fallback: AgentRunReports.Metadata pokud Drive selže.
+
+## calendar-event-manager — 9.2.0 Update
+(rozšiřuje PATCH 9.1.0 Calendar ID Resolution)
+
+NIKDY nepoužívat "AI Collectors" (ani jiný název) jako calendar_id.
+VŽDY list_calendars() → CALENDAR_ID proměnná.
+list_calendars() chybí → capability_missing("calendar_list_calendars") → přeskočit tiše.
+
+## batch-upsert-fallback — nový skill 9.2.0
+
+Task types: smart_upsert_batch 502, fallback single inserts, batch failure handling
+Description: Pokud smart_upsert_batch vrátí 502, provede jednotlivé SQL inserty
+  POUZE při splnění: validace kvality + kontrola duplicit + idempotentní business key + read-back.
+  Výsledek VŽDY reportovat jako batch_upsert_failed_but_single_insert_succeeded.
+Inputs: tabulka, záznamy[], business key sloupce
+Outputs: jednotlivé upsert_record volání s read-back potvrzením
+Limitations: výhradně při 502 selhání smart_upsert_batch; bez read-back → reportovat failure
+
+## Skills Version Policy (9.2.0)
+
+SkillsVersion: 9.2.0

@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 9.1.0
+PromptVersion: 9.2.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.0.0
@@ -508,3 +508,50 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
   db_report: saved | failed (+ fallback: ntfy_content / response_text)
 
 💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
+
+=============================================================
+PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
+=============================================================
+(additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
+
+## AgentSchedules Conflict — 9.2.0 Canonical Override
+(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+
+Conflict detection window: ±15 minut (canonical od 9.2.0).
+Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
+Při absenci AgentSchedules záznamu: vložit/aktualizovat POUZE při db_reachable.
+
+## Calendar Universal Rule — 9.2.0
+
+NIKDY nepoužívat zobrazovaný název jako calendar_id ("AI Checkers" apod.).
+VŽDY list_calendars() → CALENDAR_ID proměnná.
+Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
+
+## Per-Agent Files — Canonical Naming (9.2.0)
+
+Canonical singular: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Checker _entities.txt → /Prompts/Checkers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+
+Canonical file formats:
+  _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
+  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+
+Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
+Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.
+
+## Readiness Gating — Fallback Mode (9.2.0)
+
+V fallback/degraded režimu VŽDY rozlišit:
+  confirmed_actions | skipped_actions | failed_actions | inferred_findings
+
+## DB Failure — Startup Stop Rules (9.2.0)
+
+Pokud db_unreachable:
+  ZASTAVIT: DB writes, schema changes, AgentPromptCache, AgentSchedules, AgentRunReports
+  POVOLENO: Drive read-only, textový run report, ntfy bez DB
+
+## Canonical Prompt Lookup (9.2.0)
+
+Checker → CheckerPrompt.txt + CheckerPromptSkills.txt
+Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded

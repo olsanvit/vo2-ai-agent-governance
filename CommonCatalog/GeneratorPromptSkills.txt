@@ -1,5 +1,5 @@
 SkillsFor: GeneratorPrompt
-SkillsVersion: 9.1.0
+SkillsVersion: 9.2.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -197,3 +197,40 @@ Description: Sleduje milníky pokrytí obrázků (80%, 90%, 100%) a odesílá nt
 Inputs: teamsCoverage %, playersCoverage %, předchozí milestone stav
 Outputs: ntfy alert pokud nový milestone dosažen, aktualizovaný milestone stav
 Limitations: max 1 ntfy per milestone; nepřekračovat max 3 ntfy/run limit
+
+=============================================================
+PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
+=============================================================
+(additive patch — nenahrazuje existující skill definice; opravuje níže uvedená pravidla)
+
+## agent-schedule-manager — 9.2.0 Update
+(přepisuje ±1 min conflict window z původní definice)
+
+Conflict detection window: ±15 minut (canonical od 9.2.0).
+Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType
+Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konfliktů
+Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
+  reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
+
+## problem-report-writer — 9.2.0 Update
+
+Soubor {AgentName}_error.txt (VÝHRADNĚ singular, NIKDY _errors.txt):
+  Formát: ProblemScore | Category | Description | Timestamp | StepStatus
+  Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back potvrzením.
+Pokud Drive write selže: neclaimovat uložení; uložit do AgentRunReports.Metadata pokud DB dostupná.
+NEVYTVÁŘET Google Doc jako náhradu za governed plain-text problem report.
+Fallback Google Doc → uvést POUZE jako "fallback/unconfirmed artifact".
+
+## calendar-event-manager — 9.2.0 Update
+
+NIKDY nepoužívat zobrazovaný název jako calendar_id parametr přímo.
+VŽDY list_calendars() → hledat název odpovídající AgentType → uložit jako CALENDAR_ID proměnnou.
+Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
+Calendar failure = reporting degradation, ne datový blocker.
+
+## Skills Version Policy (9.2.0)
+
+SkillsVersion: 9.2.0
+Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
+Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
