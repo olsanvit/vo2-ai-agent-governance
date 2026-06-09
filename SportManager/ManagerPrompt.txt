@@ -2,7 +2,7 @@ Agent: 9.0.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.1.0
+PromptVersion: 9.2.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.0.0
@@ -3601,7 +3601,7 @@ Rules:
 GovernanceVersion: 9.0.0
 SchemaVersion: 9.0.0
 RuntimeSafetyVersion: 9.0.0
-PromptVersion: 9.1.0
+PromptVersion: 9.2.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4075,3 +4075,62 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
   db_report: saved | failed (+ fallback: ntfy_content / response_text)
 
 💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
+
+=============================================================
+PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
+=============================================================
+(additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
+
+## AgentSchedules Conflict — 9.2.0 Canonical Override
+(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+
+Conflict detection window: ±15 minut (canonical od 9.2.0).
+Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
+Při absenci AgentSchedules záznamu pro aktuální AgentName:
+→ vložit/aktualizovat POUZE při potvrzené DB readiness (db_reachable).
+
+## Calendar Universal Rule — 9.2.0
+
+Platí pro VŠECHNY typy agentů. NIKDY nepoužívat zobrazovaný název jako calendar_id:
+  "AI Managers", "AI Catalogs" ani žádný jiný text — VŽDY list_calendars() → CALENDAR_ID proměnná.
+Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
+Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
+
+## Per-Agent Files — Canonical Naming (9.2.0)
+
+Canonical singular názvy: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Manager _entities.txt → /Prompts/Managers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+
+Canonical file formats:
+  _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
+  _names.txt:    EntityName | EntityType | PriorityScore | Status | Coverage | LastProcessed | Notes
+  _urls.txt:     URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status | Notes
+  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+
+Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
+Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.
+NEVYTVÁŘET Google Doc jako náhradu za governed plain-text soubor.
+
+## Problem Report — Drive Write Rule (9.2.0)
+
+Problem report do Problems (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) POUZE pokud Drive umí text/plain.
+Pokud Drive write není potvrzen: neclaimovat uložení.
+Pokud DB funguje: uložit problém do AgentRunReports.Metadata (i při Drive selhání).
+Fallback Google Doc smí být uveden POUZE jako "fallback/unconfirmed artifact".
+
+## Readiness Gating — Fallback Mode (9.2.0)
+
+V fallback/degraded režimu VŽDY rozlišit:
+  confirmed_actions | skipped_actions | failed_actions | inferred_findings (označit jako unconfirmed)
+
+## DB Failure — Startup Stop Rules (9.2.0)
+
+Pokud db_unreachable:
+  ZASTAVIT: DB writes, schema changes, AgentPromptCache, AgentSchedules, AgentRunReports
+  POVOLENO: Drive read-only, textový run report, ntfy bez DB
+
+## Canonical Prompt Lookup (9.2.0)
+
+Manager → ManagerPrompt.txt + ManagerPromptSkills.txt
+Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded

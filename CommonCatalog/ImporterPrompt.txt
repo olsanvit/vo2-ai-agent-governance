@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 9.1.0
+PromptVersion: 9.2.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.0.0
@@ -652,3 +652,63 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
   db_report: saved | failed (+ fallback: ntfy_content / response_text)
 
 💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
+
+=============================================================
+PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
+=============================================================
+(additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
+
+## Importer Rollback Rule — 9.2.0
+
+Rollback NIKDY nepoužívá DELETE (žádný hard delete).
+Rollback musí být soft/status-based:
+  ImportStatus = "rolled_back"
+  IsDeleted = true POUZE pokud je bezpečné a auditované (AuditLog záznam povinný)
+
+Podmínky:
+- Soubory se nesmí přesouvat pokud DB write nebo read-back selhal
+- Reporting views/spreadsheet export spustit POUZE při plném úspěchu všech souborů
+- Každý rollback zaznamenat v AuditLog: {entity, důvod, timestamp, operator}
+
+## AgentSchedules Conflict — 9.2.0 Canonical Override
+(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+
+Conflict detection window: ±15 minut (canonical od 9.2.0).
+Pokud zjištěn schedule drift: reportovat v highlights[] jako schedule_drift_detected.
+Při absenci AgentSchedules záznamu: vložit/aktualizovat POUZE při db_reachable.
+
+## Calendar Universal Rule — 9.2.0
+
+NIKDY nepoužívat "AI Importers" ani jiný zobrazovaný název jako calendar_id.
+VŽDY list_calendars() → CALENDAR_ID proměnná.
+Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
+
+## Per-Agent Files — Canonical Naming (9.2.0)
+
+Canonical singular: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Importer _entities.txt → /Prompts/Importers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+
+Canonical file formats:
+  _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
+  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+
+Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
+Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.
+NEVYTVÁŘET Google Doc jako náhradu za governed plain-text soubor.
+
+## Readiness Gating — Fallback Mode (9.2.0)
+
+V fallback/degraded režimu VŽDY rozlišit:
+  confirmed_actions | skipped_actions | failed_actions | inferred_findings
+
+## DB Failure — Startup Stop Rules (9.2.0)
+
+Pokud db_unreachable:
+  ZASTAVIT: DB writes, schema changes, AgentPromptCache, AgentSchedules, AgentRunReports
+  POVOLENO: Drive read-only, textový run report, ntfy bez DB
+
+## Canonical Prompt Lookup (9.2.0)
+
+Importer → ImporterPrompt.txt + ImporterPromptSkills.txt
+Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded
