@@ -3993,3 +3993,85 @@ CHANGELOG
 - Coverage Gap Report
 - Anti-Duplicate Match Detection
 
+
+=============================================================
+PATCH 9.0.0 — RUNTIME GOVERNANCE ADDENDUM
+=============================================================
+(additive patch — nenahrazuje existující sekce)
+
+## Drive fileId Canonical Rule
+
+NIKDY neukládat Google Drive fileId jako canonical identifikátor promptu, skills nebo per-agent souborů.
+- Důvod: fileId se změní při re-upload → uložené ID → 404 v dalším runu
+- Při každém runu: search_files(query="{filename}", folderId="{canonicalFolderId}") → přesná shoda názvu
+- Pokud search vrátí více výsledků: použít POUZE přesnou shodu názvu + nejnovější bezpečně ověřený soubor
+- Nejasnost (více souborů se stejným názvem) → reportovat jako blocker nebo degraded dle kritičnosti
+- Pokud soubor nenalezen → NIKDY nepoužívat podobný název ani jinou složku
+
+## DB Write Read-Back Rule
+
+Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
+- Po každém upsert_record nebo smart_upsert_batch: ověřit úspěch z response (rowsAffected > 0)
+- Pokud write vrátí 502 nebo chybný response: neclaimovat partial success dokud read-back nepotvrdí
+  → run_select_sql("SELECT COUNT(*) FROM {Table} WHERE {criteria}") → ověřit vznik/změnu řádků
+- Pokud read-back potvrdí 0 řádků: reportovat no_partial_write_confirmed (ne partial_success)
+- Toto pravidlo platí i pro AgentRunReports, AuditLog a problem report soubory
+
+## Memory Non-Canonical Rule
+
+Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
+- Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
+- Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
+- Canonical zdroje mají vždy přednost: Gitea → Drive → DB cache → bootstrap (v tomto pořadí)
+
+## Ntfy Runtime Rules
+
+Ntfy posílat pouze přes MCP `send_notification` tool, pokud je skutečně dostupný jako callable tool.
+Reportovat jeden z těchto stavů v run reportu:
+  ntfy: sent
+  ntfy: skipped_capability_missing
+  ntfy: failed_403  (chybí NTFY_USER/NTFY_PASS v kontejneru — informovat operátora)
+  ntfy: failed_unconfirmed
+Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
+pokud DB zápisy a validace proběhly bezpečně.
+
+## AgentSchedules Conflict — 9.0.0 Canonical
+
+Conflict window: ±1 minuta (ne ±15 minut).
+Pokud byl agent spuštěn ze staré verze skilu s ±15 min oknem, reportovat obě hodnoty:
+  schedule_conflict_reported_window: ±15 min (ze staré verze skilu)
+  schedule_conflict_canonical_window: ±1 min (9.0.0 canonical)
+  governance_inconsistency: true → označit v errors[]
+
+## Finální Run Report — Povinný formát 9.0.0
+
+Každý scheduled report psát česky, s emoji, s těmito povinným poli:
+
+📋 STARTUP:
+  readiness_status: ready | not_ready | blocked | first_run_init
+  prompt_status: version_match | version_mismatch | prompt_upgrade_applied | prompt_upgrade_blocked
+  PromptVersion: {verze}
+  SkillsVersion: {verze}
+  MCP_VERSION: {verze z db_ping}
+  db_ping: ok | failed | retry_{N}
+  skills_count: {počet}
+  capability_missing[]: [{tool1}, {tool2}, ...]
+
+📊 PRŮBĚH:
+  confirmed_writes: {N} záznamů (upsert potvrzen read-backem)
+  skipped_actions: [{krok}: {důvod}]
+  failed_actions: [{krok}: {důvod}]
+  inferred_findings: [{co bylo zjištěno ale nezapsáno}]
+
+📁 SOUBORY:
+  _entities: exact_file_found | created | creation_failed | skipped (+ used_source)
+  _names:    exact_file_found | not_found_skipped
+  _urls:     exact_file_found | not_found_skipped
+  _error:    written | skipped_no_failure | creation_failed
+
+📬 REPORTING:
+  ntfy: sent | skipped_capability_missing | failed_403 | failed_unconfirmed
+  calendar: event_created | skipped_capability_missing | skipped_no_calendar_id
+  db_report: saved | failed (+ fallback: ntfy_content / response_text)
+
+💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
