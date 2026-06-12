@@ -1951,6 +1951,15 @@ app.get("/ping", (req, res) => {
   res.json({ ok: true, version: MCP_VERSION });
 });
 
+// Alias for reverse-proxy path-prefixed deployments (e.g. /AI/health)
+app.get(/^\/(AI|mcp|api)\/health$/, async (req, res) => {
+  res.redirect(307, "/health");
+});
+
+app.get(/^\/(AI|mcp|api)\/ping$/, (req, res) => {
+  res.json({ ok: true, version: MCP_VERSION });
+});
+
 app.get("/health", async (req, res) => {
   try {
     const r = await pool.query("SELECT now() AS now");
