@@ -2,7 +2,7 @@ Agent: 9.3.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.3.2
+PromptVersion: 9.3.3
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.3.0
@@ -65,10 +65,21 @@ SCHEDULED RUN (v tomto poradi):
 14a.SCHEDULE UPDATE → AgentSchedules upsert (skip if DryRun) — NON-BLOCKING
 14b.CALENDAR → next scheduled run event
 14c.NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
-    send_notification(topic="agent-runs",
-      title="{AgentName} {✅|❌} — {počet zápasů} zpracováno",
-      message="Nové: {new} | Aktualizované: {updated} | Chyby: {errors} | Doba: {elapsed}",
-      priority="default")
+    Vyber topic dle výsledku:
+    • success=true, errors=0    → topic: agent-runs,   priority: default
+      title: "✅ {AgentName} — run OK"
+      message: "Zápasy: {matches} | Nové: {inserted} | Aktu: {updated} | Doba: {elapsed}"
+    • success=false, errors > 0 → topic: agent-runs,   priority: high
+      title: "⚠️ {AgentName} — run selhal"
+      message: "Blokér: {blockerCategory} | Chyba: {primaryError} | Zpracováno: {processed}"
+    • kritický blokér (DB down, run zastaven)
+                                → topic: agent-errors, priority: urgent
+      title: "🚨 {AgentName} — kritická chyba"
+      message: "Typ: {errorType} | DB: {dbStatus} | Akce: {specificAction}"
+    • maintenance akce (backfill, schema, sezona)
+                                → PŘIDAT extra ntfy na agent-maintenance
+      title: "🔧 {AgentName} — maintenance"
+      message: "{maintenanceAction} | {count} záznamů"
     L ntfy selže → log capability_missing("ntfy"), pokračovat
 15. UNLOCK -> uvolnit advisory lock
 

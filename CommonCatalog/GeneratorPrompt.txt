@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 9.3.2
+PromptVersion: 9.3.3
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.0.0
@@ -56,10 +56,21 @@ GENERATION RUN (v tomto pořadí):
 5a. SCHEDULE UPDATE → AgentSchedules upsert
 6.  CALENDAR EVENT → next scheduled run
 7.  NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
-             send_notification(topic="agent-runs",
-               title="{AgentName} {✅|❌} — {počet entit} zpracováno",
-               message="Nové: {new} | Aktualizované: {updated} | Chyby: {errors} | Doba: {elapsed}",
-               priority="default")
+             Vyber topic dle výsledku:
+             • success=true, errors=0    → topic: agent-runs,   priority: default
+               title: "✅ {AgentName} — run OK"
+               message: "Nové: {inserted} | Aktu: {updated} | Doba: {elapsed} | Verze: {PromptVersion}"
+             • success=false, errors > 0 → topic: agent-runs,   priority: high
+               title: "⚠️ {AgentName} — run selhal"
+               message: "Blokér: {blockerCategory} | Chyba: {primaryError} | Zpracováno: {processed}"
+             • kritický blokér (DB down, run zastaven)
+                                         → topic: agent-errors, priority: urgent
+               title: "🚨 {AgentName} — kritická chyba"
+               message: "Typ: {errorType} | DB: {dbStatus} | Akce: {specificAction}"
+             • maintenance akce provedeny (backfill, schema, merge)
+                                         → PŘIDAT extra ntfy na agent-maintenance
+               title: "🔧 {AgentName} — maintenance"
+               message: "{maintenanceAction} | {count} záznamů"
              L ntfy selže → log capability_missing("ntfy"), pokračovat
 8.  UNLOCK → advisory lock uvolnit
 
