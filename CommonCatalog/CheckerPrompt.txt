@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 9.2.0
+PromptVersion: 9.3.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.0.0
@@ -27,7 +27,7 @@ STARTUP SEKVENCE (7 kroků):
 2. PROMPT VERSION → porovnat s Google Drive + načíst CheckerPromptSkills
 3. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Checkers/
 4. LOAD SKILLS → ověřit dostupnost database-table-audit a table-freshness-report
-5. AGENT SCHEDULES → načíst z DB, detekovat konflikty
+5. AGENT SCHEDULES → načíst z DB, zobrazit přehled (conflict detection zakázána)
 6. READINESS → classify readiness_status
 
 -----------------------------------------------------------
@@ -468,13 +468,9 @@ Reportovat jeden z těchto stavů v run reportu:
 Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
 pokud DB zápisy a validace proběhly bezpečně.
 
-## AgentSchedules Conflict — 9.0.0 Canonical
+## AgentSchedules Conflict — 9.3.0 Canonical
 
-Conflict window: ±1 minuta (ne ±15 minut).
-Pokud byl agent spuštěn ze staré verze skilu s ±15 min oknem, reportovat obě hodnoty:
-  schedule_conflict_reported_window: ±15 min (ze staré verze skilu)
-  schedule_conflict_canonical_window: ±1 min (9.0.0 canonical)
-  governance_inconsistency: true → označit v errors[]
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 
 ## Finální Run Report — Povinný formát 9.0.0
 
@@ -514,11 +510,11 @@ PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
 =============================================================
 (additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
 
-## AgentSchedules Conflict — 9.2.0 Canonical Override
-(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+## AgentSchedules Conflict — 9.3.0 Override
+(přepisuje všechny předchozí verze AgentSchedules Conflict sekce)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
-Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
+Pokud zjištěn schedule drift: reportovat v highlights[] jako schedule_drift_detected.
 Při absenci AgentSchedules záznamu: vložit/aktualizovat POUZE při db_reachable.
 
 ## Calendar Universal Rule — 9.2.0

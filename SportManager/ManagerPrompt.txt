@@ -359,7 +359,7 @@ Povinné kroky v tomto pořadí:
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
 11. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
-    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±1 min → log warning v startup diagnostics
+    → paralelní běh více agentů ve stejný čas je povolený, konflikty se nehlásí
       + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
 12. CALENDAR ID RESOLUTION → uložit CALENDAR_ID pro celý run
@@ -3885,7 +3885,7 @@ CREATE TABLE IF NOT EXISTS AgentSchedules (
 Pravidla:
 - Business key: AgentName UNIQUE — každý agent má max 1 záznam
 - Na konci každého runu: UPSERT (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt=now()+IntervalHours)
-- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±1 min okně → log warning)
+- Na startu: SELECT all active agents + zobrazit přehled plánů (konflikt detection je zakázána)
 - DryRun: UPSERT se neprovede
 
 ## Canonical Precedence Rules
@@ -4091,13 +4091,9 @@ Reportovat jeden z těchto stavů v run reportu:
 Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
 pokud DB zápisy a validace proběhly bezpečně.
 
-## AgentSchedules Conflict — 9.0.0 Canonical
+## AgentSchedules Conflict — 9.3.0 Canonical
 
-Conflict window: ±1 minuta (ne ±15 minut).
-Pokud byl agent spuštěn ze staré verze skilu s ±15 min oknem, reportovat obě hodnoty:
-  schedule_conflict_reported_window: ±15 min (ze staré verze skilu)
-  schedule_conflict_canonical_window: ±1 min (9.0.0 canonical)
-  governance_inconsistency: true → označit v errors[]
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 
 ## Finální Run Report — Povinný formát 9.0.0
 
@@ -4137,10 +4133,10 @@ PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
 =============================================================
 (additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
 
-## AgentSchedules Conflict — 9.2.0 Canonical Override
-(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+## AgentSchedules Conflict — 9.3.0 Override
+(přepisuje všechny předchozí verze AgentSchedules Conflict sekce)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
 Při absenci AgentSchedules záznamu pro aktuální AgentName:
 → vložit/aktualizovat POUZE při potvrzené DB readiness (db_reachable).

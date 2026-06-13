@@ -172,10 +172,10 @@ Outputs: execution plan, per-file results, celkový stav
 Limitations: reportingová fáze jen při plném úspěchu; neomezovat catch-up batch
 
 ## agent-schedule-manager
-Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Task types: AgentSchedules, přehled agentů, přehled plánů (conflict detection zakázána)
 Description: Spravuje tabulku AgentSchedules pro Importer agenty.
   Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu: load přehled a detekovat konflikty ±1 min.
+  Na startu: load přehled a zobrazit přehled plánů (conflict detection zakázána) ±1 min.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Importer"
 Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
@@ -224,7 +224,7 @@ PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
 ## agent-schedule-manager — 9.2.0 Update
 (přepisuje ±1 min conflict window z původní definice)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType
 Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konfliktů
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;

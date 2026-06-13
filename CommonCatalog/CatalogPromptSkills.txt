@@ -1003,14 +1003,13 @@ Outputs: digest soubor na Drive /Prompts/Reports/{AgentName}/, ntfy summary na a
 Limitations: min 5 runů pro smysluplný weekly digest; bez dat reportuje "insufficient_data"
 
 ## agent-schedule-manager
-Task types: AgentSchedules, denní čas spuštění, přehled agentů, detekce konfliktů
+Task types: AgentSchedules, denní čas spuštění, přehled agentů
 Description: Spravuje tabulku AgentSchedules — ukládá denní plánovaný čas spuštění každého agenta.
   Na konci každého runu provede UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu načte přehled všech aktivních agentů a detekuje konflikty (±1 min od sebe).
-  Slouží k přehledu "kdo se kdy pouští" a prevenci přetížení v jednu dobu.
+  Na startu načte přehled všech aktivních agentů (paralelní běh více agentů je povolený).
 Inputs: AgentName, ScheduledRunTime (time, Europe/Prague), IntervalHours, AgentType (Catalog/Manager)
-Outputs: upsert do AgentSchedules, startup report konfliktů, přehled tabulky agentů
-Limitations: čas v Europe/Prague; konflikt = 2+ agenti v okně ±1 min; NEZDVOJIT upsert při DryRun
+Outputs: upsert do AgentSchedules, přehled tabulky agentů
+Limitations: čas v Europe/Prague; NEZDVOJIT upsert při DryRun
 
 ## problem-report-writer
 Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
@@ -1029,14 +1028,13 @@ PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
 =============================================================
 (additive patch — nenahrazuje existující skill definice; opravuje níže uvedená pravidla)
 
-## agent-schedule-manager — 9.2.0 Update
-(přepisuje ±1 min conflict window z původní definice)
+## agent-schedule-manager — 9.3.0 Update
+(přepisuje ±1 min / ±15 min conflict window z předchozích verzí)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType
-Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konfliktů
-Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
-  reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
+Outputs: upsert do AgentSchedules (POUZE při db_reachable), schedule_drift_detected pokud DB plán ≠ Hermes plán
+Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable
 
 ## problem-report-writer — 9.2.0 Update
 
