@@ -372,7 +372,7 @@ Povinné kroky v tomto pořadí:
 
     ChatGPT (list_calendars NENÍ k dispozici):
     a) CALENDAR_ID = {{AI_MANAGERS_CALENDAR_ID}} (operátor nastaví) nebo "primary"
-    b) Pokud nenakonfigurováno: log capability_missing("ai_managers_calendar_id") → přeskočit
+    b) Pokud nenakonfigurováno: použít "primary" jako fallback (NIKDY capability_missing jen kvůli chybějícímu ID)
     DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Managers" jako calendar_id parametr přímo
 13. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
 
@@ -919,7 +919,9 @@ Postup:
 1. Sestavit obsah souboru podle formátu výše
 2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
 3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
-   Pokud soubor neexistuje: create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   Pokud soubor neexistuje:
+   [Claude MCP] create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   [ChatGPT]    create_file(name="{AgentName}_error.txt", content=<obsah>) → přesun do složky není podporován; zaznamenat capability_missing("problem_report_drive_parent") a pokračovat
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
@@ -935,7 +937,7 @@ Priorita:
 - Problem report Drive zápis se NEBLOKUJE run ani report — jen best-effort
 - Pokud Drive nedostupný: agent pokračuje k finálnímu reportu bez blokatéru
 
-## Retry Protocol Governance -- 8.4.0
+## Retry Protocol Governance
 
 Transient error categories:
 - ECONNREFUSED, ECONNRESET, ETIMEDOUT, statement_timeout
