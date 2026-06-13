@@ -1,7 +1,7 @@
 Agent: 9.3.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 9.3.3
+PromptVersion: 9.3.4
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.3.0
@@ -172,7 +172,7 @@ SCHEDULED RUN (v tomto poradi):
              • success=true, errors=0    → topic: agent-runs,   priority: default
                title: "✅ {AgentName} — run OK"
                message: "Nové: {inserted} | Aktu: {updated} | Doba: {elapsed} | Verze: {PromptVersion}"
-             • success=false, errors > 0 → topic: agent-runs,   priority: high
+             • success=false, errors > 0 → topic: agent-alerts, priority: high
                title: "⚠️ {AgentName} — run selhal"
                message: "Blokér: {blockerCategory} | Chyba: {primaryError} | Zpracováno: {processed}"
              • kritický blokér (DB down, run zastaven)
@@ -3372,7 +3372,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 9.3.3
+PromptVersion: 9.3.4
 
 Ověřené image nástroje:
 - save_image_base64
