@@ -100,7 +100,7 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     4. Pro každý chybějící skill: capability_missing("{skill}")
     5. Zaznamenat do run reportu: skillsNeeded[], skillsAvailable[], skillsMissing[]
     6. Přebytečné skills: zaznamenat jako unused_skill[] v highlights[]
-10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (±1 min)
+10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled (conflict detection zakázána)
 10a. CALENDAR ID RESOLUTION → uložit CALENDAR_ID pro celý run
      Claude MCP (list_calendars dostupné):
      a) list_calendars() → hledat kalendář s názvem obsahujícím "AI Catalogs"
@@ -421,10 +421,7 @@ Required runtime sequence:
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
 16. načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
-    → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±1 min → log warning v startup diagnostics
-    → řešení konfliktu (operátor musí upravit ScheduledRunTime v AgentSchedules):
-       doporučení pro agenta: navrhni v highlights[] konkrétní čas posunu:
-       "Konflikt: {Agent2} runs ve {čas} (±1 min). Doporučené posunutí: +20 min → {nový čas}."
+    → paralelní běh více agentů ve stejný čas je povolený, konflikty se nehlásí
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
 17. classify readiness_status only after DB reachability, prompt/version compatibility,
     skills check, and baseline validation are all satisfied
@@ -4418,7 +4415,7 @@ CREATE TABLE IF NOT EXISTS AgentSchedules (
 Pravidla:
 - Business key: AgentName UNIQUE — každý agent má max 1 záznam
 - Na konci každého runu: UPSERT (AgentName, ScheduledRunTime, LastRunAt=now(), NextRunAt=now()+IntervalHours)
-- Na startu: SELECT all active agents + detekce konfliktů (2+ agenti v ±1 min okně → log warning)
+- Na startu: SELECT all active agents + zobrazit přehled plánů (conflict detection zakázána)
 - DryRun: UPSERT se neprovede
 
 ## Deployment and Infrastructure Notes
@@ -5011,13 +5008,9 @@ Reportovat jeden z těchto stavů v run reportu:
 Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
 pokud DB zápisy a validace proběhly bezpečně.
 
-## AgentSchedules Conflict — 9.0.0 Canonical
+## AgentSchedules Conflict — 9.3.0 Canonical
 
-Conflict window: ±1 minuta (ne ±15 minut).
-Pokud byl agent spuštěn ze staré verze skilu s ±15 min oknem, reportovat obě hodnoty:
-  schedule_conflict_reported_window: ±15 min (ze staré verze skilu)
-  schedule_conflict_canonical_window: ±1 min (9.0.0 canonical)
-  governance_inconsistency: true → označit v errors[]
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 
 ## Finální Run Report — Povinný formát 9.0.0
 
@@ -5057,11 +5050,10 @@ PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
 =============================================================
 (additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
 
-## AgentSchedules Conflict — 9.2.0 Canonical Override
-(přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
+## AgentSchedules Conflict — 9.3.0 Canonical Override
+(přepisuje PATCH 9.2.0 sekci AgentSchedules Conflict)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
-Důvod: ±1 min způsobovalo false positives při normálním scheduling drift.
+Paralelní běh více agentů ve stejný čas je plně povolený — conflict detection se neprovádí.
 Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
 Při absenci přesného AgentSchedules záznamu pro aktuální AgentName:
 → vložit nebo aktualizovat POUZE při potvrzené DB readiness (db_reachable).

@@ -266,10 +266,10 @@ Outputs: simulované výstupy, run report s IsDryRun=true
 Limitations: Calendar eventy NEVYTVÁŘÍ; Drive zápis blokován
 
 ## agent-schedule-manager
-Task types: AgentSchedules, přehled agentů, detekce konfliktů
+Task types: AgentSchedules, přehled agentů, přehled plánů (conflict detection zakázána)
 Description: Spravuje tabulku AgentSchedules pro Collector agenty.
   Na konci runu: UPSERT (AgentName, ScheduledRunTime, NextRunAt, LastRunAt).
-  Na startu: load přehled a detekovat konflikty ±1 min.
+  Na startu: load přehled a zobrazit přehled plánů (conflict detection zakázána) ±1 min.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType="Collector"
 Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
@@ -328,7 +328,7 @@ PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
 ## agent-schedule-manager — 9.2.0 Update
 (přepisuje ±1 min conflict window)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Vkládat/aktualizovat AgentSchedules POUZE při db_reachable.
 Reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán.
 

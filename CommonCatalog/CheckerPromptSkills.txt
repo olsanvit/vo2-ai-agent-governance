@@ -1,5 +1,5 @@
 SkillsFor: CheckerPrompt
-SkillsVersion: 9.2.0
+SkillsVersion: 9.3.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -183,12 +183,12 @@ PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
 =============================================================
 (additive patch — nenahrazuje existující skill definice; opravuje níže uvedená pravidla)
 
-## agent-schedule-manager — 9.2.0 Update
-(přepisuje ±1 min conflict window z původní definice)
+## agent-schedule-manager — 9.3.0 Update
+(přepisuje všechny předchozí conflict window verze)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType
-Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konfliktů
+Outputs: upsert do AgentSchedules (POUZE při db_reachable), přehled agentů
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
   reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
 
@@ -211,6 +211,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 9.2.0
+SkillsVersion: 9.3.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

@@ -34,7 +34,7 @@ STARTUP SEKVENCE (8 kroků):
 4. MAPPING → načíst {AgentName}_mapping.txt z Drive /Prompts/Importers/
 5. SCHEMA CHECK → ověřit/vytvořit TargetTable a potřebné sloupce
 6. PENDING FILES → zjistit nové / dosud nezpracované soubory ve SourceFolder
-7. AGENT SCHEDULES → načíst z DB, detekovat konflikty
+7. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
 8. READINESS → classify readiness_status
 
 -----------------------------------------------------------
@@ -612,13 +612,9 @@ Reportovat jeden z těchto stavů v run reportu:
 Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
 pokud DB zápisy a validace proběhly bezpečně.
 
-## AgentSchedules Conflict — 9.0.0 Canonical
+## AgentSchedules Conflict — 9.3.0 Canonical
 
-Conflict window: ±1 minuta (ne ±15 minut).
-Pokud byl agent spuštěn ze staré verze skilu s ±15 min oknem, reportovat obě hodnoty:
-  schedule_conflict_reported_window: ±15 min (ze staré verze skilu)
-  schedule_conflict_canonical_window: ±1 min (9.0.0 canonical)
-  governance_inconsistency: true → označit v errors[]
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 
 ## Finální Run Report — Povinný formát 9.0.0
 
@@ -673,7 +669,7 @@ Podmínky:
 ## AgentSchedules Conflict — 9.2.0 Canonical Override
 (přepisuje PATCH 9.0.0 sekci AgentSchedules Conflict ±1 min)
 
-Conflict detection window: ±15 minut (canonical od 9.2.0).
+Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Pokud zjištěn schedule drift: reportovat v highlights[] jako schedule_drift_detected.
 Při absenci AgentSchedules záznamu: vložit/aktualizovat POUZE při db_reachable.
 
