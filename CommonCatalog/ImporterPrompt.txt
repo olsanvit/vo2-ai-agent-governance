@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 9.2.0
+PromptVersion: 9.3.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.0.0

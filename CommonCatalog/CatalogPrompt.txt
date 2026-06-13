@@ -113,7 +113,7 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
      a) CALENDAR_ID dle konfigurace operátora:
         - operátor vloží ID přímo do promtu jako {{AI_CATALOGS_CALENDAR_ID}}
         - NEBO použít "primary" (výchozí Google Calendar uživatele)
-     b) Pokud ID není nakonfigurováno: log capability_missing("ai_catalogs_calendar_id") → přeskočit
+     b) Pokud ID není nakonfigurováno: použít "primary" jako fallback (NIKDY capability_missing jen kvůli chybějícímu ID)
      DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo
 11. READINESS -> classify readiness_status (az po vsech predchozich krocich)
 
@@ -1699,7 +1699,9 @@ Postup:
 1. Sestavit obsah souboru podle formátu výše
 2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
 3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
-   Pokud soubor neexistuje: create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   Pokud soubor neexistuje:
+   [Claude MCP] create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   [ChatGPT]    create_file(name="{AgentName}_error.txt", content=<obsah>) → pak přesunout do složky není možné přes action; zaznamenat capability_missing("problem_report_drive_parent") a pokračovat
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
@@ -3109,7 +3111,7 @@ Successful report must include:
 - any non-blocking warnings visible for operators
 - activation status, source document id/url
 
-## Webhook and Inbound Data Protocol — 8.4.0
+## Webhook and Inbound Data Protocol
 
 Agent muze prijmat data od externich systemu skrze HTTP webhook endpoint (pokud je nakonfigurovano).
 
@@ -3133,7 +3135,7 @@ Podporovane zdroje (priklad):
 - external data provider change notification
 - internal agent-to-agent cross-notification
 
-## DryRun Mode Governance — 8.4.0
+## DryRun Mode Governance
 
 DryRun mod umoznuje testovaci beh bez jakychkoliv zapisovych operaci do DB.
 
@@ -3160,7 +3162,7 @@ Pouziti:
 - Overeni parsovaci logiky bez side effects
 - Debugging datovych problemu
 
-## Data Export and Backup Protocol — 8.4.0
+## Data Export and Backup Protocol
 
 Backup schedule:
 - weekly: export all ImportantScore >= 70 tables to Drive /Prompts/Backups/{AgentName}/weekly/
@@ -3358,7 +3360,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 9.2.0  <!-- legacy section původně z 8.4.0, aktualizováno na 9.2.0 -->
+PromptVersion: 9.3.0
 
 Ověřené image nástroje:
 - save_image_base64
@@ -3837,9 +3839,8 @@ SchemaVersion: 9.2.0
 RuntimeSafetyVersion: 9.2.0
 ScoringVersion: 3.0
 ImageGovernanceVersion: 9.2.0
-ProviderGovernanceVersion: 9.2.0
+ProviderGovernanceVersion: 9.3.0
 AIProvenanceVersion: 3.0
-<!-- Původní hodnoty z 8.4.0 jsou historické — tato sekce aktualizována na 9.2.0 -->
 
 ## Prompt Synchronization Note
 
@@ -3959,7 +3960,7 @@ Běh je dry_run, pokud:
 - TechnologiesView, SoftwareSystemsView, APIsView, SDKsView
 - InfrastructureView, CloudServicesView, IntegrationsView, VersionHistoryView
 
-## Skill Directory -- 8.4.0
+## Skill Directory
 
 Detailní Skill Directory (111 skills) je v samostatném souboru:
   CatalogPromptSkills.txt — Drive folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -4914,7 +4915,7 @@ Exception: debug/developer/manual runs may use English when explicitly requested
 
 ## Final Note
 
-Tento soubor je CatalogPrompt 8.4.0 — konsolidovaná restrukturalizace z 9701 řádků původního souboru.
+Tento soubor je CatalogPrompt 9.3.0 — konsolidovaná restrukturalizace z 9701 řádků původního souboru.
 
 Klíčové změny oproti původnímu souboru:
 - Odstraněno: Slack alerting sekce, legacy release metadata < 7.0, duplicitní pravidla
