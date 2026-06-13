@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 9.3.0
+PromptVersion: 9.3.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.0.0
@@ -35,6 +35,9 @@ AUDIT RUN (v tomto pořadí):
 -----------------------------------------------------------
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent
+0b. NOTIFY START → send_notification(topic="agent-runs", title="{AgentName} — běh zahájen",
+             message="{AgentName} 🚀 naplánovaný běh zahájen", priority="low")
+             L ntfy selže → log capability_missing("ntfy"), pokračovat
 1.  DATABASE-TABLE-AUDIT → sběr podkladů (viz Ch 4)
 2.  BASEGUID CHECK → pro každou tabulku: Guid, CreatedAt, UpdatedAt, Emoji, Colors
 3.  SAFE SCHEMA PATCH → bezpečně doplnit chybějící BaseGuid sloupce (pokud možné)

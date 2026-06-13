@@ -2,7 +2,7 @@ Agent: 9.3.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.3.0
+PromptVersion: 9.3.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.3.0
@@ -28,6 +28,9 @@ SCHEDULED RUN (v tomto poradi):
              → pokud audit selže s errors: STOP scheduled run, zapsat problem report
              GARANCE: pokud self-audit projde bez errors, žádné komplikace v běhu
              se neočekávají — verze, tools, skills, Drive soubory a ntfy jsou ověřeny.
+0b. NOTIFY START → send_notification(topic="agent-runs", title="{AgentName} — běh zahájen",
+             message="{AgentName} 🚀 naplánovaný běh zahájen", priority="low")
+             L ntfy selže → log capability_missing("ntfy"), pokračovat
 1.  STARTUP checks (db, prompt, skills, catalog, missed run, circuit breaker)
 2.  INTERNATIONAL CALENDAR -> aktivni prestavka? -> preskocit afektovane souteze
 3.  NAMES QUEUE  -> {AgentName}_names (Sheet) -> resolve tymy/hrace -> priority queue
