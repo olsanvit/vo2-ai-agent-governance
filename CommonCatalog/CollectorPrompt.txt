@@ -1,6 +1,6 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.3.3
+PromptVersion: 9.3.4
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.0.0
@@ -56,7 +56,7 @@ SCHEDULED RUN (v tomto pořadí):
              • success=true, errors=0    → topic: agent-runs,   priority: default
                title: "✅ {AgentName} — run OK"
                message: "Nové: {inserted} | Aktu: {updated} | Doba: {elapsed} | Verze: {PromptVersion}"
-             • success=false, errors > 0 → topic: agent-runs,   priority: high
+             • success=false, errors > 0 → topic: agent-alerts, priority: high
                title: "⚠️ {AgentName} — run selhal"
                message: "Blokér: {blockerCategory} | Chyba: {primaryError} | Zpracováno: {processed}"
              • kritický blokér (DB down, run zastaven)
