@@ -1,6 +1,6 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.3.2
+PromptVersion: 9.3.3
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.0.0
@@ -52,10 +52,21 @@ SCHEDULED RUN (v tomto pořadí):
 8a. SCHEDULE UPDATE → AgentSchedules upsert
 9.  CALENDAR EVENT → next scheduled run
 10. NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
-             send_notification(topic="agent-runs",
-               title="{AgentName} {✅|❌} — {počet entit} zpracováno",
-               message="Nové: {new} | Aktualizované: {updated} | Chyby: {errors} | Doba: {elapsed}",
-               priority="default")
+             Vyber topic dle výsledku:
+             • success=true, errors=0    → topic: agent-runs,   priority: default
+               title: "✅ {AgentName} — run OK"
+               message: "Nové: {inserted} | Aktu: {updated} | Doba: {elapsed} | Verze: {PromptVersion}"
+             • success=false, errors > 0 → topic: agent-runs,   priority: high
+               title: "⚠️ {AgentName} — run selhal"
+               message: "Blokér: {blockerCategory} | Chyba: {primaryError} | Zpracováno: {processed}"
+             • kritický blokér (DB down, run zastaven)
+                                         → topic: agent-errors, priority: urgent
+               title: "🚨 {AgentName} — kritická chyba"
+               message: "Typ: {errorType} | DB: {dbStatus} | Akce: {specificAction}"
+             • maintenance akce provedeny (backfill, schema, merge)
+                                         → PŘIDAT extra ntfy na agent-maintenance
+               title: "🔧 {AgentName} — maintenance"
+               message: "{maintenanceAction} | {count} záznamů"
              L ntfy selže → log capability_missing("ntfy"), pokračovat
 11. UNLOCK → advisory lock uvolnit
 
