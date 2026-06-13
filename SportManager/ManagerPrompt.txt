@@ -246,7 +246,8 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
    c. Gitea nedostupná → FALLBACK na Drive:
-      search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      [ChatGPT]    search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
       POZOR: nikdy neukládat nalezené fileId — vždy search znovu příští run
    d. Gitea i Drive nedostupné + cache existuje → použít cache; log "prompt_upgrade_blocked"
    e. Vše nedostupné + cache chybí → pokračovat s bootstrap verzí; log warning
@@ -300,7 +301,8 @@ Povinné kroky v tomto pořadí:
       → extract PromptVersion z prvních 5 řádků
       → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
    b) DRIVE (fallback pokud Gitea nedostupná):
-      search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      [ChatGPT]    search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
       POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
    c) verify: canonical PromptVersion >= agent version (no downgrade)
    d) if version_mismatch: activate fetched prompt (selfUpdate)
@@ -311,29 +313,37 @@ Povinné kroky v tomto pořadí:
    → log warning, run NEBLOKOVAT, send ntfy "⚠️ prompt upgrade blocked"
 7. Nacist {skillsFile}.txt — stejná priorita Gitea → Drive → cache:
    GITEA: .../raw/branch/main/SportManager/{skillsFile}.txt
-   DRIVE: search_files(query="{skillsFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+   [Claude MCP] DRIVE: search_files(query="{skillsFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+   [ChatGPT]    DRIVE: search(query="{skillsFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
    - agent musi mit aktivnich ASPON 11 skills
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
    - pokud ukol neni pokryt: navrhnout novy skill (Drive/Gitea dle workflow operátora)
 8. Nacist {AgentName}_entities (Sheet) z /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-   search_files → sheets_get_values → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+   [Claude MCP] search_files → sheets_get_values → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+   [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range
    - pokud Sheet neexistuje:
      a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
      b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
      c) přiřadit výchozí ImportantScore dle defaultní tabulky z Ch 1 (Matches=100, Teams=100, atd.; neznámé = 50)
-     d) sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
-        sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+     [Claude MCP] d) sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+                     sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+     [ChatGPT]    d) create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
+                     batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
      e) log: "📊 {AgentName}_entities Sheet vytvořen s {N} tabulkami"
-   - pokud Sheet existuje: sheets_get_values → použít jako přehled pro prioritizaci
+   - pokud Sheet existuje:
+     [Claude MCP] sheets_get_values → použít jako přehled pro prioritizaci
+     [ChatGPT]    get_spreadsheet_range → použít jako přehled pro prioritizaci
    - agent může Sheet ROZŠIŘOVAT a AKTUALIZOVAT:
-     → přidat nově objevené tabulky: sheets_append_rows (ImportantScore=50 výchozí)
-     → aktualizovat ImportantScore, RowCount, LastPopulated: sheets_find_row + sheets_update_row
+     [Claude MCP] → sheets_append_rows (nové) / sheets_find_row + sheets_update_row (aktualizace)
+     [ChatGPT]    → batch_update_spreadsheet(appendCells) / search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
    DŮLEŽITÉ: načíst PŘED Baseline-25 check (krok 9)
 8a. Načíst {AgentName}_names (Sheet) z /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
-    search_files → sheets_get_values → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
+    [Claude MCP] search_files → sheets_get_values → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
+    [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 8b. Načíst {AgentName}_urls (Sheet) z /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-    search_files → sheets_get_values → seznam URL k projití před standardním scrapingem
+    [Claude MCP] search_files → sheets_get_values → seznam URL k projití před standardním scrapingem
+    [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 9. Zkontrolovat existenci alespon 25 baseline entit
    - seznam tabulek pro počítání: ImportantScore >= 70 tabulky z Managers souboru (krok 8)
@@ -419,13 +429,21 @@ Postup při prvním runu:
    AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue,
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit sport-specifické tabulky: Competitions, Seasons, Teams, Players, Matches
-4. Vytvořit Google Sheets pokud neexistují (search_files nejdříve — nevytvářet duplicity):
+4. Vytvořit Google Sheets pokud neexistují (nejdříve ověřit existenci — nevytvářet duplicity):
+   [Claude MCP]
    sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
      + sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"]])
    sheets_create_spreadsheet(title="{AgentName}_names",    folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
      + sheets_append_rows(rows=[["EntityName","coverage","tables","lastProcessed"]])
    sheets_create_spreadsheet(title="{AgentName}_urls",     folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
      + sheets_append_rows(rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+   [ChatGPT]
+   create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["ImportantScore","TableName","Description","RowCount","LastPopulated"]],fields:"userEnteredValue"}}])
+   create_file(name="{AgentName}_names",    mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["EntityName","coverage","tables","lastProcessed"]],fields:"userEnteredValue"}}])
+   create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
 5. Upsert AgentSchedules (AgentName, AgentType="Manager", ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT post-match pipeline — pouze schema init + discovery (max 5 datumů, max 10 zápasů)
 7. Uložit run report: runMode="first_run", success=schema_ready
@@ -631,7 +649,9 @@ Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 - Managers/{AgentName}_entities (Google Sheet) -- seznam vlastnich DB tabulek agenta
   Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
   COLUMNS: ImportantScore | TableName | Description | RowCount | LastPopulated
-  Číst: search_files → sheets_get_values; Přidat: sheets_append_rows; Update: sheets_find_row + sheets_update_row
+  Číst: [Claude MCP] search_files → sheets_get_values / [ChatGPT] search → get_spreadsheet_range
+  Přidat: [Claude MCP] sheets_append_rows / [ChatGPT] batch_update_spreadsheet(appendCells)
+  Update: [Claude MCP] sheets_find_row + sheets_update_row / [ChatGPT] search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
 - Names/{AgentName}_names (Google Sheet) -- seznam nazvu tymu/soutezi/hracu k prioritnimu dohledani
   Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
   COLUMNS: EntityName | coverage | tables | lastProcessed
@@ -644,9 +664,15 @@ Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
   Drive folder ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Postup pri startu:
-1. Nacist Managers Sheet (search_files → sheets_get_values) -> prehled vlastnich DB tabulek agenta
-2. Nacist Names Sheet (search_files → sheets_get_values) -> pridat do priority queue (Score 90+)
-3. Nacist Urls Sheet (search_files → sheets_get_values) -> projit pred standardnim web scrapingem
+1. Nacist Managers Sheet -> prehled vlastnich DB tabulek agenta
+   [Claude MCP] search_files(folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → sheets_get_values
+   [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range
+2. Nacist Names Sheet -> pridat do priority queue (Score 90+)
+   [Claude MCP] search_files(folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY") → sheets_get_values
+   [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → get_spreadsheet_range
+3. Nacist Urls Sheet -> projit pred standardnim web scrapingem
+   [Claude MCP] search_files(folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U") → sheets_get_values
+   [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → get_spreadsheet_range
 4. Pokud Sheet neexistuje nebo je prazdny: preskocit (ne chyba)
 
 ## Google Sheets Sports Baseline Catalog -- 9.3.0
@@ -670,10 +696,13 @@ RowCount = 0 pro ImportantScore < 70  -> note v highlights, zadny blok
 
 Lifecycle rules:
 - pokud Sheet neexistuje: vytvorit po prvnim uspesnem runu:
-  sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
-  + sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+  [Claude MCP] sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+               + sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+  [ChatGPT]    create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
+               + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
 - pokud Sheet existuje: aktualizovat na konci kazdeho uspesneho runu:
-  sheets_find_row(column=1, value=TableName) → sheets_update_row pro RowCount + LastPopulated
+  [Claude MCP] sheets_find_row(column=1, value=TableName) → sheets_update_row pro RowCount + LastPopulated
+  [ChatGPT]    search_spreadsheet_rows(spreadsheetId, "Sheet1", query=TableName) → rowIndex + batch_update_spreadsheet(updateCells)
   NIKDY nepřepisovat celý Sheet — jen append/update_row
 - nikdy neaktualizovat kdyz db_status == db_unreachable
 
@@ -733,14 +762,20 @@ L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále 
 
 BLOK 5 -- Google Sheets + Drive soubory:
 5a. {AgentName}_entities (Sheet) v /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: ImportantScore|TableName|Description|RowCount|LastPopulated
-    L chybí → sheets_create_spreadsheet + záhlaví (struktura dle baseline-managers-file-manager)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: ImportantScore|TableName|Description|RowCount|LastPopulated
+                 L chybí → sheets_create_spreadsheet + záhlaví (struktura dle baseline-managers-file-manager)
+    [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → existuje? get_spreadsheet_range → zkontrolovat záhlaví
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5b. {AgentName}_names (Sheet) v /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: EntityName|coverage|tables|lastProcessed
-    L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: EntityName|coverage|tables|lastProcessed
+                 L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → existuje? get_spreadsheet_range
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5c. {AgentName}_urls (Sheet) v /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: URL|SourceTier|ReliabilityScore|EntityType|LastChecked|Status
-    L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: URL|SourceTier|ReliabilityScore|EntityType|LastChecked|Status
+                 L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → existuje? get_spreadsheet_range
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5d. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
     → Drive .txt (beze změny) — přečíst pokud existuje, ověřit aktuálnost problémů
 

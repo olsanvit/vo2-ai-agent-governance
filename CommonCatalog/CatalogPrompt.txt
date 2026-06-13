@@ -22,46 +22,64 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}_entities (Google Sheet) z Drive /Prompts/Catalogs/
     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
-    Najít: search_files(query="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
-    Číst: sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
+    [Claude MCP] Najít: search_files(query="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+                 Číst:  sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
+    [ChatGPT]    Najít: search(query="{AgentName}_entities", special_filter_query_str="'1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH' in parents")
+                 Číst:  get_spreadsheet_range(spreadsheetId=<found id>, range="Sheet1")
     L neexistuje → OKAMŽITĚ vytvořit při startu:
       a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
       b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
       c) přiřadit výchozí ImportantScore dle dostupných metadat (neznámé = 50)
-      d) sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
-         sheets_append_rows(spreadsheetId=<new id>, range="Sheet1", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+      [Claude MCP] d) sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+                      sheets_append_rows(spreadsheetId=<new id>, range="Sheet1", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+      [ChatGPT]    d) create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
+                      batch_update_spreadsheet(spreadsheetId=<new id>, requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
       e) log: "📊 {AgentName}_entities Sheet vytvořen s {N} tabulkami"
     - Agent může Sheet ROZŠIŘOVAT a AKTUALIZOVAT:
-      → přidat nově objevené tabulky: sheets_append_rows (ImportantScore=50 výchozí)
-      → aktualizovat ImportantScore, RowCount, LastPopulated: sheets_find_row + sheets_update_row
+      [Claude MCP] → sheets_append_rows (nové tabulky) / sheets_find_row + sheets_update_row (aktualizace)
+      [ChatGPT]    → batch_update_spreadsheet(appendCells) / search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
       → logicky seřadit sestupně dle ImportantScore (při čtení)
     COLUMNS: ImportantScore(3des.) | TableName | Description | RowCount | LastPopulated
     Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý Sheet — jen append/update_row.
     AgentName format: "Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]"
 5.  NAMES -> nacist {AgentName}_names (Google Sheet) z Drive /Prompts/Names/
     Drive folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY
-    Najít: search_files(query="{AgentName}_names", folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
-    Číst: sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
-    L neexistuje → sheets_create_spreadsheet(title="{AgentName}_names", folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
-                   + sheets_append_rows(rows=[["EntityName","coverage","tables","lastProcessed"]])
+    [Claude MCP] Najít: search_files(query="{AgentName}_names", folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
+                 Číst:  sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
+    [ChatGPT]    Najít: search(query="{AgentName}_names", special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents")
+                 Číst:  get_spreadsheet_range(spreadsheetId=<found id>, range="Sheet1")
+    L neexistuje → [Claude MCP] sheets_create_spreadsheet(title="{AgentName}_names", folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
+                                + sheets_append_rows(rows=[["EntityName","coverage","tables","lastProcessed"]])
+                   [ChatGPT]    create_file(name="{AgentName}_names", mimeType="application/vnd.google-apps.spreadsheet")
+                                + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header],fields:"userEnteredValue"}}])
     Plní VÝHRADNĚ operátor — agent NEPŘIDÁVÁ nové entity řádky (jen operátor)
-    Agent AKTUALIZUJE coverage metadata: sheets_find_row(column=0, value=EntityName) + sheets_update_row
+    Agent AKTUALIZUJE coverage metadata:
+    [Claude MCP] sheets_find_row(column=0, value=EntityName) + sheets_update_row
+    [ChatGPT]    search_spreadsheet_rows(spreadsheetId, "Sheet1", query=EntityName) → rowIndex + batch_update_spreadsheet(updateCells)
     COLUMNS: EntityName | coverage | tables | lastProcessed
 6.  URLS -> nacist {AgentName}_urls (Google Sheet) z Drive /Prompts/Urls/
     Drive folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U
-    Najít: search_files(query="{AgentName}_urls", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
-    Číst: sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
-    L neexistuje → sheets_create_spreadsheet(title="{AgentName}_urls", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
-                   + sheets_append_rows(rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+    [Claude MCP] Najít: search_files(query="{AgentName}_urls", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+                 Číst:  sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
+    [ChatGPT]    Najít: search(query="{AgentName}_urls", special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents")
+                 Číst:  get_spreadsheet_range(spreadsheetId=<found id>, range="Sheet1")
+    L neexistuje → [Claude MCP] sheets_create_spreadsheet(title="{AgentName}_urls", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+                                + sheets_append_rows(rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+                   [ChatGPT]    create_file(name="{AgentName}_urls", mimeType="application/vnd.google-apps.spreadsheet")
+                                + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header],fields:"userEnteredValue"}}])
     Plní: operátor (manuálně) + agent (auto-discovery Tier A/B zdrojů)
     COLUMNS: URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
     Status hodnoty: active | dead | paused | priority
     Agent auto-discovery pravidla:
     - zapisovat POUZE Tier A a Tier B URL (Tier C/D → ignorovat)
     - před zápisem ověřit dostupnost (HTTP HEAD request)
-    - deduplikovat: sheets_find_row(column=0, value=URL) před přidáním
-    - max 50 nových URL per run: sheets_append_rows (NIKDY nepřepisovat celý Sheet)
-    - URL s 404/403 třikrát → Status=dead: sheets_find_row + sheets_update_row
+    - deduplikovat: [Claude MCP] sheets_find_row(column=0, value=URL) / [ChatGPT] search_spreadsheet_rows(query=URL) — před přidáním
+    - max 50 nových URL per run — NIKDY nepřepisovat celý Sheet
+      [Claude MCP] → sheets_append_rows
+      [ChatGPT]    → batch_update_spreadsheet(appendCells)
+    - URL s 404/403 třikrát → Status=dead:
+      [Claude MCP] sheets_find_row + sheets_update_row
+      [ChatGPT]    search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
     - log: "🔗 URLs discovery: N nových přidáno, M dead označeno"
     BACKFILL (ihned po 4+5+6): NULL hodnoty first, pak nejstarší dle UpdatedAt
 7.  MISSED RUN CHECK -> porovnat LastRunAt s ocekavanym intervalem
@@ -116,10 +134,12 @@ SCHEDULED RUN (v tomto poradi):
                (souběžný run = data corruption risk; lock selhání není warning, je to blocker)
 1.  DISCOVERY -> nove entity (max 50/run)
 2.  NAMES QUEUE -> {AgentName}_names (Sheet) → priority discovery (Score >= 90.000)
-             sheets_get_values → přidat do priority queue
+             [Claude MCP] sheets_get_values → přidat do priority queue
+             [ChatGPT]    get_spreadsheet_range → přidat do priority queue
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
 3.  URLS QUEUE  -> {AgentName}_urls (Sheet) → scraping před standardními zdroji
-             sheets_get_values → zpracovat před standardním scrapingem
+             [Claude MCP] sheets_get_values → zpracovat před standardním scrapingem
+             [ChatGPT]    get_spreadsheet_range → zpracovat před standardním scrapingem
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
 4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prázdné tabulky
 5.  DATA COLLECTION -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
@@ -137,7 +157,8 @@ SCHEDULED RUN (v tomto poradi):
              L view selže → log warning do errors[], pokračovat (views nejsou blocker runu)
 11. SOURCE RELIABILITY UPDATE -> aktualizovat scores zdrojů
 12. BASELINE CATALOG UPDATE -> {AgentName}_entities (Sheet) v /Prompts/Catalogs/
-             sheets_find_row + sheets_update_row pro existující; sheets_append_rows pro nové
+             [Claude MCP] sheets_find_row + sheets_update_row pro existující; sheets_append_rows pro nové
+             [ChatGPT]    search_spreadsheet_rows + batch_update_spreadsheet(updateCells) pro existující; batch_update_spreadsheet(appendCells) pro nové
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
 13. RUN REPORT -> upsert_record("AgentRunReports", ...) (vždy, i při selhání)
              L DB down → zaznamenat selhání v textu odpovědi, pokračovat
@@ -194,8 +215,17 @@ DB:       upsert_record, smart_upsert_batch (bulk, max MAX_BATCH_SIZE — defaul
 Audit:    upsert_record("AgentRunReports", ...) -- save report
           run_select_sql("SELECT * FROM AgentRunReports ...") -- get reports
 Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-alerts / agent-maintenance / agent-digest)
-Drive:    read_file_content, create_file, update_file_content, search_files  [Google Drive MCP]
-Sheets:   sheets_get_values, sheets_append_rows, sheets_update_row, sheets_find_row, sheets_create_spreadsheet  [Google Sheets API v server.js]
+Drive:    [Claude MCP]  search_files, read_file_content, create_file, update_file_content
+          [ChatGPT]     search, fetch, create_file, list_folder, list_drives
+          ⚠️ search_files(query,folderId=F) → ChatGPT: search(query=..., special_filter_query_str="'F' in parents")
+          ⚠️ read_file_content(fileId)      → ChatGPT: fetch(url=<Drive URL souboru>)
+Sheets:   [Claude MCP]  sheets_get_values, sheets_append_rows, sheets_update_row, sheets_find_row, sheets_create_spreadsheet  [server.js]
+          [ChatGPT]     get_spreadsheet_range(čtení), batch_update_spreadsheet(append/update), search_spreadsheet_rows(find), create_file(mimeType=spreadsheet)
+          ⚠️ sheets_get_values(spreadsheetId,range)          → ChatGPT: get_spreadsheet_range(spreadsheetId, range)
+          ⚠️ sheets_find_row(spreadsheetId,sheet,col,val)    → ChatGPT: search_spreadsheet_rows(spreadsheetId, sheetName, query=val) → rowIndex
+          ⚠️ sheets_append_rows(spreadsheetId,range,rows)    → ChatGPT: batch_update_spreadsheet(spreadsheetId, requests=[{appendCells:{sheetId:0,rows:[...],fields:"userEnteredValue"}}])
+          ⚠️ sheets_update_row(spreadsheetId,range,values)   → ChatGPT: batch_update_spreadsheet(spreadsheetId, requests=[{updateCells:{range:{sheetId:0,startRowIndex:N,endRowIndex:N+1},rows:[...],fields:"userEnteredValue"}}])
+          ⚠️ sheets_create_spreadsheet(title,folderId)       → ChatGPT: create_file(name=title, mimeType="application/vnd.google-apps.spreadsheet")
 Calendar: create_event, update_event, delete_event  [Google Calendar — oba]
           search_events, fetch/read_event, get_availability  [ChatGPT native]
           list_events, list_calendars, get_event  [Claude MCP]
@@ -341,8 +371,10 @@ Required runtime sequence:
 4. detect MCP_VERSION from running MCP/server runtime (via db_ping response or health endpoint)
 5. detect active agent version from runtime prompt header and PromptVersion
 6. VŽDY načíst canonical prompt z Drive (i při version_match — Drive je autoritativní):
-   a) search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
-   b) read_file_content(fileId=<found id>) → extract PromptVersion from body
+   [Claude MCP] a) search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+                b) read_file_content(fileId=<found id>) → extract PromptVersion from body
+   [ChatGPT]    a) search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
+                b) fetch(url=<Drive URL found file>) → extract PromptVersion from body
    c) classify prompt_status:
       - version_match: runtime version == Drive PromptVersion == MCP_VERSION → pokračovat
       - version_mismatch: → selfUpdate (krok 8)
@@ -369,14 +401,17 @@ Required runtime sequence:
     - pokud soubor neexistuje: přeskočit tiše, reportovat capability_missing pro všechny skills
     - pokud úkol není pokryt: navrhnout nový skill, přidat do CatalogPromptSkills.txt na Drive
 12. načíst {AgentName}_entities (Sheet) z /Prompts/Catalogs/ (folder: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-    search_files → sheets_get_values → přehled spravovaných tabulek (ImportantScore, RowCount, LastPopulated)
+    [Claude MCP] search_files → sheets_get_values → přehled spravovaných tabulek (ImportantScore, RowCount, LastPopulated)
+    [ChatGPT]    search(special_filter_query_str="'1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
     - použít jako výchozí přehled pro prioritizaci tabulek v běhu
 13. načíst {AgentName}_names (Sheet) z /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
-    search_files → sheets_get_values → přidat do priority queue (Score 90+)
+    [Claude MCP] search_files → sheets_get_values → přidat do priority queue (Score 90+)
+    [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 14. načíst {AgentName}_urls (Sheet) z /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-    search_files → sheets_get_values → zpracovat před standardním scrapingem
+    [Claude MCP] search_files → sheets_get_values → zpracovat před standardním scrapingem
+    [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
@@ -463,13 +498,21 @@ Co dělat při prvním runu (v tomto pořadí):
    AuditLog, SchemaMigrations, AgentRunReports, ManualReviewQueue,
    AgentTableSync, DiscoveryQueue, SourceCircuitBreaker, SourceReliability, AgentSchedules
 3. Ověřit score sloupce (numeric(6,3)) ve všech existujících tabulkách
-4. Vytvořit Google Sheets pokud neexistují (search_files nejdříve — nevytvářet duplicity):
+4. Vytvořit Google Sheets pokud neexistují (nejdříve ověřit existenci — nevytvářet duplicity):
+   [Claude MCP]
    sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
      + sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"]])
    sheets_create_spreadsheet(title="{AgentName}_names",    folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY")
      + sheets_append_rows(rows=[["EntityName","coverage","tables","lastProcessed"]])
    sheets_create_spreadsheet(title="{AgentName}_urls",     folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
      + sheets_append_rows(rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+   [ChatGPT]
+   create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["ImportantScore","TableName","Description","RowCount","LastPopulated"]],fields:"userEnteredValue"}}])
+   create_file(name="{AgentName}_names",    mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["EntityName","coverage","tables","lastProcessed"]],fields:"userEnteredValue"}}])
+   create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT agresivní enrichment — pouze schema init a základní discovery (max 10 entit)
 7. Uložit run report s runMode = "first_run", success = schema_ready (ne fully_successful)
@@ -642,14 +685,20 @@ L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále 
 
 BLOK 5 — Google Sheets + Drive soubory:
 5a. {AgentName}_entities (Sheet) v /Prompts/Catalogs/ (folder: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: ImportantScore|TableName|Description|RowCount|LastPopulated
-    L chybí → sheets_create_spreadsheet + záhlaví (struktura dle baseline-catalog-file-manager)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: ImportantScore|TableName|Description|RowCount|LastPopulated
+                 L chybí → sheets_create_spreadsheet + záhlaví (struktura dle baseline-catalog-file-manager)
+    [ChatGPT]    search(special_filter_query_str="'1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH' in parents") → existuje? get_spreadsheet_range → zkontrolovat záhlaví
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5b. {AgentName}_names (Sheet) v /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: EntityName|coverage|tables|lastProcessed
-    L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: EntityName|coverage|tables|lastProcessed
+                 L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → existuje? get_spreadsheet_range
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5c. {AgentName}_urls (Sheet) v /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-    search_files → existuje? sheets_get_values → zkontrolovat záhlaví: URL|SourceTier|ReliabilityScore|EntityType|LastChecked|Status
-    L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [Claude MCP] search_files → existuje? sheets_get_values → zkontrolovat záhlaví: URL|SourceTier|ReliabilityScore|EntityType|LastChecked|Status
+                 L chybí → sheets_create_spreadsheet + záhlaví (OK)
+    [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → existuje? get_spreadsheet_range
+                 L chybí → create_file + batch_update_spreadsheet(appendCells header)
 5d. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
     → Drive .txt (beze změny) — přečíst pokud existuje, ověřit aktuálnost problémů
 
