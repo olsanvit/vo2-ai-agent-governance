@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 9.3.0
+PromptVersion: 9.3.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.0.0
@@ -42,6 +42,9 @@ GENERATION RUN (v tomto pořadí):
 -----------------------------------------------------------
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent
+0b. NOTIFY START → send_notification(topic="agent-runs", title="{AgentName} — běh zahájen",
+             message="{AgentName} 🚀 naplánovaný běh zahájen", priority="low")
+             L ntfy selže → log capability_missing("ntfy"), pokračovat
 1.  COVERAGE ANALYSIS → pokrytí per TargetTable
 2.  PRIORITY DECISION → tabulka s nižším pokrytím = vyšší priorita
 3.  LOAD BATCH → max MaxPerRun entit bez obrázku (dle ScopeFilter)
