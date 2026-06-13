@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 9.3.1
+PromptVersion: 9.3.2
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.0.0
@@ -42,9 +42,6 @@ IMPORT RUN (v tomto pořadí):
 -----------------------------------------------------------
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent
-0b. NOTIFY START → send_notification(topic="agent-runs", title="{AgentName} — běh zahájen",
-             message="{AgentName} 🚀 naplánovaný běh zahájen", priority="low")
-             L ntfy selže → log capability_missing("ntfy"), pokračovat
 1.  DISCOVER FILES → procházet SourceFolder dle SubfolderScheme
 2.  SORT → dle SubfolderScheme (chronologicky nebo dle konfigurace)
 3.  PER FILE:
@@ -57,7 +54,12 @@ IMPORT RUN (v tomto pořadí):
 5.  RUN REPORT → upsert do AgentRunReports
 5a. SCHEDULE UPDATE → AgentSchedules upsert
 6.  CALENDAR EVENT → next scheduled run
-7.  NOTIFICATION → send_notification
+7.  NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
+             send_notification(topic="agent-runs",
+               title="{AgentName} {✅|❌} — {počet entit} zpracováno",
+               message="Nové: {new} | Aktualizované: {updated} | Chyby: {errors} | Doba: {elapsed}",
+               priority="default")
+             L ntfy selže → log capability_missing("ntfy"), pokračovat
 8.  UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------

@@ -1,7 +1,7 @@
 Agent: 9.3.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 9.3.1
+PromptVersion: 9.3.2
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.3.0
@@ -132,9 +132,6 @@ SCHEDULED RUN (v tomto poradi):
              Lock je per-agent (hash AgentName) — zabrání souběžnému runu stejného agenta.
              L selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP
                (souběžný run = data corruption risk; lock selhání není warning, je to blocker)
-0b. NOTIFY START -> send_notification(topic="agent-runs", title="{AgentName} — běh zahájen",
-             message="{AgentName} 🚀 naplánovaný běh zahájen", priority="low")
-             L ntfy selže → log capability_missing("ntfy"), pokračovat
 1.  DISCOVERY -> nove entity (max 50/run)
 2.  NAMES QUEUE -> {AgentName}_names (Sheet) → priority discovery (Score >= 90.000)
              [Claude MCP] sheets_get_values → přidat do priority queue
@@ -170,8 +167,12 @@ SCHEDULED RUN (v tomto poradi):
 13b.DIGEST CHECK -> každých 7 runů/pondělí = weekly; každých 30 dní = monthly
 14. CALENDAR EVENT -> next scheduled run + maintenance
              L Calendar nedostupný → log capability_missing("calendar"), pokračovat
-15. NOTIFICATION -> send_notification na agent-runs (max 3 ntfy/run)
-             L ntfy nedostupný → log capability_missing("ntfy"), pokračovat
+15. NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
+             send_notification(topic="agent-runs",
+               title="{AgentName} {✅|❌} — {počet entit} zpracováno",
+               message="Nové: {new} | Aktualizované: {updated} | Chyby: {errors} | Doba: {elapsed}",
+               priority="default")
+             L ntfy selže → log capability_missing("ntfy"), pokračovat
 16. UNLOCK  -> run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)")
              L unlock vrátí false → OČEKÁVANÉ CHOVÁNÍ s MCP stateless konektorem — log warning, NEBLOKUJ
              L selhání → log warning, pokračovat — unlock false není error ani blocker
@@ -3360,7 +3361,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 9.3.1
+PromptVersion: 9.3.2
 
 Ověřené image nástroje:
 - save_image_base64
