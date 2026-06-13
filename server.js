@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "9.0.0";
+const MCP_VERSION = "9.3.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -33,6 +33,77 @@ const pool = new Pool({
 pool.on("error", (err) => {
   console.error("[pool] Unexpected idle client error:", err.message);
 });
+
+// ── Google Sheets API (service account, no external packages) ─────────────────
+let _sheetsToken = null;
+let _sheetsTokenExpiry = 0;
+
+async function getSheetsToken() {
+  if (_sheetsToken && Date.now() < _sheetsTokenExpiry - 60_000) return _sheetsToken;
+  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!saJson) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON not configured — Sheets API unavailable");
+  const sa = JSON.parse(saJson);
+  const now = Math.floor(Date.now() / 1000);
+  const header  = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({
+    iss: sa.client_email,
+    scope: "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file",
+    aud: "https://oauth2.googleapis.com/token",
+    exp: now + 3600,
+    iat: now,
+  })).toString("base64url");
+  const sign = crypto.createSign("SHA256");
+  sign.update(`${header}.${payload}`);
+  const jwt = `${header}.${payload}.${sign.sign(sa.private_key, "base64url")}`;
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`,
+  });
+  if (!res.ok) throw new Error(`Google auth failed: ${await res.text()}`);
+  const d = await res.json();
+  _sheetsToken = d.access_token;
+  _sheetsTokenExpiry = Date.now() + (d.expires_in || 3600) * 1000;
+  return _sheetsToken;
+}
+
+async function sheetsGet(path) {
+  const token = await getSheetsToken();
+  const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function sheetsPost(path, body) {
+  const token = await getSheetsToken();
+  const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, {
+    method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function sheetsPut(path, body) {
+  const token = await getSheetsToken();
+  const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, {
+    method: "PUT", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+async function drivePatch(fileId, params) {
+  const token = await getSheetsToken();
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${qs}&fields=id,parents`, {
+    method: "PATCH", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) throw new Error(`Drive API ${res.status}: ${await res.text()}`);
+  return res.json();
+}
 
 let pgcryptoAvailable = false;
 let citextAvailable = false;
@@ -1906,6 +1977,77 @@ function createMcpServer() {
         }, null, 2)
       }]
     };
+  });
+
+  // ── Google Sheets tools ────────────────────────────────────────────────────
+  wrapTool("sheets_get_values", "Read all rows from a Google Sheet. Returns array of rows (each row is array of cell strings). Row 0 is the header.", {
+    spreadsheetId: z.string().describe("Spreadsheet ID (from URL or sheets_create_spreadsheet)"),
+    range: z.string().default("Sheet1").describe("Sheet name or A1 range, e.g. 'Sheet1' or 'Sheet1!A1:E'"),
+  }, async ({ spreadsheetId, range }) => {
+    const data = await sheetsGet(`spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}`);
+    const values = data.values || [];
+    return { content: [{ type: "text", text: JSON.stringify({ spreadsheetId, range, rowCount: values.length, values }, null, 2) }] };
+  });
+
+  wrapTool("sheets_append_rows", "Append one or more rows to a Google Sheet. Each row is an array of cell strings.", {
+    spreadsheetId: z.string(),
+    range: z.string().default("Sheet1").describe("Sheet name, e.g. 'Sheet1'"),
+    rows: z.array(z.array(z.string())).describe("Array of rows; each row is array of cell values"),
+  }, async ({ spreadsheetId, range, rows }) => {
+    const data = await sheetsPost(
+      `spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`,
+      { values: rows }
+    );
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, updatedRows: data.updates?.updatedRows ?? rows.length, spreadsheetId }, null, 2) }] };
+  });
+
+  wrapTool("sheets_update_row", "Update a specific range in a Google Sheet. Use A1 notation for the range, e.g. 'Sheet1!A3:E3'.", {
+    spreadsheetId: z.string(),
+    range: z.string().describe("A1 range to update, e.g. 'Sheet1!A3:E3'"),
+    values: z.array(z.string()).describe("Cell values for the row (one cell per column in range)"),
+  }, async ({ spreadsheetId, range, values }) => {
+    const data = await sheetsPut(
+      `spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}?valueInputOption=USER_ENTERED`,
+      { values: [values] }
+    );
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, updatedCells: data.updatedCells, range }, null, 2) }] };
+  });
+
+  wrapTool("sheets_find_row", "Find a row in a Google Sheet by matching a value in a specific column. Returns 1-based rowIndex and rowValues.", {
+    spreadsheetId: z.string(),
+    sheetName: z.string().default("Sheet1"),
+    column: z.number().int().min(0).describe("0-based column index to search in"),
+    value: z.string().describe("Value to match (case-insensitive exact match)"),
+  }, async ({ spreadsheetId, sheetName, column, value }) => {
+    const data = await sheetsGet(`spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`);
+    const rows = data.values || [];
+    const lv = value.toLowerCase();
+    for (let i = 0; i < rows.length; i++) {
+      if ((rows[i][column] ?? "").toLowerCase() === lv) {
+        return { content: [{ type: "text", text: JSON.stringify({ found: true, rowIndex: i + 1, rowValues: rows[i] }, null, 2) }] };
+      }
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ found: false, rowIndex: null, searchedRows: rows.length }, null, 2) }] };
+  });
+
+  wrapTool("sheets_create_spreadsheet", "Create a new Google Spreadsheet and move it to a Drive folder. Returns spreadsheetId and URL.", {
+    title: z.string().describe("Spreadsheet title, e.g. '{AgentName}_entities'"),
+    folderId: z.string().optional().describe("Drive folder ID to place the spreadsheet in"),
+    sheets: z.array(z.string()).optional().describe("Sheet (tab) names, default ['Sheet1']"),
+  }, async ({ title, folderId, sheets }) => {
+    const created = await sheetsPost("spreadsheets", {
+      properties: { title },
+      sheets: (sheets?.length ? sheets : ["Sheet1"]).map(n => ({ properties: { title: n } })),
+    });
+    const spreadsheetId = created.spreadsheetId;
+    if (folderId) {
+      const token = await getSheetsToken();
+      const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${spreadsheetId}?fields=parents`, { headers: { Authorization: `Bearer ${token}` } });
+      const meta = await metaRes.json();
+      const currentParents = (meta.parents || []).join(",");
+      await drivePatch(spreadsheetId, { addParents: folderId, removeParents: currentParents });
+    }
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, spreadsheetId, title, folderId: folderId ?? null, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` }, null, 2) }] };
   });
 
   return server;
