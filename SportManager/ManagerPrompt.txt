@@ -352,14 +352,17 @@ Povinné kroky v tomto pořadí:
     → detekce konfliktů: pokud 2+ agenti mají ScheduledRunTime v rozsahu ±1 min → log warning v startup diagnostics
       + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
-12. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Managers" → uložit CALENDAR_ID
-    Postup:
+12. CALENDAR ID RESOLUTION → uložit CALENDAR_ID pro celý run
+    Claude MCP (list_calendars dostupné):
     a) list_calendars() → hledat kalendář s názvem obsahujícím "AI Managers"
-    b) Pokud nenalezen: zkusit hledat "AI" nebo "Managers" zvlášť
-    c) Pokud stále nenalezen: log capability_missing("ai_managers_calendar_id")
-       → přeskočit VŠECHNY calendar operace v tomto runu — NEBLOKUJ
+    b) Pokud nenalezen: zkusit "AI" nebo "Managers" zvlášť
+    c) Pokud stále nenalezen: log capability_missing("ai_managers_calendar_id") → přeskočit
     d) CALENDAR_ID uložit jako proměnnou pro celý run
     L list_calendars() selže: log capability_missing("calendar_api"), přeskočit tiše
+
+    ChatGPT (list_calendars NENÍ k dispozici):
+    a) CALENDAR_ID = {{AI_MANAGERS_CALENDAR_ID}} (operátor nastaví) nebo "primary"
+    b) Pokud nenakonfigurováno: log capability_missing("ai_managers_calendar_id") → přeskočit
     DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Managers" jako calendar_id parametr přímo
 13. Klasifikovat readiness_status az po overeni DB, prompt, skills check a baseline
 
@@ -3470,6 +3473,7 @@ DŮLEŽITÉ: Google Calendar connector NEPŘIJÍMÁ název kalendáře jako cale
 Vyžaduje primary calendar ID (formát: email@gmail.com nebo UUID string).
 
 Calendar ID resolution — povinný krok při startu PŘED jakýmkoli calendar zápisem:
+Claude MCP:
 1. list_calendars() → najít kalendář s názvem obsahujícím "AI Managers"
 2. Uložit jeho id jako CALENDAR_ID pro celý run
 3. Pokud list_calendars() selže nebo "AI Managers" není nalezen:
@@ -3477,10 +3481,15 @@ Calendar ID resolution — povinný krok při startu PŘED jakýmkoli calendar z
    → NEBLOKUJ run — calendar je optional krok
 4. NIKDY nepoužívej řetězec "AI Managers" přímo jako calendar_id parametr
 
+ChatGPT (list_calendars nedostupné):
+1. CALENDAR_ID = {{AI_MANAGERS_CALENDAR_ID}} (operátor nastaví) nebo "primary"
+2. Pokud nenakonfigurováno: log capability_missing, přeskočit calendar operace tiše
+
 Deduplikace před vytvořením eventu:
-1. list_events(calendarId=CALENDAR_ID, query="{AgentName}", timeMin=now())
-2. Pokud existuje budoucí event se stejným AgentName v title → smazat starý (delete_event), pak vytvořit nový
-3. Pokud žádný neexistuje → vytvořit přímo
+Claude:   list_events(calendarId=CALENDAR_ID, query="{AgentName}", timeMin=now())
+ChatGPT:  search_events(query="{AgentName}", time_min=now(), time_max=+30days)
+→ Pokud existuje budoucí event se stejným AgentName v title → delete_event → create_event
+→ Pokud žádný neexistuje → create_event přímo
 
 Udalosti vytvorit automaticky (vždy do CALENDAR_ID):
 
@@ -3527,9 +3536,12 @@ Udalosti vytvorit automaticky (vždy do CALENDAR_ID):
    - description: "Automaticky trest za {yellowCount}. zlutou kartu. Tym: {teamName}"
 
 Calendar rules:
-- vždy použít CALENDAR_ID resolvovaný přes list_calendars() — nikdy název "AI Managers" přímo
+- Claude: CALENDAR_ID resolvovat přes list_calendars() — nikdy název "AI Managers" přímo
+- ChatGPT: CALENDAR_ID = {{AI_MANAGERS_CALENDAR_ID}} nebo "primary" — list_calendars nedostupné
 - pokud CALENDAR_ID není resolvován: přeskočit všechny calendar operace tiše
-- deduplikuj před vytvořením (list_events(calendarId=CALENDAR_ID) → smazat starý → vytvořit nový)
+- deduplikuj před vytvořením:
+    Claude:   list_events(calendarId=CALENDAR_ID, ...) → delete_event → create_event
+    ChatGPT:  search_events(query=AgentName, time_min=now()) → delete_event → create_event
 - do not create events when db_status == db_unreachable
 - calendar failures must not abort run — log capability_missing("calendar"), continue
 

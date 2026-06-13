@@ -83,14 +83,19 @@ STARTUP SEKVENCE (11 kroku -- viz Ch 3: db_ping, version check, freshness, Drive
     5. Zaznamenat do run reportu: skillsNeeded[], skillsAvailable[], skillsMissing[]
     6. Přebytečné skills: zaznamenat jako unused_skill[] v highlights[]
 10. AGENT SCHEDULES -> nacist z DB, zobrazit prehled, detekovat konflikty (±1 min)
-10a. CALENDAR ID RESOLUTION → list_calendars() → najit "AI Catalogs" → ulozit CALENDAR_ID
-     Postup:
+10a. CALENDAR ID RESOLUTION → uložit CALENDAR_ID pro celý run
+     Claude MCP (list_calendars dostupné):
      a) list_calendars() → hledat kalendář s názvem obsahujícím "AI Catalogs"
-     b) Pokud nenalezen: zkusit hledat "AI" nebo "Catalogs" zvlášť
-     c) Pokud stále nenalezen: log capability_missing("ai_catalogs_calendar_id")
-        → přeskočit VŠECHNY calendar operace v tomto runu — NEBLOKUJ
+     b) Pokud nenalezen: zkusit "AI" nebo "Catalogs" zvlášť
+     c) Pokud stále nenalezen: log capability_missing("ai_catalogs_calendar_id") → přeskočit
      d) CALENDAR_ID uložit jako proměnnou pro celý run
      L list_calendars() selže: log capability_missing("calendar_api"), přeskočit tiše
+
+     ChatGPT (list_calendars NENÍ k dispozici):
+     a) CALENDAR_ID dle konfigurace operátora:
+        - operátor vloží ID přímo do promtu jako {{AI_CATALOGS_CALENDAR_ID}}
+        - NEBO použít "primary" (výchozí Google Calendar uživatele)
+     b) Pokud ID není nakonfigurováno: log capability_missing("ai_catalogs_calendar_id") → přeskočit
      DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo
 11. READINESS -> classify readiness_status (az po vsech predchozich krocich)
 
@@ -191,7 +196,10 @@ Audit:    upsert_record("AgentRunReports", ...) -- save report
 Notif:    send_notification [MCP tool v server.js] -> ntfy.vo2info.cz (agent-runs / agent-errors / agent-alerts / agent-maintenance / agent-digest)
 Drive:    read_file_content, create_file, update_file_content, search_files  [Google Drive MCP]
 Sheets:   sheets_get_values, sheets_append_rows, sheets_update_row, sheets_find_row, sheets_create_spreadsheet  [Google Sheets API v server.js]
-Calendar: create_event, list_events, delete_event  [Google Calendar MCP]
+Calendar: create_event, update_event, delete_event  [Google Calendar — oba]
+          search_events, fetch/read_event, get_availability  [ChatGPT native]
+          list_events, list_calendars, get_event  [Claude MCP]
+          ⚠️ ChatGPT nemá list_calendars → CALENDAR_ID: operator nastaví nebo použít "primary"
 Lock:     run_select_sql("SELECT pg_try_advisory_lock(hashtext('{AgentName}')::bigint & 2147483647)") / pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)
 
 -----------------------------------------------------------
@@ -2005,6 +2013,7 @@ DŮLEŽITÉ: Google Calendar connector NEPŘIJÍMÁ název kalendáře jako cale
 Vyžaduje primary calendar ID (formát: email@gmail.com nebo UUID string).
 
 Calendar ID resolution — povinný krok při startu PŘED jakýmkoli calendar zápisem:
+Claude MCP:
 1. list_calendars() → najít kalendář s názvem obsahujícím "AI Catalogs"
 2. Uložit jeho id (např. "abc123@group.calendar.google.com") jako CALENDAR_ID pro celý run
 3. Pokud list_calendars() selže nebo "AI Catalogs" není nalezen:
@@ -2012,10 +2021,15 @@ Calendar ID resolution — povinný krok při startu PŘED jakýmkoli calendar z
    → NEBLOKUJ run — calendar je optional krok
 4. NIKDY nepoužívej řetězec "AI Catalogs" jako calendar_id parametr přímo
 
+ChatGPT (list_calendars nedostupné):
+1. CALENDAR_ID = {{AI_CATALOGS_CALENDAR_ID}} (operátor nastaví) nebo "primary"
+2. Pokud nenakonfigurováno: log capability_missing, přeskočit calendar operace tiše
+
 Deduplikace před vytvořením eventu:
-1. list_events(calendarId=CALENDAR_ID, query="{AgentName}", timeMin=now())
-2. Pokud existuje budoucí event se stejným AgentName v title → smazat starý (delete_event), pak vytvořit nový
-3. Pokud žádný neexistuje → vytvořit přímo
+Claude:   list_events(calendarId=CALENDAR_ID, query="{AgentName}", timeMin=now())
+ChatGPT:  search_events(query="{AgentName}", time_min=now(), time_max=+30days)
+→ Pokud existuje budoucí event se stejným AgentName v title → delete_event → create_event
+→ Pokud žádný neexistuje → create_event přímo
 
 Events to create automatically:
 
@@ -2043,9 +2057,12 @@ Events to create automatically:
    - calendar: CALENDAR_ID (resolvovaný přes list_calendars při startu)
 
 Calendar rules:
-- vždy použít CALENDAR_ID resolvovaný přes list_calendars() — nikdy název "AI Catalogs" přímo
+- Claude: CALENDAR_ID resolvovat přes list_calendars() — nikdy název "AI Catalogs" přímo
+- ChatGPT: CALENDAR_ID = {{AI_CATALOGS_CALENDAR_ID}} nebo "primary" — list_calendars nedostupné
 - pokud CALENDAR_ID není resolvován: přeskočit všechny calendar operace tiše
-- deduplikuj před vytvořením (list_events(calendarId=CALENDAR_ID) → smazat starý → vytvořit nový)
+- deduplikuj před vytvořením:
+    Claude:   list_events(calendarId=CALENDAR_ID, ...) → smazat starý → create_event
+    ChatGPT:  search_events(query=AgentName, time_min=now()) → delete_event starý → create_event
 - do not create events when db_status == db_unreachable
 - calendar failures must not abort run — log capability_missing("calendar"), continue
 - delete outdated future run events when creating new one for same agent
