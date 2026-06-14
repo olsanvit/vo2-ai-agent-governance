@@ -337,32 +337,41 @@ Povinné kroky v tomto pořadí:
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
    - pokud ukol neni pokryt: navrhnout novy skill (Drive/Gitea dle workflow operátora)
 8. Nacist {AgentName}_entities (Sheet) z /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-   [Claude MCP] search_files → sheets_get_values → seznam vlastnich DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+   [Claude MCP] search_files(query="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → <spreadsheetId>
+                sheets_get_values(spreadsheetId=<spreadsheetId>, range="Sheet1") → seznam vlastnich DB tabulek agenta
+                sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<výstup>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
    [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range
+   - spreadsheetId NIKDY neukládat natvrdo — vždy search_files znovu (uložené ID → 404 po re-upload)
+   - sync propíše nové řádky přidané operátorem v Sheetu do AgentMonitor DB
    - pokud Sheet neexistuje:
      a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
      b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
      c) přiřadit výchozí ImportantScore dle defaultní tabulky z Ch 1 (Matches=100, Teams=100, atd.; neznámé = 50)
      [Claude MCP] d) sheets_create_spreadsheet(title="{AgentName}_entities", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
                      sheets_append_rows(rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+                     sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<nové řádky vč. hlavičky>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
      [ChatGPT]    d) create_file(name="{AgentName}_entities", mimeType="application/vnd.google-apps.spreadsheet")
                      batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
      e) log: "📊 {AgentName}_entities Sheet vytvořen s {N} tabulkami"
    - pokud Sheet existuje:
-     [Claude MCP] sheets_get_values → použít jako přehled pro prioritizaci
+     [Claude MCP] → výsledek sync_agent_entities použít jako přehled pro prioritizaci
      [ChatGPT]    get_spreadsheet_range → použít jako přehled pro prioritizaci
    - agent může Sheet ROZŠIŘOVAT a AKTUALIZOVAT:
      [Claude MCP] → sheets_append_rows (nové) / sheets_find_row + sheets_update_row (aktualizace)
      [ChatGPT]    → batch_update_spreadsheet(appendCells) / search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
    DŮLEŽITÉ: načíst PŘED Baseline-25 check (krok 9)
 8a. Načíst {AgentName}_names (Sheet) z /Prompts/Names/ (folder: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
-    [Claude MCP] search_files → sheets_get_values → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
+    [Claude MCP] search_files(query="{AgentName}_names", folderId="1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY") → <spreadsheetId>
+                 sheets_get_values(spreadsheetId=<spreadsheetId>, range="Sheet1") → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
+                 sync_agent_entities(agent_name="{AgentName}", entity_type="name", rows=<výstup>, value_col=0, meta_cols=["coverage","tables","lastProcessed"])
     [ChatGPT]    search(special_filter_query_str="'1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY' in parents") → get_spreadsheet_range
-    - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
+    - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
 8b. Načíst {AgentName}_urls (Sheet) z /Prompts/Urls/ (folder: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-    [Claude MCP] search_files → sheets_get_values → seznam URL k projití před standardním scrapingem
+    [Claude MCP] search_files(query="{AgentName}_urls", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U") → <spreadsheetId>
+                 sheets_get_values(spreadsheetId=<spreadsheetId>, range="Sheet1") → seznam URL k projití před standardním scrapingem
+                 sync_agent_entities(agent_name="{AgentName}", entity_type="url", rows=<výstup>, value_col=0, meta_cols=["SourceTier","ReliabilityScore","EntityType","LastChecked","Status"])
     [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → get_spreadsheet_range
-    - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba)
+    - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
 9. Zkontrolovat existenci alespon 25 baseline entit
    - seznam tabulek pro počítání: ImportantScore >= 70 tabulky z Managers souboru (krok 8)
    - pokud Managers soubor chybí (první run): použít doporučené tabulky
