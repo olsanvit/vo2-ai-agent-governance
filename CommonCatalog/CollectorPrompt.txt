@@ -1,6 +1,6 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.3.4
+PromptVersion: 9.3.5
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.0.0
@@ -356,7 +356,7 @@ CHAPTER 8: NOTIFICATIONS
    message: "🖼️ Uloženo: {saved} | ⏭️ Přeskočeno: {skipped} | ⚖️ Top: {topCategory}"
    priority: default
 
-2. Konec runu — selhání (agent-runs):
+2. Konec runu — selhání (agent-alerts):
    title: "⚠️ {AgentName} — run selhal"
    message: "Blokér: {blockerCategory} | Chyba: {primaryError}"
    priority: high

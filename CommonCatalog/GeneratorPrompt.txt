@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 9.3.4
+PromptVersion: 9.3.5
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.0.0
@@ -319,7 +319,7 @@ CHAPTER 8: NOTIFICATIONS
 1. Run OK (agent-runs): "✅ {AgentName} — run OK"
    "🖼️ Vygenerováno: {N} | ⏭️ Přeskočeno: {N} | ❌ Selhání: {N} | 📊 {Table}: {cov}%"
 
-2. Run selhal (agent-runs): "⚠️ {AgentName} — run selhal" | priority: high
+2. Run selhal (agent-alerts): "⚠️ {AgentName} — run selhal" | priority: high
 
 3. Kritická chyba (agent-errors): priority: urgent
 
