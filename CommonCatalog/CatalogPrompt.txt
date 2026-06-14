@@ -1,10 +1,10 @@
-Agent: 9.4.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 9.4.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 9.4.0
+PromptVersion: 9.4.1
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.4.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.4.1
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -262,7 +262,7 @@ ntfy:         https://ntfy.vo2info.cz
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
-MCP Version:  9.3.0
+MCP Version:  9.4.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -375,9 +375,6 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 | {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
 | {AgentName}_urls (Sheet) | /Prompts/Urls/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_append_rows nové URLs (max 500 řádků); sheets_update_row Status |
 | {AgentName}_names (Sheet) | /Prompts/Names/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_update_row coverage counts; jen operátor přidává entity |
-| {AgentName}_categories_{type}.txt | /Prompts/Collectors/ | ✅ pokud chybí | startup + session cache | ✅ update counts; řadit ASC |
-| {AgentName}_mapping.txt | /Prompts/Importers/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
@@ -464,7 +461,7 @@ Required runtime sequence:
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (9.0.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (9.4.1)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -703,13 +700,13 @@ L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("d
 L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 — DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 9.0.0
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 9.4.1
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 9.4.0
-2b. MCP_VERSION z db_ping == 9.3.0
+2a. PromptVersion tohoto promptu == 9.4.1
+2b. MCP_VERSION z db_ping == 9.4.1
 2c. SkillsVersion z načteného PromptSkills souboru == 9.0.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
@@ -777,7 +774,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 9.4.0?
+    → poslední runy mají promptVersion 9.4.1?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -800,7 +797,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 9.4.0 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 9.4.1 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -2847,7 +2844,7 @@ scheduled_mode defaults operator-facing output to Czech.
 
 
 =============================================================
-CHAPTER 13: 9.0.0 GOVERNANCE EXTENSIONS
+CHAPTER 13: GOVERNANCE EXTENSIONS
 =============================================================
 
 ## Data Lineage
@@ -4969,6 +4966,14 @@ Klíčové změny oproti původnímu souboru:
 =============================================================
 CHANGELOG
 =============================================================
+
+## 9.4.1 (2026-06-14)
+- PromptVersion header bump: 9.4.0 → 9.4.1
+- MCP Version v INFRASTRUKTURA: 9.3.0 → 9.4.1
+- Self-Audit BLOK 1a: MCP_VERSION kontrola 9.0.0 → 9.4.1
+- Self-Audit BLOK 2a/2b: PromptVersion+MCP_VERSION check aktualizovány na 9.4.1
+- Per-agent files tabulka: odstraněny řádky jiných AgentTypů (_categories_, _mapping, _prompts)
+- CHAPTER 13: odstraněn prefix verze "9.0.0" z názvu kapitoly
 
 ## 9.0.0 (2026-06-04)
 - ImageType enum rozšířen: 60+ typů (kits, symbols, season logos, historical variants)
