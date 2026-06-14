@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "9.3.0";
+const MCP_VERSION = "9.4.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -2048,6 +2048,70 @@ function createMcpServer() {
       await drivePatch(spreadsheetId, { addParents: folderId, removeParents: currentParents });
     }
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, spreadsheetId, title, folderId: folderId ?? null, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` }, null, 2) }] };
+  });
+
+  // ── Agent Monitor Tools (9.4.0) ─────────────────────────────────────────────
+
+  wrapTool("sync_agent_entities", "Sync entity rows into AgentEntities table (AgentMonitor DB cache). rows is a 2D array (row 0 = header). value_col is 0-based index of the main entity value. meta_cols are additional column names to store in ExtraData.", {
+    agent_name:  z.string(),
+    entity_type: z.enum(["entity", "name", "url", "error"]),
+    rows:        z.array(z.array(z.string())),
+    value_col:   z.number().optional(),
+    meta_cols:   z.array(z.string()).optional()
+  }, async ({ agent_name, entity_type, rows, value_col = 0, meta_cols = [] }) => {
+    await ensureTable("AgentEntities");
+    await ensureColumnsInternal("AgentEntities", {
+      AgentName: "", EntityType: "", Value: "", ImportantScore: 0,
+      ExtraData: {}, SyncedAt: new Date().toISOString()
+    });
+
+    if (!Array.isArray(rows) || rows.length < 2) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, inserted: 0, updated: 0, skipped: 0, reason: "empty or header-only rows" }, null, 2) }] };
+    }
+
+    const header = rows[0];
+    const dataRows = rows.slice(1);
+    const syncedAt = new Date().toISOString();
+    let inserted = 0, updated = 0, skipped = 0;
+
+    for (const row of dataRows) {
+      const value = String(row[value_col] ?? "").trim();
+      if (!value) { skipped++; continue; }
+
+      const extra = {};
+      for (const col of meta_cols) {
+        const idx = header.findIndex(h => h === col);
+        if (idx >= 0) extra[col] = row[idx] ?? "";
+      }
+
+      const importantScore = Number(extra["ImportantScore"] ?? 0) || 0;
+
+      const r = await upsertRecord("AgentEntities",
+        { AgentName: agent_name, EntityType: entity_type, Value: value },
+        { ImportantScore: importantScore, ExtraData: extra, SyncedAt: syncedAt, IsActive: true }
+      );
+      if (r.mode === "insert") inserted++;
+      else updated++;
+    }
+
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, agentName: agent_name, entityType: entity_type, inserted, updated, skipped, syncedAt }, null, 2) }] };
+  });
+
+  wrapTool("get_agent_entities", "Read entity rows for an agent from the AgentEntities table (written by sync_agent_entities). Returns all active rows for the given agent and entity_type.", {
+    agent_name:  z.string(),
+    entity_type: z.enum(["entity", "name", "url", "error"]).optional(),
+    limit:       z.number().optional()
+  }, async ({ agent_name, entity_type, limit = 500 }) => {
+    const exists = await tableExists("AgentEntities");
+    if (!exists) {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, agentName: agent_name, entityType: entity_type ?? "all", rows: [], note: "AgentEntities table does not exist yet — run sync_agent_entities first" }, null, 2) }] };
+    }
+
+    const criteria = { AgentName: agent_name };
+    if (entity_type) criteria.EntityType = entity_type;
+
+    const rows = await findRecords("AgentEntities", criteria, safeLimit(limit, 1000));
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, agentName: agent_name, entityType: entity_type ?? "all", count: rows.length, rows }, null, 2) }] };
   });
 
   return server;
