@@ -2055,7 +2055,7 @@ function createMcpServer() {
   wrapTool("sync_agent_entities", "Sync entity rows into AgentEntities table (AgentMonitor DB cache). rows is a 2D array (row 0 = header). value_col is 0-based index of the main entity value. meta_cols are additional column names to store in ExtraData.", {
     agent_name:  z.string(),
     entity_type: z.enum(["entity", "name", "url", "error"]),
-    rows:        z.array(z.array(z.string())),
+    rows:        z.array(z.any()),
     value_col:   z.number().optional(),
     meta_cols:   z.array(z.string()).optional()
   }, async ({ agent_name, entity_type, rows, value_col = 0, meta_cols = [] }) => {
