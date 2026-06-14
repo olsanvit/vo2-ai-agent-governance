@@ -2,7 +2,7 @@ Agent: 9.3.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.3.4
+PromptVersion: 9.3.5
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.3.0
@@ -3358,8 +3358,7 @@ Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 
 POVINNE notifikace:
 
-1. Konec scheduled runu (topic: agent-runs)
-   Úspěch:
+1. Konec scheduled runu — úspěch (topic: agent-runs)
    - title: "✅ {AgentName} — run OK"
    - message: |
      **✅ Scheduled run dokončen**
@@ -3369,7 +3368,7 @@ POVINNE notifikace:
      ⏱️ Trvání: {durationMs}ms | 📋 Verze: {PromptVersion}
    - priority: "default", tags: ["white_check_mark", sport-emoji]
 
-   Selhání:
+2. Konec scheduled runu — selhání (topic: agent-alerts)
    - title: "⚠️ {AgentName} — run selhal"
    - message: |
      **⚠️ Scheduled run selhal**
@@ -3380,7 +3379,7 @@ POVINNE notifikace:
      **Doporučená akce:** {actionNeeded}
    - priority: "high", tags: ["warning", sport-emoji]
 
-2. Kritický blokér (topic: agent-errors)
+3. Kritický blokér (topic: agent-errors)
    - title: "🚨 {AgentName} — kritická chyba"
    - message: |
      **🚨 Kritická chyba — run zastaven**
@@ -3394,33 +3393,33 @@ POVINNE notifikace:
 
 DOPORUCENE notifikace:
 
-3. Nove vysledky (topic: agent-runs) -- po zpracovani vcerejsiho matchday
+4. Nove vysledky (topic: agent-runs) -- po zpracovani vcerejsiho matchday
    - title: "{AgentName} vysledky {datum}"
    - message: "{homeTeam} {h}:{a} {awayTeam}\n...({totalMatches} zapasu celkem)"
    - priority: "default"
    - tags: ["soccer"] nebo sport-specificke
 
-4. Standings aktualizovana (topic: agent-runs)
+5. Standings aktualizovana (topic: agent-runs)
    - title: "{Competition} tabulka aktualizovana"
    - message: "1. {leader} {pts}b\n2. {second} {pts}b\n..."
    - priority: "low", tags: ["bar_chart"]
 
-5. Zdroj blokovany / anti-bot (topic: agent-alerts)
+6. Zdroj blokovany / anti-bot (topic: agent-alerts)
    - title: "{AgentName} zdroj nedostupny"
    - message: "{domain}: {statusCode}\nFallback: {fallbackSource}\nZpracovano: {processed}/{total}"
    - priority: "high", tags: ["no_entry"]
 
-6. Podezrely pohyb odds (topic: agent-alerts)
+7. Podezrely pohyb odds (topic: agent-alerts)
    - title: "{AgentName} podezrely pohyb odds"
    - message: "{homeTeam} vs {awayTeam}\nPohyb: {marketType} {old}->>{new} ({shift}%)\nIntegrita: flagovano"
    - priority: "high", tags: ["chart_with_upwards_trend", "warning"]
 
-7. Hrac blizko trestu (topic: agent-maintenance)
+8. Hrac blizko trestu (topic: agent-maintenance)
    - title: "{AgentName} blizko trestu"
    - message: "{playerName} ({teamName}): {yellowCount}/{threshold} zlutych karet\n{competition}"
    - priority: "low", tags: ["yellow_square"]
 
-8. Season lifecycle (topic: agent-maintenance)
+9. Season lifecycle (topic: agent-maintenance)
    Nova sezona:
    - title: "{AgentName} nova sezona inicializovana"
    - message: "{seasonName}: {teamCount} tymu, {matchCount} zapasu"
@@ -3430,70 +3429,70 @@ DOPORUCENE notifikace:
    - message: "{seasonName}\nVitez: {winner}\nPostup: {promoted}\nSestup: {relegated}"
    - priority: "default", tags: ["checkered_flag"]
 
-9. Zraneni (topic: agent-maintenance)
+10. Zraneni (topic: agent-maintenance)
    - title: "{AgentName} zraneni: {PlayerName}"
    - message: "{PlayerName} ({TeamName}): {InjuryType}, navrat: {ExpectedReturnDate}"
    - priority: "default", tags: ["ambulance"]
 
-10. Top scorers (topic: agent-runs) -- po kazdem matchday
+11. Top scorers (topic: agent-runs) -- po kazdem matchday
     - title: "{Competition} top strelci po {N}. kole"
     - message: "1. {player1} ({team1}) -- {g}g {a}a\n2. ..."
     - priority: "low", tags: ["soccer", "bar_chart"]
 
-11. Missed run (topic: agent-alerts)
+12. Missed run (topic: agent-alerts)
     - title: "{AgentName} zmeskany run"
     - message: "Posledni uspesny run: {lastRunAt} ({nDays} dni ago)\nSpoustim catch-up"
     - priority: "high", tags: ["alarm_clock"]
 
-12. Digest -- tydeni (topic: agent-digest)
+13. Digest -- tydeni (topic: agent-digest)
     Kdy: kazdych 7 runu nebo kazde pondeli
     - title: "{AgentName} tydeni souhrn"
     - message: "{totalRuns} runu / {successRate}% uspesnost / {matchesProcessed} zapasu\nTop soutez: {topCompetition}\nProblemy: {errorSummary}"
     - priority: "low", tags: ["bar_chart"]
 
-13. Digest -- mesicni (topic: agent-digest)
+14. Digest -- mesicni (topic: agent-digest)
     Kdy: kazdych 30 dni
     - title: "{AgentName} mesicni souhrn"
     - message: "{totalRuns} runu / {successRate}% uspesnost / {totalMatches} zapasu\nNove tymy: {newTeams}\nNovi hraci: {newPlayers}"
     - priority: "default", tags: ["calendar"]
 
-14. Nové historické logo (topic: agent-maintenance)
+15. Nové historické logo (topic: agent-maintenance)
     Kdy: při uložení nového/historického loga entity
     - title: "{AgentName} 🖼️ nové logo: {TeamName}"
     - message: "Tým: {TeamName} | Typ: {ImageType} | Zdroj: {SourceName}\nHistorické: {IsHistorical} | Platné od: {ValidFrom}"
     - priority: "low", tags: ["frame_with_picture"]
 
-15. Přejmenování / reformace entity (topic: agent-maintenance)
+16. Přejmenování / reformace entity (topic: agent-maintenance)
     Kdy: při detekci přejmenování týmu nebo ligy
     - title: "{AgentName} 🔄 změna entity: {OldName}"
     - message: "Typ: {rename|reform|merge}\n{OldName} → {NewName} ({datum})\nGuid zachován: {true|false}"
     - priority: "default", tags: ["arrows_counterclockwise"]
 
-16. Integrita zápasu flagována (topic: agent-alerts)
+17. Integrita zápasu flagována (topic: agent-alerts)
     Kdy: HomeScore/AwayScore > 15, nebo xG anomálie, nebo odds > 20%
     - title: "{AgentName} 🚩 integrity flag: {HomeTeam} vs {AwayTeam}"
     - message: "Důvod: {reason}\nHodnota: {value}\nMatch: {MatchGuid}\nManuální review vyžadován"
     - priority: "high", tags: ["triangular_flag_on_post", "warning"]
 
-17. Transfer detekován (topic: agent-maintenance)
+18. Transfer detekován (topic: agent-maintenance)
     Kdy: při detekci transferu z MatchLineups (TeamGuid ≠ Squads.TeamGuid)
     - title: "{AgentName} 🔀 transfer: {PlayerName}"
     - message: "{PlayerName}: {OldTeam} → {NewTeam}\nOkno: {open|closed}\nAkce: {updated|queued_for_review}"
     - priority: "low", tags: ["arrows_counterclockwise"]
 
-18. Coverage gap detekován (topic: agent-alerts)
+19. Coverage gap detekován (topic: agent-alerts)
     Kdy: datum s MatchCount=0 a Score >= 90 (kritická mezera)
     - title: "{AgentName} 📉 coverage gap: {SportName}"
     - message: "{N} datových mezer | Nejstarší: {OldestDate}\nPrioritní: {TopGapDate} (Score {Score})\nPřidáno do DiscoveryQueue"
     - priority: "default", tags: ["chart_with_downwards_trend"]
 
-19. Hromadný upload obrázků dokončen (topic: agent-maintenance)
+20. Hromadný upload obrázků dokončen (topic: agent-maintenance)
     Kdy: po batch image upload (5+ obrázků)
     - title: "{AgentName} 🖼️ image batch: {N} uploady"
     - message: "Úspěch: {success}/{total}\nNové: {new} | Duplikáty přeskočeny: {dupes}\nTabulka: {EntityType}"
     - priority: "low", tags: ["frame_with_picture", "white_check_mark"]
 
-20. Self-audit dokončen (topic: agent-runs nebo agent-alerts)
+21. Self-audit dokončen (topic: agent-runs nebo agent-alerts)
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
@@ -3504,13 +3503,13 @@ DOPORUCENE notifikace:
     - message: "Errors: {seznam} | Opraveno: {co}\nVyžaduje pozornost: {co_nelze_opravit}"
     - priority: "high", tags: ["warning", "magnifying_glass_tilted_left"]
 
-21. Cross-agent task dokončen (topic: agent-maintenance)
+22. Cross-agent task dokončen (topic: agent-maintenance)
     Kdy: Catalog agent dokončil úkol zadaný Manager agentem
     - title: "{AgentName} ✅ cross-agent task: {taskType}"
     - message: "Od: {SourceAgent}\nZpracováno: {N} položek\nChyby: {errors}"
     - priority: "low", tags: ["link", "white_check_mark"]
 
-22. Prompt upgrade dostupný (topic: agent-runs)
+23. Prompt upgrade dostupný (topic: agent-runs)
     Kdy: při detekci nové verze na Drive (version_mismatch)
     - title: "{AgentName} 🔄 prompt upgrade: {oldVersion} → {newVersion}"
     - message: "Drive verze: {newVersion}\nAktivní verze: {oldVersion}\nUpgrade: {applied|blocked}"
