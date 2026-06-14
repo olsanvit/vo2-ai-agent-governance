@@ -13,11 +13,11 @@ ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
 -----------------------------------------------------------
 STARTUP SEKVENCE (18 kroků -- viz Ch 3: db_ping, version check, freshness, Drive soubory + sync_agent_entities, KONTROLA skills, AgentSchedules, readiness, startup backfill):
 -----------------------------------------------------------
-1.  DB PING -> db_status = db_reachable | db_unreachable (jediný DB check)
+1.  DB PING -> db_status = db_reachable | db_unreachable (jediné db_ping volání; run_select_sql je samostatný nástroj)
     L db_unreachable -> STOP + ntfy urgent (topic: agent-errors) + calendar event
        Žádné zápisy, žádný Drive catalog update, žádné schema změny.
        Run report do DB nelze uložit → zaznamenat selhání v textu odpovědi agenta.
-2.  PROMPT VERSION -> porovnat s Google Drive + nacist CatalogPromptSkills.txt
+2.  PROMPT VERSION -> ověřit přes Gitea (fallback: Drive → cache) + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 4.  BASELINE CATALOG -> nacist {AgentName}_entities (Google Sheet) z Drive /Prompts/Catalogs/
@@ -341,21 +341,26 @@ CHAPTER 3: STARTUP PROTOCOL
 
 ## Prompt Cache Protocol
 
-Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovná verze:
+Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
 
 ### Canonical prompt (XxxPrompt.txt + XxxPromptSkills.txt)
 
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
-2. DRIVE HEADER → načíst jen první 3 řádky souboru z Drive (pouze hlavičku)
+2. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL (pouze hlavičku):
+   CatalogPrompt:       .../raw/branch/main/CommonCatalog/CatalogPrompt.txt
+   CatalogPromptSkills: .../raw/branch/main/CommonCatalog/CatalogPromptSkills.txt
 3. ROZHODNUTÍ:
-   a. cache_version == drive_version  → použít Content z DB cache; stažení přeskočit
-   b. cache_version != drive_version (nebo cache neexistuje)
-      → stáhnout plný obsah z Drive
+   a. cache_version == gitea_version  → použít Content z DB cache; stažení přeskočit
+   b. cache_version != gitea_version (nebo cache neexistuje)
+      → stáhnout plný obsah z Gitea (WebFetch celého souboru)
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
-   c. Drive nedostupný + cache existuje  → použít cache; log "prompt_upgrade_blocked"
-   d. Drive nedostupný + cache chybí     → pokračovat s bootstrap verzí; log warning
+   c. Gitea nedostupná → FALLBACK na Drive:
+      [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
+   d. Gitea i Drive nedostupné + cache existuje → použít cache; log "prompt_upgrade_blocked"
+   e. Vše nedostupné + cache chybí → pokračovat s bootstrap verzí; log warning
 
 Stejný protokol platí pro Skills soubor ({PromptFile}Skills.txt).
 
@@ -402,15 +407,19 @@ Required runtime sequence:
 3. if db_status == db_unreachable: stop before selfUpdate, baseline validation, views, reports, or writes
 4. detect MCP_VERSION from running MCP/server runtime (via db_ping response or health endpoint)
 5. detect active agent version from runtime prompt header and PromptVersion
-6. VŽDY načíst canonical prompt z Drive (i při version_match — Drive je autoritativní):
-   [Claude MCP] a) search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
-                b) read_file_content(fileId=<found id>) → extract PromptVersion from body
-   [ChatGPT]    a) search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
-                b) fetch(url=<Drive URL found file>) → extract PromptVersion from body
+6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache vs Gitea header (viz Prompt Cache Protocol):
+   PRIORITA: Gitea → Drive fallback → DB cache → bootstrap
+   a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/CommonCatalog/{promptFile}.txt
+      → extract PromptVersion z prvních 5 řádků
+      → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
+   b) DRIVE (fallback pokud Gitea nedostupná):
+      [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+      [ChatGPT]    search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
+      POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
    c) classify prompt_status:
-      - version_match: runtime version == Drive PromptVersion == MCP_VERSION → pokračovat
+      - version_match: runtime version == Gitea/Drive PromptVersion == MCP_VERSION → pokračovat
       - version_mismatch: → selfUpdate (krok 8)
-      - prompt_upgrade_blocked: Drive nedostupný → pokračovat, log warning
+      - prompt_upgrade_blocked: Gitea i Drive nedostupné → pokračovat s cache/bootstrap, log warning
 7. classify prompt_status as: version_match | version_mismatch | prompt_upgrade_blocked | prompt_upgrade_applied
 8. if version_mismatch: selfUpdate
    selfUpdate flow:
@@ -1554,60 +1563,36 @@ Kdy zvážit separaci:
 - Compliance požadavky (GDPR oddělení PII dat)
 - Různé backup/retention politiky
 
-## Google Drive Baseline Catalog File Governance — 8.5.0
+## Google Drive Baseline Catalog Sheet Governance — 9.4.0
 
-Every agent must maintain a baseline catalog file in Google Drive listing database tables the agent uses.
-Baseline entities = database tables, not individual records.
+Každý agent udržuje baseline catalog jako **Google Sheet** v Drive (nikoliv textový soubor).
+Baseline entities = DB tabulky, ne individuální záznamy.
 
-Location:
-- Folder: /Prompts/Catalogs/ (Drive folder ID: 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
-- Filename: {AgentName}_entities.txt (e.g. PeopleAgent.txt, SportAgent.txt)
+Umístění (Catalog agenti):
+- Folder: /Prompts/Catalogs/ (Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+- Sheet: {AgentName}_entities (Google Sheet)
+- COLUMNS: ImportantScore | TableName | Description | RowCount | LastPopulated
 
-Catalog file format (PŘESNĚ tento formát — žádné narrative sekce, žádné entity záznamy):
-```
-AgentName: {AgentName}
-PromptVersion: {activePromptVersion}
-LastUpdated: {ISO8601 datetime}
-TableCount: {count}
-
---- BASELINE TABLES ---
-ImportantScore | TableName | Description | RowCount | LastPopulated
-91.156 | CoreEntityTable | Primary entity table | 1520 | 2026-05-31
-83.420 | EntityAliases | Aliases for entities | 340 | 2026-05-30
-71.008 | Sources | Data sources | 85 | 2026-05-29
-```
-
-DŮLEŽITÉ: Soubor obsahuje POUZE tabulky (DB table names), NE individuální záznamy/entity.
-- Správně: řádek = jedna DB tabulka se ImportantScore, RowCount, LastPopulated
-- Špatně: řádek = konkrétní entita (Solar, Copper, Smith...) nebo narrative text
-
-ImportantScore field (0.000–100.000, 3 desetinná místa) — důležitost/priorita tabulky pro tohoto agenta:
+ImportantScore (0.000–100.000, 3 desetinná místa):
 - 90.000–100.000: critical — blocks readiness if empty
 - 70.000–89.999: high — populated every run
 - 50.000–69.999: medium — populated when source available
 - 30.000–49.999: low — populated opportunistically
 - 0.000–29.999: archive/reference — maintenance runs only
 
-RowCount = current row count from DB (SELECT COUNT(*) WHERE IsDeleted IS NOT TRUE)
-LastPopulated = ISO8601 date of last run that wrote data to this table
+RowCount = SELECT COUNT(*) WHERE IsDeleted IS NOT TRUE
+LastPopulated = datum posledního runu který zapsal data do tabulky
 
 Lifecycle rules:
-- on startup: read catalog via read_file_content (search by title in folder 1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi)
-- if file does not exist: create after first successful run:
-  create_file(title="{AgentName}_entities.txt", parentId="1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi", textContent=<catalog content>)
-- if file exists: update at end of every successful run:
-  pokud je dostupný update_file_content: update_file_content(fileId=<id>, textContent=<updated content>)
-  pokud update_file_content není dostupný: create_file s novým obsahem (starý soubor ponech — operátor smaže)
-- never update catalog when db_status == db_unreachable
-- agent MŮŽE přidávat nové řádky tabulek: při každém runu zkontroluj DB tables a přidej chybějící
+- on startup: search_files(query="{AgentName}_entities", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+              → sheets_get_values(spreadsheetId=<found id>, range="Sheet1")
+- if Sheet does not exist: create after first successful run (viz First Run Protocol)
+- if Sheet exists: update at end of every successful run via sheets_find_row + sheets_update_row
+- NIKDY nepřepisovat celý Sheet — jen append/update_row
+- never update when db_status == db_unreachable
+- agent MŮŽE přidávat nové řádky: při každém runu zkontroluj DB tables a přidej chybějící
   (nová tabulka = nový řádek s ImportantScore odhadnutou dle důležitosti, RowCount z DB, LastPopulated=dnes)
-
-Catalog file read procedure:
-1. search_files(query="title = '{AgentName}_entities.txt' and parentId = '1XDM5t9uh6Aea7FEAL9IOsFUMV7pEdYgi'")
-2. call read_file_content(fileId=<found id>) to load current catalog
-3. parse table lines (ImportantScore | TableName | Description | RowCount | LastPopulated)
-4. compare with actual DB tables
-5. report discrepancies in startup diagnostics
+- spreadsheetId NIKDY neukládat natvrdo — vždy search_files znovu (uložené ID → 404 po re-upload)
 
 ## Google Drive Agent Folder Structure — 8.5.0
 
@@ -1616,27 +1601,28 @@ Každý agent má v Google Drive složce /Prompts/ přístup k těmto podsložk�
 Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Podsložky:
-- /Prompts/Managers/      — Prompt soubory pro Manager agenty (správci domén)
-- /Prompts/Catalogs/      — Katalogové soubory entit pro jednotlivé agenty
-                            Format: {AgentName}_entities.txt, ImportantScore|TableName|RowCount|LastPopulated
-- /Prompts/Names/         — Soubory se seznamy názvů pro dohledání (per agent)
-                            Format: {AgentName}_names.txt, jeden název na řádek
-- /Prompts/Urls/          — Soubory se seznamy URL k prohledání (per agent)
-                            Format: {AgentName}_urls.txt, jedna URL na řádek
+- /Prompts/Managers/      — Entities Sheety pro Manager agenty (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+                            Format: {AgentName}_entities (Google Sheet), ImportantScore|TableName|RowCount|LastPopulated
+- /Prompts/Catalogs/      — Entities Sheety pro Catalog agenty (folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+                            Format: {AgentName}_entities (Google Sheet), ImportantScore|TableName|RowCount|LastPopulated
+- /Prompts/Names/         — Sheety se seznamy názvů pro dohledání, per agent (folder ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
+                            Format: {AgentName}_names (Google Sheet), EntityName|coverage|tables|lastProcessed
+- /Prompts/Urls/          — Sheety se seznamy URL k prohledání, per agent (folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
+                            Format: {AgentName}_urls (Google Sheet), URL|SourceTier|ReliabilityScore|EntityType|LastChecked|Status
 
 Použití složek při běhu:
 
 Managers/:
-- Agent-typ Manager čte svůj prompt z /Prompts/Managers/{AgentName}_entities.txt
+- Každý Manager agent udržuje svůj {AgentName}_entities Sheet v /Prompts/Managers/
 - Manager agent koordinuje Catalog agenty pro svou doménu
-- Při startup: selfUpdate z Managers/ pokud PromptVersion nesouhlasí
+- Při startup: načíst Sheet → přehled vlastních DB tabulek
 
 Catalogs/:
-- Každý Catalog agent udržuje svůj soubor /Prompts/Catalogs/{AgentName}_entities.txt
-- Soubor obsahuje seznam DB tabulek (ImportantScore, RowCount, LastPopulated)
+- Každý Catalog agent udržuje svůj {AgentName}_entities Sheet v /Prompts/Catalogs/
+- Sheet obsahuje seznam DB tabulek (ImportantScore, RowCount, LastPopulated)
 - Načíst při startu (po DB ping, před discovery) → přehled tabulek pro prioritizaci běhu
 - Aktualizovat na konci každého úspěšného scheduled runu
-- Pokud soubor neexistuje: přeskočit tiše, vytvořit po prvním úspěšném běhu
+- Pokud Sheet neexistuje: přeskočit tiše, vytvořit po prvním úspěšném běhu (viz First Run Protocol)
 
 Names/:
 - Řádky (entity names) plní VÝHRADNĚ operátor — agent NEPŘIDÁVÁ nové řádky, NEMAŽE existující
@@ -2092,7 +2078,7 @@ DOPORUČENÉ notifikace (MĚL BY poslat):
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 9.0.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: {PromptVersion} | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK | AgentMonitor: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"

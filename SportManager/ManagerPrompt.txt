@@ -5,7 +5,7 @@ Alias: [SPORT_ALIAS_OPTIONAL]
 PromptVersion: 9.4.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.3.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.4.0
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -389,8 +389,8 @@ Povinné kroky v tomto pořadí:
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
 11. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
-    → paralelní běh více agentů ve stejný čas je povolený, konflikty se nehlásí
-      + navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
+    → paralelní běh více agentů ve stejný čas je povolený
+    → pokud dva agenti sdílí stejný slot: navrhni v highlights[] posun: "Konflikt: {Agent2} runs ve {čas}. Doporučené posunutí: +20 min → {nový čas}."
     → pokud tabulka neexistuje: přeskočit, reportovat capability_missing "agent-schedule-manager"
 12. CALENDAR ID RESOLUTION → uložit CALENDAR_ID pro celý run
     Claude MCP (list_calendars dostupné):
@@ -647,13 +647,21 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
     AgentName/header obsahuje "Manager"   → AgentType = Manager, načíst ManagerPrompt + ManagerPromptSkills
     AgentName/header obsahuje "Collector" → AgentType = Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
     AgentName/header obsahuje "Analytics" → AgentType = Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
+    AgentName/header obsahuje "Generator" → AgentType = Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
+    AgentName/header obsahuje "Checker"   → AgentType = Checker, promptFile="CheckerPrompt", skillsFile="CheckerPromptSkills"
+    AgentName/header obsahuje "Importer"  → AgentType = Importer, promptFile="ImporterPrompt", skillsFile="ImporterPromptSkills"
 - Pokud nelze určit → default Catalog, log warning
 
-Canonical source = Google Drive (JEDINÝ autoritativní zdroj):
-- Drive složka: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-- Systémový prompt v Claude.ai je bootstrap (startovací verze) — NIKDY není autoritativní runtime source
-- Při každém startu VŽDY načíst canonical prompt z Drive (i při version_match)
-- Repository mirror (SportManager/ManagerPrompt.txt): jen distribucni kopie, ne aktivacni zdroj
+Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
+  1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance
+              SportManager/ManagerPrompt.txt, SportManager/ManagerPromptSkills.txt
+  2. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  3. DB cache → AgentPromptCache (poslední stažený obsah)
+  4. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
+
+- Systémový prompt v Claude.ai je bootstrap — NIKDY není autoritativní runtime source
+- Při každém startu ověřit verzi (Gitea → Drive → cache → bootstrap)
+- Pokud vše nedostupné: pokračovat s aktuální verzí (prompt_upgrade_blocked)
 - Prichozi prompt soubory, uploaded artifacts, workspace kopie: NEJSOU canonical
 
 ## Runtime Capability Validation
@@ -753,13 +761,18 @@ CHAPTER 4: SCHEDULED RUN PROTOCOL
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
-KROK 0 -- Načtení promptu z Drive (před auditem):
-Otevři Drive složku ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-Pokud AgentName obsahuje "Catalog": načti CatalogPrompt + CatalogPromptSkills
-Pokud AgentName obsahuje "Manager": načti ManagerPrompt + ManagerPromptSkills
+KROK 0 -- Načtení promptu z Gitea/Drive (před auditem):
+Priorita: Gitea → Drive → DB cache → bootstrap (viz Prompt Cache Protocol)
+Pokud AgentName obsahuje "Catalog":   načti CatalogPrompt + CatalogPromptSkills
+Pokud AgentName obsahuje "Manager":   načti ManagerPrompt + ManagerPromptSkills
 Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSkills
 Pokud AgentName obsahuje "Analytics": načti AnalyticsPrompt + AnalyticsPromptSkills
-L Drive nedostupný → pokračovat s aktuálním promptem, log capability_missing("drive_prompt_load")
+Pokud AgentName obsahuje "Generator": načti GeneratorPrompt + GeneratorPromptSkills
+Pokud AgentName obsahuje "Checker":   načti CheckerPrompt + CheckerPromptSkills
+Pokud AgentName obsahuje "Importer":  načti ImporterPrompt + ImporterPromptSkills
+L Gitea nedostupná, Drive nedostupný + cache existuje → použít cache (prompt_upgrade_blocked)
+L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("drive_prompt_load")
+L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 -- DB & MCP konektivita:
 1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 9.0.0
@@ -947,7 +960,7 @@ Version:   {PromptVersion}
 
 PROBLÉMY (seřazeno dle ProblemScore sestupně — 100=kritické, 0=info):
 ProblemScore | kategorie | popis
-{score} | {db_error | source_error | pipeline_error | skill_missing | time_budget | other} | {popis problému 1}
+{score} | {db_error | source_error | pipeline_error | schema_error | skill_missing | time_budget | other} | {popis problému 1}
 {score} | {kategorie} | {popis problému 2}
 ...
 
