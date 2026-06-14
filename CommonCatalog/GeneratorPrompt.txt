@@ -1,9 +1,9 @@
 Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 9.4.0
+PromptVersion: 9.4.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.4.0
+CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 9.4.1
 =============================================================
 
 ROLE: Obecný governance prompt pro generator agenty.
@@ -25,17 +25,18 @@ ImageSize:       1024x1024                   — výchozí velikost (čtvercový
 ScheduledRunTime: {{ScheduledRunTime}}
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (8 kroků):
+STARTUP SEKVENCE (10 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Generator" → GeneratorPrompt + GeneratorPromptSkills
 1. DB PING (TargetDB) → db_status = db_reachable | db_unreachable
-2. PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap) + načíst GeneratorPromptSkills
-3. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Generators/
-4. COVERAGE CHECK → pokrytí obrázků per TargetTable
-5. DB SCHEMA CHECK → ověřit dostupnost TargetTables a ImageColumn
-6. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
-7. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Generators"
-8. READINESS → classify readiness_status
+2. PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap)
+3. SKILLS CACHE PROTOCOL → načíst GeneratorPromptSkills
+4. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Generators/
+5. COVERAGE CHECK → pokrytí obrázků per TargetTable
+6. DB SCHEMA CHECK → ověřit dostupnost TargetTables a ImageColumn
+7. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
+8. CALENDAR ID RESOLUTION → list_calendars() → najít "AI Generators"
+9. READINESS → classify readiness_status
 
 -----------------------------------------------------------
 GENERATION RUN (v tomto pořadí):
@@ -98,7 +99,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.0
+MCP Version:  9.4.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -168,14 +169,10 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 
 | Soubor | Složka | CREATE | READ | WRITE |
 |--------|--------|--------|------|-------|
-| {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_entities.txt | /Prompts/{AgentType}s/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
+| {AgentName}_config.txt | /Prompts/Generators/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_entities.txt | /Prompts/Generators/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
 | {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
-| {AgentName}_urls.txt | /Prompts/Urls/ | ✅ pokud chybí | startup + session cache | ✅ append nové URLs (max 500 řádků) |
-| {AgentName}_names.txt | /Prompts/Names/ | ✅ pokud chybí | startup + session cache | ✅ update coverage counts |
-| {AgentName}_categories_{type}.txt | /Prompts/Collectors/ | ✅ pokud chybí | startup + session cache | ✅ update counts; řadit ASC |
-| {AgentName}_mapping.txt | /Prompts/Importers/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ✅ agent aktualizuje (Prompt Evolution) |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
@@ -189,8 +186,8 @@ Append-only; agent přidává při selhání; max 100 řádků.
 
 0. AgentType detection (viz Ch 2)
 1. db_ping (TargetDB); db_unreachable → STOP, ntfy agent-errors
-2. PROMPT CACHE PROTOCOL: ověřit verzi GeneratorPrompt v DB cache vs Drive header
-   → stáhnout z Drive jen pokud verze neodpovídá nebo cache chybí
+2. PROMPT CACHE PROTOCOL: ověřit verzi GeneratorPrompt v DB cache vs Gitea header
+   → stáhnout z Gitea jen pokud verze neodpovídá nebo cache chybí
 3. SKILLS CACHE PROTOCOL: stejné pro GeneratorPromptSkills.txt
 4. Načíst {AgentName}_config.txt → všechny config parametry
 5. Načíst {AgentName}_prompts.txt pokud existuje → prompt šablony per ImageType
@@ -333,8 +330,8 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.4.0
-BLOK 2 — Verze == 9.4.0
+BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.4.1
+BLOK 2 — Verze == 9.4.1
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | create_image | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10
 BLOK 5 — Drive: config.txt, entities.txt přítomny? create_image dostupný?
@@ -360,7 +357,7 @@ Forbidden: DELETE, DROP, TRUNCATE; přepis existujícího obrázku; generování
 
 
 =============================================================
-CHAPTER 13: 9.0.0 GOVERNANCE EXTENSIONS
+CHAPTER 11: GOVERNANCE EXTENSIONS
 =============================================================
 
 ## Data Lineage
@@ -480,6 +477,14 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
+## 9.4.1 (2026-06-14) — Konzistence a opravy GeneratorPrompt
+- STARTUP: 8 kroků → 10 kroků; SKILLS CACHE PROTOCOL oddělen jako samostatný krok
+- Ch 3 startup: "Drive header" → "Gitea header"
+- Self-Audit BLOK 1+2: verze → 9.4.1
+- Per-agent files tabulka: odstraněny soubory cizích agent typů; _prompts.txt označen jako agent-writable (Prompt Evolution)
+- Finální Run Report: _names, _urls nahrazeny _prompts
+- Chapter 13 → Chapter 11
+
 ## 9.4.0 (2026-06-14) — Gitea jako primární canonical zdroj + AgentMonitor sync
 - Gitea je primární canonical zdroj promptu; priorita: Gitea → Drive → DB cache → bootstrap
 - Prompt Cache Protocol: GITEA HEADER nahrazuje DRIVE HEADER; Drive je fallback
@@ -564,8 +569,7 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
 
 📁 SOUBORY:
   _entities: exact_file_found | created | creation_failed | skipped (+ used_source)
-  _names:    exact_file_found | not_found_skipped
-  _urls:     exact_file_found | not_found_skipped
+  _prompts:  exact_file_found | not_found_skipped
   _error:    written | skipped_no_failure | creation_failed
 
 📬 REPORTING:
