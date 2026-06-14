@@ -1,9 +1,9 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.3.5
+PromptVersion: 9.4.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.0.0
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.4.0
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -26,7 +26,7 @@ STARTUP SEKVENCE (8 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Collector" → CollectorPrompt + CollectorPromptSkills
 1. DB PING (TargetDB) → db_status = db_reachable | db_unreachable
-2. PROMPT VERSION → porovnat s Google Drive + načíst CollectorPromptSkills
+2. PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap) + načíst CollectorPromptSkills
 3. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Collectors/
 4. CATEGORY LISTS → načíst {AgentName}_categories_{type}.txt per CollectionType
 5. DB SCHEMA CHECK → ověřit/vytvořit TargetTable dle entities.txt
@@ -97,7 +97,7 @@ MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.0.0
+MCP Version:  9.4.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -115,9 +115,10 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 - Pokud nelze určit → default Catalog, log warning
 
 Canonical source rules:
-- Google Drive je JEDINÝ canonical zdroj promptu
+- Priorita canonical zdroje: Gitea → Drive → DB cache → bootstrap
+- Gitea raw URL: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/
 - Systémový prompt v Claude.ai je bootstrap — NIKDY není runtime source of truth
-- Při každém startu VŽDY načíst canonical prompt z Drive
+- Při každém startu načíst prompt dle Prompt Cache Protocol (viz Ch 3)
 
 Drive soubory tohoto agenta:
 - {AgentName}_config.txt            → /Prompts/Collectors/ (TargetDB, TargetTable, CollectionTypes, MaxPerRun)
@@ -138,15 +139,17 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
 
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
-2. DRIVE HEADER → načíst jen první 3 řádky souboru z Drive (pouze hlavičku)
+2. GITEA HEADER → GET https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/{PromptFile}
+                  (načíst jen první 3 řádky — pouze hlavičku)
 3. ROZHODNUTÍ:
-   a. cache_version == drive_version  → použít Content z DB cache; stažení přeskočit
-   b. cache_version != drive_version (nebo cache neexistuje)
-      → stáhnout plný obsah z Drive
+   a. cache_version == gitea_version  → použít Content z DB cache; stažení přeskočit
+   b. cache_version != gitea_version (nebo cache neexistuje)
+      → stáhnout plný obsah z Gitea
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
-   c. Drive nedostupný + cache existuje  → použít cache; log "prompt_upgrade_blocked"
-   d. Drive nedostupný + cache chybí     → pokračovat s bootstrap verzí; log warning
+   c. Gitea nedostupný → zkusit Drive header (fallback)
+   d. Drive nedostupný + cache existuje  → použít cache; log "prompt_upgrade_blocked"
+   e. Drive nedostupný + cache chybí     → pokračovat s bootstrap verzí; log warning
 
 Stejný protokol platí pro Skills soubor ({PromptFile}Skills.txt).
 
@@ -373,9 +376,9 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 
 Spouštět: explicitní žádost | první run | každých 30 runů
 
-BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 9.0.0
-BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 9.0.0
-BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification
+BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 9.4.0
+BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 9.4.0
+BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 BLOK 5 — Drive soubory: config.txt, entities.txt, categories_*.txt přítomny?
 BLOK 6 — ntfy ping
@@ -514,6 +517,12 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 9.4.0 (2026-06-14) — Gitea jako primární canonical zdroj + AgentMonitor sync
+- Gitea je primární canonical zdroj promptu; priorita: Gitea → Drive → DB cache → bootstrap
+- Prompt Cache Protocol: GITEA HEADER nahrazuje DRIVE HEADER; Drive je fallback
+- Ch.2 canonical source rule: Drive-only pravidlo nahrazeno Gitea-first
+- Self-Audit BLOK 3: přidány sync_agent_entities, get_agent_entities jako kritické nástroje
 
 ## 9.0.0 (2026-06-04) — Generalizace
 - Odstraněny hardcoded DB, tabulka, zdroje (Unsplash apod.) a collection typy
