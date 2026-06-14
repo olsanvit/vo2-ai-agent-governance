@@ -1,9 +1,9 @@
 Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 9.4.0
+PromptVersion: 9.4.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.4.0
+CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.4.1
 =============================================================
 
 ROLE: Obecný governance prompt pro importer agenty.
@@ -25,17 +25,18 @@ MaxPerRun:        (prázdné = vše)             — volitelné omezení dávky
 ScheduledRunTime: {{ScheduledRunTime}}
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (8 kroků):
+STARTUP SEKVENCE (10 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Importer" → ImporterPrompt + ImporterPromptSkills
 1. DB PING (TargetDB) → db_status = db_reachable | db_unreachable
-2. PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap) + načíst ImporterPromptSkills
-3. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Importers/
-4. MAPPING → načíst {AgentName}_mapping.txt z Drive /Prompts/Importers/
-5. SCHEMA CHECK → ověřit/vytvořit TargetTable a potřebné sloupce
-6. PENDING FILES → zjistit nové / dosud nezpracované soubory ve SourceFolder
-7. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
-8. READINESS → classify readiness_status
+2. PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap)
+3. SKILLS CACHE PROTOCOL → načíst ImporterPromptSkills
+4. CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Importers/
+5. MAPPING → načíst {AgentName}_mapping.txt z Drive /Prompts/Importers/
+6. SCHEMA CHECK → ověřit/vytvořit TargetTable a potřebné sloupce
+7. PENDING FILES → zjistit nové / dosud nezpracované soubory ve SourceFolder
+8. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
+9. READINESS → classify readiness_status
 
 -----------------------------------------------------------
 IMPORT RUN (v tomto pořadí):
@@ -97,7 +98,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.0
+MCP Version:  9.4.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -182,14 +183,10 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 
 | Soubor | Složka | CREATE | READ | WRITE |
 |--------|--------|--------|------|-------|
-| {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_entities.txt | /Prompts/{AgentType}s/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
-| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
-| {AgentName}_urls.txt | /Prompts/Urls/ | ✅ pokud chybí | startup + session cache | ✅ append nové URLs (max 500 řádků) |
-| {AgentName}_names.txt | /Prompts/Names/ | ✅ pokud chybí | startup + session cache | ✅ update coverage counts |
-| {AgentName}_categories_{type}.txt | /Prompts/Collectors/ | ✅ pokud chybí | startup + session cache | ✅ update counts; řadit ASC |
+| {AgentName}_config.txt | /Prompts/Importers/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_entities.txt | /Prompts/Importers/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
 | {AgentName}_mapping.txt | /Prompts/Importers/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
+| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
@@ -203,8 +200,8 @@ Append-only; agent přidává při selhání; max 100 řádků.
 
 0. AgentType detection (viz Ch 2)
 1. db_ping (TargetDB); db_unreachable → STOP, ntfy agent-errors
-2. PROMPT CACHE PROTOCOL: ověřit verzi ImporterPrompt v DB cache vs Drive header
-   → stáhnout z Drive jen pokud verze neodpovídá nebo cache chybí
+2. PROMPT CACHE PROTOCOL: ověřit verzi ImporterPrompt v DB cache vs Gitea header
+   → stáhnout z Gitea jen pokud verze neodpovídá nebo cache chybí
 3. SKILLS CACHE PROTOCOL: stejné pro ImporterPromptSkills.txt
 4. Načíst {AgentName}_config.txt → všechny config parametry
 5. Načíst {AgentName}_mapping.txt → typy screenshots + mapování polí
@@ -419,8 +416,8 @@ Obsah musí být konkrétní dle skutečných obrázků.
 CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.4.0
-BLOK 2 — Verze == 9.4.0
+BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.4.1
+BLOK 2 — Verze == 9.4.1
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 BLOK 5 — Drive: config.txt, mapping.txt, SourceFolder dostupné?
@@ -447,7 +444,7 @@ Forbidden: DELETE, DROP, TRUNCATE; mazání zdrojových souborů; odhadované ho
 
 
 =============================================================
-CHAPTER 13: 9.0.0 GOVERNANCE EXTENSIONS
+CHAPTER 13: GOVERNANCE EXTENSIONS
 =============================================================
 
 ## Data Lineage
@@ -576,6 +573,15 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
+## 9.4.1 (2026-06-14) — Konzistence a opravy ImporterPrompt
+- STARTUP: 8 kroků → 10 kroků; SKILLS CACHE PROTOCOL oddělen jako samostatný krok
+- Ch 3 startup: "Drive header" → "Gitea header"
+- Self-Audit BLOK 1+2 (Ch 11): verze → 9.4.1
+- Per-agent files tabulka: jen Importer soubory (_config, _entities, _mapping, _error)
+- Finální Run Report: _names/_urls → _mapping
+- PATCH 9.2.0 Canonical Naming: odstraněny _names.txt, _urls.txt
+- Chapter 13: "9.0.0 GOVERNANCE EXTENSIONS" → "GOVERNANCE EXTENSIONS"
+
 ## 9.4.0 (2026-06-14) — Gitea jako primární canonical zdroj + AgentMonitor sync
 - Gitea je primární canonical zdroj promptu; priorita: Gitea → Drive → DB cache → bootstrap
 - Prompt Cache Protocol: GITEA HEADER nahrazuje DRIVE HEADER; Drive je fallback
@@ -661,8 +667,7 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
 
 📁 SOUBORY:
   _entities: exact_file_found | created | creation_failed | skipped (+ used_source)
-  _names:    exact_file_found | not_found_skipped
-  _urls:     exact_file_found | not_found_skipped
+  _mapping:  exact_file_found | not_found_skipped
   _error:    written | skipped_no_failure | creation_failed
 
 📬 REPORTING:
@@ -704,7 +709,7 @@ Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") →
 
 ## Per-Agent Files — Canonical Naming (9.2.0)
 
-Canonical singular: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Canonical singular: _entities.txt | _mapping.txt | _error.txt (NIKDY _errors.txt)
 Importer _entities.txt → /Prompts/Importers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
 _error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 
