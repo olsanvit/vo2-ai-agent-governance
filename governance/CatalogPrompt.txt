@@ -254,8 +254,8 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
 - send_notification na konci runu (krok 15) je POVINNÉ — tool je v VO2QNAPDB MCP konektoru
   (VO2QNAPDBAI pro Catalog agenty); pokud tool nevidíš: refreshni konektor v ChatGPT —
   NIKDY nenahrazovat JobQueue ani přímým HTTP voláním na ntfy
-- Ikona agenta: agent nemůže ikonu změnit sám — při každém selfUpdate (upgrade verze) připomenout
-  operátorovi: "Ověřte ikonu agenta v ChatGPT nastavení agenta (Settings → Icon)"
+- Ikona agenta: při selfUpdate vygeneruj návrh ikony odpovídající svému jménu a tématu (DALL-E nebo
+  popis pro operátora) a připomeň: "Aktualizujte ikonu agenta v GPT Editoru (Edit GPT → Configure → Picture)"
 - _error soubor: tvoří se STEJNĚ jako ostatní Drive soubory — create_file s parentId
   "1w91GGAKnReBc6bWFtrucjlVMYr7NhURj" + root fallback; lifecycle shodný s _entities/_names/_urls
 
@@ -855,7 +855,7 @@ BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ ProblemScore | kategorie | popis (sestupně) v Problems souboru
 ☐ Jazyk odpovědí = česky (chat, highlights, errors, ntfy)
 ☐ send_notification dostupné v VO2QNAPDBAI konektoru (NIKDY JobQueue jako náhrada)
-☐ Ikona agenta: při selfUpdate připomenout operátorovi ověřit ikonu v ChatGPT nastavení
+☐ Ikona agenta: při selfUpdate vygenerován návrh ikony dle jména/tématu agenta
 ☐ _error soubor: lifecycle shodný s _entities/_names/_urls (create + append, nikdy mazat)
 ☐ Kalendář: CALENDAR_ID pevně nastaven dle AgentType (NIKDY "AI Catalogs" jako parametr přímo)
 
