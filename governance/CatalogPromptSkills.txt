@@ -1,6 +1,6 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 9.4.1
-Generated: 2026-06-09
+SkillsVersion: 9.4.2
+Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
 Tento soubor je autoritativní seznam skills povolených pro Catalog agenty.
@@ -737,14 +737,17 @@ Limitations: safe mode pouze non-destructive fixes; aggressive vyžaduje potvrze
 -- J. SCHEDULING & CALENDAR (6) --------------------------------
 
 ## next-run-calendar-scheduler
-Task types: plánování příštího runu v Google Calendar, AI Catalogs
-Description: Vytváří Calendar event pro příští scheduled run. CALENDAR_ID musí být vyřešen přes list_calendars() (hledat kalendář obsahující "AI Catalogs") — NIKDY nepoužívat text "AI Catalogs" přímo jako calendar_id parametr.
+Task types: plánování příštího runu v Google Calendar, AI Catalogs, AI Managers
+Description: Vytváří Calendar event pro příští scheduled run. CALENDAR_ID je pevně nastaven dle AgentType:
+  - AgentType=Catalog: "28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com"
+  - AgentType=Manager: "a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com"
+  NIKDY nepoužívat řetězec "AI Catalogs" nebo "AI Managers" přímo jako calendar_id parametr.
   Před vytvořením: list_events → smazat starý event se stejným AgentName → vytvořit nový.
   Zajišťuje, že existuje právě JEDNA budoucí událost pro agenta.
   Při úspěšném runu suffix " ✅", při selhání " ❌".
-Inputs: agent name, výsledek runu, čas příštího scheduled runu (NextRunAt)
-Outputs: Calendar event vytvořen (CALENDAR_ID z list_calendars), potvrzení
-Limitations: pokud list_calendars() selže → capability_missing("calendar_list_calendars"), Calendar přeskočit — NEBLOKUJ datový běh; nemaže historické eventy (jen budoucí duplicity)
+Inputs: agent name, AgentType, výsledek runu, čas příštího scheduled runu (NextRunAt)
+Outputs: Calendar event vytvořen s pevným CALENDAR_ID, potvrzení
+Limitations: CALENDAR_ID je hardcoded — list_calendars() není potřeba; nemaže historické eventy (jen budoucí duplicity)
 
 ## run-interval-calculator
 Task types: interval výpočtu, freshness SLA, next run time
@@ -779,11 +782,14 @@ Outputs: Prague TZ datetime, UTC datetime, DST flag
 Limitations: primárně pro Europe/Prague; multi-timezone vyžaduje custom config
 
 ## calendar-conflict-resolver
-Task types: Calendar konflikty, duplicate events, AI Catalogs cleanup
-Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta
-  v kalendáři "AI Catalogs". list_events → smazat starší duplicitní budoucí eventy.
+Task types: Calendar konflikty, duplicate events, AI Catalogs cleanup, AI Managers cleanup
+Description: Detekuje duplicitní nebo překrývající Calendar eventy pro stejného agenta.
+  CALENDAR_ID je pevně nastaven dle AgentType:
+  - AgentType=Catalog: "28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com"
+  - AgentType=Manager: "a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com"
+  list_events(calendarId=CALENDAR_ID) → smazat starší duplicitní budoucí eventy.
   Zajišťuje právě JEDNU budoucí událost per agent.
-Inputs: AgentName, CALENDAR_ID (z list_calendars — NIKDY nepoužívat "AI Catalogs" přímo jako calendar_id parametr)
+Inputs: AgentName, AgentType
 Outputs: seznam duplicit, smazané eventy, canonical next-run event
 Limitations: neupravuje eventy jiných agentů; pouze pro daného agenta
 
@@ -923,13 +929,15 @@ Limitations: query parametry nutné pro obsah (id, page) zachovává
 ## ntfy-notification-sender
 Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts, agent-maintenance, agent-digest
 Description: Odesílá notifikace na ntfy.vo2info.cz do příslušných kanálů.
+  MCP tool: send_notification (z VO2QNAPDBAI konektoru) — NIKDY přímý HTTP na ntfy.
+  Pokud send_notification není k dispozici: log capability_missing("send_notification"), pokračovat.
   agent-runs: výsledky runů. agent-errors: POUZE kritické bloky (priority urgent).
   agent-alerts: varování (rate limit, source blocked, missed run, circuit breaker, ManualReviewQueue).
   agent-maintenance: backfill, merge, schema změny. agent-digest: týdenní/měsíční souhrny.
   Max 3 notifikace per run (digest se nepočítá do limitu).
 Inputs: kanál (agent-runs/agent-errors/agent-alerts/agent-maintenance/agent-digest), zpráva, priority
 Outputs: notifikace odeslána, message ID
-Limitations: max 3 ntfy per run; při překročení agreguje do jedné souhrnné zprávy
+Limitations: max 3 ntfy per run; při překročení agreguje do jedné souhrnné zprávy; dostupnost závisí na MCP session
 
 ## alert-threshold-monitor
 Task types: threshold alerting, metrics monitoring, proactive alerting
@@ -1036,21 +1044,25 @@ Inputs: AgentName, ScheduledRunTime, IntervalHours, AgentType
 Outputs: upsert do AgentSchedules (POUZE při db_reachable), schedule_drift_detected pokud DB plán ≠ Hermes plán
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable
 
-## problem-report-writer — 9.2.0 Update
+## problem-report-writer — 9.4.2 Update
 
 Soubor {AgentName}_error.txt (VÝHRADNĚ singular, NIKDY _errors.txt):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
   Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
-Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back potvrzením.
-Pokud Drive write selže: neclaimovat uložení; uložit do AgentRunReports.Metadata pokud DB dostupná.
+Soubor se vytváří při startu agenta (prázdný) — stejně jako _entities/_names/_urls.
+  [ChatGPT] create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+            fallback: create_file bez parentId → root, log "error_file_created_in_root"
+Pokud soubor existuje: přečíst při startu a ověřit aktuálnost problémů.
+Při selhání: append nový řádek — NIKDY nepřepisovat celý soubor.
+Pokud Drive write při selhání selže: uložit do AgentRunReports.Metadata pokud DB dostupná.
 NEVYTVÁŘET Google Doc jako náhradu za governed plain-text problem report.
-Fallback Google Doc → uvést POUZE jako "fallback/unconfirmed artifact".
 
-## calendar-event-manager — 9.2.0 Update
+## calendar-event-manager — 9.4.2 Update
 
-NIKDY nepoužívat zobrazovaný název jako calendar_id parametr přímo.
-VŽDY list_calendars() → hledat název odpovídající AgentType → uložit jako CALENDAR_ID proměnnou.
-Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
+CALENDAR_ID je pevně nastaven dle AgentType — list_calendars() není potřeba:
+  AgentType=Catalog: "28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com"
+  AgentType=Manager: "a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com"
+NIKDY nepoužívat zobrazovaný název ("AI Catalogs", "AI Managers") jako calendar_id parametr přímo.
 Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
