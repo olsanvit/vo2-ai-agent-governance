@@ -348,8 +348,8 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
 2. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL (pouze hlavičku):
-   CatalogPrompt:       .../raw/branch/main/CommonCatalog/CatalogPrompt.txt
-   CatalogPromptSkills: .../raw/branch/main/CommonCatalog/CatalogPromptSkills.txt
+   CatalogPrompt:       .../raw/branch/main/governance/CatalogPrompt.txt
+   CatalogPromptSkills: .../raw/branch/main/governance/CatalogPromptSkills.txt
 3. ROZHODNUTÍ:
    a. cache_version == gitea_version  → použít Content z DB cache; stažení přeskočit
    b. cache_version != gitea_version (nebo cache neexistuje)
@@ -406,7 +406,7 @@ Required runtime sequence:
 5. detect active agent version from runtime prompt header and PromptVersion
 6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache vs Gitea header (viz Prompt Cache Protocol):
    PRIORITA: Gitea → Drive fallback → DB cache → bootstrap
-   a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/CommonCatalog/{promptFile}.txt
+   a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/{promptFile}.txt
       → extract PromptVersion z prvních 5 řádků
       → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
    b) DRIVE (fallback pokud Gitea nedostupná):
@@ -1768,7 +1768,7 @@ Pravidla pro Names a Urls soubory:
 
 !! DŮLEŽITÉ ROZLIŠENÍ:
    "Manager agent" v CatalogPrompt = čistý KOORDINÁTOR Catalog agentů (nepíše přímo do DB)
-   "ManagerPrompt" (SportManager/) = SAMOSTATNÝ sport datový agent (píše přímo do DB)
+   "ManagerPrompt" (governance/) = SAMOSTATNÝ sport datový agent (píše přímo do DB)
    Jedná se o dva různé koncepty se sdíleným slovem "Manager". NEPLÉST.
 
 Manager agent (koordinátor) je nadřazený orchestrační agent, který koordinuje skupinu

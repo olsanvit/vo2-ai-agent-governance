@@ -250,8 +250,8 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
 2. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL (pouze hlavičku):
    URL vzor: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/{path}
-   - ManagerPrompt:      SportManager/ManagerPrompt.txt
-   - ManagerPromptSkills: SportManager/ManagerPromptSkills.txt
+   - ManagerPrompt:      governance/ManagerPrompt.txt
+   - ManagerPromptSkills: governance/ManagerPromptSkills.txt
    - CatalogPrompt:      governance/CatalogPrompt.txt
    - CollectorPrompt:    governance/CollectorPrompt.txt
    - CheckerPrompt:      governance/CheckerPrompt.txt
@@ -315,7 +315,7 @@ Povinné kroky v tomto pořadí:
 5. Detekovat agent version z runtime prompt header (PromptVersion)
 6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache vs Gitea header (viz Prompt Cache Protocol):
    PRIORITA: Gitea → Drive fallback → DB cache → bootstrap
-   a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/SportManager/{promptFile}.txt
+   a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/{promptFile}.txt
       → extract PromptVersion z prvních 5 řádků
       → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
    b) DRIVE (fallback pokud Gitea nedostupná):
@@ -330,7 +330,7 @@ Povinné kroky v tomto pořadí:
    → pokračovat s aktuální verzí, prompt_status = prompt_upgrade_blocked
    → log warning, run NEBLOKOVAT, send ntfy "⚠️ prompt upgrade blocked"
 7. Nacist {skillsFile}.txt — stejná priorita Gitea → Drive → cache:
-   GITEA: .../raw/branch/main/SportManager/{skillsFile}.txt
+   GITEA: .../raw/branch/main/governance/{skillsFile}.txt
    [Claude MCP] DRIVE: search_files(query="{skillsFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
    [ChatGPT]    DRIVE: search(query="{skillsFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
    - agent musi mit aktivnich ASPON 11 skills
@@ -651,7 +651,7 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 
 Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance
-              SportManager/ManagerPrompt.txt, SportManager/ManagerPromptSkills.txt
+              governance/ManagerPrompt.txt, governance/ManagerPromptSkills.txt
   2. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
   3. DB cache → AgentPromptCache (poslední stažený obsah)
   4. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)

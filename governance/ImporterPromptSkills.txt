@@ -1,5 +1,5 @@
 SkillsFor: ImporterPrompt
-SkillsVersion: 9.3.0
+SkillsVersion: 9.4.1
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -249,6 +249,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 9.3.0
+SkillsVersion: 9.4.1
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
