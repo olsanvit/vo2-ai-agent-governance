@@ -343,29 +343,34 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 
 Canonical source rules:
 Priorita zdrojů promptu (v tomto pořadí):
-  1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance
-              governance/CatalogPrompt.txt, governance/CatalogPromptSkills.txt
-  2. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-  3. DB cache → AgentPromptCache (poslední stažený obsah)
-  4. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
+  1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
+              raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
+  2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+              raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
+  3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  4. DB cache → AgentPromptCache (poslední stažený obsah)
+  5. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
 
 Postup při startu (Prompt Cache Protocol):
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
 2. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL:
-   CatalogPrompt: .../raw/branch/main/governance/CatalogPrompt.txt
-   CatalogPromptSkills: .../raw/branch/main/governance/CatalogPromptSkills.txt
+   CatalogPrompt:       https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/CatalogPrompt.txt
+   CatalogPromptSkills: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/CatalogPromptSkills.txt
 3. ROZHODNUTÍ:
    a. cache_version == gitea_version → použít DB cache
    b. verze se liší → stáhnout plný obsah z Gitea → upsert AgentPromptCache
-   c. Gitea nedostupná → FALLBACK na Drive:
+   c. Gitea nedostupná → FALLBACK GitHub raw:
+      CatalogPrompt:       https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/CatalogPrompt.txt
+      CatalogPromptSkills: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/CatalogPromptSkills.txt
+   d. GitHub nedostupný → FALLBACK Drive:
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
       POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
-   d. Gitea i Drive nedostupné + cache existuje → použít cache; log "prompt_upgrade_blocked"
-   e. Vše nedostupné + cache chybí → pokračovat s bootstrap verzí; log warning
+   e. Gitea i GitHub i Drive nedostupné + cache existuje → použít cache; log "prompt_upgrade_blocked"
+   f. Vše nedostupné + cache chybí → pokračovat s bootstrap verzí; log warning
 
 - AgentType = Catalog → canonical soubory: CatalogPrompt + CatalogPromptSkills
 - AgentType = Manager → canonical soubory: ManagerPrompt + ManagerPromptSkills
-- Při každém startu VŽDY ověřit verzi (Gitea → Drive → cache → bootstrap)
+- Při každém startu VŽDY ověřit verzi (Gitea → GitHub → Drive → cache → bootstrap)
   → Pokud vše nedostupné: pokračovat s aktuální verzí (prompt_upgrade_blocked)
 
 Agent identity rules:
