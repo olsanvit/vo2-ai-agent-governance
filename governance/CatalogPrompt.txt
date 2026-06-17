@@ -1,7 +1,7 @@
-Agent: 9.4.3 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 9.4.4 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 9.4.3
+PromptVersion: 9.4.4
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.4.1
@@ -133,11 +133,11 @@ KROK 4 — VÍCE SHOD: pokud search vrátí 2+ souborů se stejným názvem:
      L list_calendars() selže: log capability_missing("calendar_api"), přeskočit tiše
 
      ChatGPT (list_calendars NENÍ k dispozici):
-     a) CALENDAR_ID dle konfigurace operátora:
-        - operátor vloží ID přímo do promtu jako {{AI_CATALOGS_CALENDAR_ID}}
-        - NEBO použít "primary" (výchozí Google Calendar uživatele)
-     b) Pokud ID není nakonfigurováno: použít "primary" jako fallback (NIKDY capability_missing jen kvůli chybějícímu ID)
-     DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo
+     a) CALENDAR_ID dle AgentType — pevně nastaveno operátorem:
+        - AgentType=Catalog: "28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com"
+        - AgentType=Manager: "a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com"
+     b) Fallback (AgentType neznámý): použít "primary"
+     DŮLEŽITÉ: NIKDY nepoužívat řetězec "AI Catalogs" nebo "AI Managers" jako calendar_id parametr přímo
 11. READINESS -> classify readiness_status (az po vsech predchozich krocich)
 
 -----------------------------------------------------------
@@ -419,7 +419,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 |--------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
 | {AgentName}_entities (Sheet) | /Prompts/{AgentType}s/ | ✅ při prvním běhu | startup: sheets_get_values | ✅ sheets_append_rows nové; sheets_update_row pro RowCount + LastPopulated |
-| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| {AgentName}_error.txt | /Problems/ | ✅ při startu (prázdný) | startup: přečíst pokud existuje | ✅ append při selhání |
 | {AgentName}_urls (Sheet) | /Prompts/Urls/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_append_rows nové URLs (max 500 řádků); sheets_update_row Status |
 | {AgentName}_names (Sheet) | /Prompts/Names/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_update_row coverage counts; jen operátor přidává entity |
 
@@ -603,6 +603,9 @@ Co dělat při prvním runu (v tomto pořadí):
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["EntityName","coverage","tables","lastProcessed"]],fields:"userEnteredValue"}}])
    create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
+   create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+     → pokud parentId není podporováno: create_file(name="{AgentName}_error.txt", mimeType="text/plain") — root fallback, log "error_file_created_in_root"
+     → obsah: prázdný (nebo záhlaví: "ProblemScore|Category|Description|Timestamp")
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT agresivní enrichment — pouze schema init a základní discovery (max 10 entit)
 7. Uložit run report s runMode = "first_run", success = schema_ready (ne fully_successful)
@@ -804,7 +807,10 @@ BLOK 5 — Google Sheets + Drive soubory + AgentMonitor sync:
     L count = 0 → sync pravděpodobně selhal nebo první run; ověřit zda sync_agent_entities vrátilo ok=true
     L ok=false (AGENT_MONITOR_URL not configured) → log capability_missing("agent_monitor_db"), pokračovat
 5e. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
-    → Drive .txt (beze změny) — přečíst pokud existuje, ověřit aktuálnost problémů
+    → přečíst pokud existuje, ověřit aktuálnost problémů
+    → pokud neexistuje: vytvořit (prázdný) — stejně jako ostatní governed soubory při startu
+      [ChatGPT] create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+               fallback: create_file bez parentId → root, log "error_file_created_in_root"
 
 BLOK 6 — ntfy:
 6a. send_notification(topic="agent-runs", title="{AgentName} self-audit", message="test — ignorovat", priority="min")
