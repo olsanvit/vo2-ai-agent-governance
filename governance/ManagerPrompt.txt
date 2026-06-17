@@ -1,8 +1,8 @@
-Agent: 9.4.2 [SPORT_NAME] Data Manager
+Agent: 9.4.4 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.4.2
+PromptVersion: 9.4.4
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.4.1
