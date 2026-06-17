@@ -1,7 +1,7 @@
-Agent: 9.4.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 9.4.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 9.4.1
+PromptVersion: 9.4.2
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 9.4.1
@@ -141,6 +141,30 @@ SCHEDULED RUN (v tomto poradi):
              [Claude MCP] sheets_get_values → zpracovat před standardním scrapingem
              [ChatGPT]    get_spreadsheet_range → zpracovat před standardním scrapingem
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
+3b. EMPTY QUEUE SEED DISCOVERY → aktivuje se POUZE pokud platí OBOJE:
+             - _names fronta má 0 zpracovatelných položek (jen hlavička nebo prázdný Sheet)
+             - _urls fronta má 0 zpracovatelných položek (jen hlavička nebo prázdný Sheet)
+             Cíl: agent sám najde seed data aby příští run mohl sbírat reálná data.
+             Postup:
+             a) Odvodit doménu katalogu z {AgentName} (např. "VINWMIVehicles" → výrobci vozidel)
+             b) Provést web search: WebFetch nebo search s dotazy jako:
+                - "list of {domain} [wikipedia OR official source]"
+                - "top {domain} manufacturers/names/brands"
+                - "{domain} data sources API"
+             c) Z výsledků extrahovat:
+                - Entity jména → zapsat do {AgentName}_names (Sheet):
+                  [ChatGPT] batch_update_spreadsheet(appendCells) → max 20 nových řádků
+                            formát: EntityName|coverage=""|tables=""|lastProcessed=""
+                - Zdrojové URL → zapsat do {AgentName}_urls (Sheet):
+                  [ChatGPT] batch_update_spreadsheet(appendCells) → max 20 nových řádků
+                            formát: URL|SourceTier=A|ReliabilityScore=70.000|EntityType|LastChecked=now()|Status=new
+             d) Log do highlights[]: "🔍 Empty queue seed: {N} jmen a {M} URL přidáno do Drive"
+             e) Pokud web search selže nebo nic nenajde: log warning, pokračovat bez blokování
+             PRAVIDLA:
+             - Nepřidávat duplicity (normalizovat jméno před zápisem)
+             - Maximálně 20 jmen + 20 URL per run (nespamovat Sheet)
+             - Preferovat autoritativní zdroje: Wikipedia, ISO normy, oficiální registry
+             - Volitelné zdroje: Wikidata, DBpedia, veřejné API katalogy
 4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prázdné tabulky
 5.  DATA COLLECTION -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
     L rate limit: 1 req/s scraping, 5 req/s API, max 500 req/run
