@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 9.4.4
+SkillsVersion: 9.4.5
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -920,13 +920,19 @@ Limitations: contract_expiry musí být uložen v Metadata; bez dat nelze sledov
 ## ntfy-notification-sender
 Task types: ntfy notifikace, agent-runs, agent-errors, agent-alerts, agent-maintenance, agent-digest
 Description: Odesílá notifikace na ntfy.vo2info.cz pro sportovního agenta.
-  MCP tool: send_notification (z VO2QNAPDBAI konektoru) — NIKDY přímý HTTP na ntfy.
-  Pokud send_notification není k dispozici: log capability_missing("send_notification"), pokračovat.
+  MCP tool: send_notification — VŽDY z VO2QNAPDB MCP konektoru, NIKDY přímý HTTP na ntfy ani JobQueue:
+    Manager/TE agenti → VO2QNAPDBTE konektor
+    MAB agenti        → VO2QNAPDBMAB konektor
+    USM agenti        → VO2QNAPDBUSM konektor
+  Pokud tool v konektoru nevidíš: refreshni konektor v ChatGPT (odpoj + připoj znovu).
+  NIKDY nenahrazovat přes JobQueue ani enqueue_job — JobQueue je pro datové úlohy, ne notifikace.
+  Pokud send_notification po refreshi stále chybí: log capability_missing("send_notification"), pokračovat.
   agent-runs: výsledky runů, výsledky zápasů, standings. agent-errors: POUZE kritické bloky (priority urgent).
   agent-alerts: varování (source blocked, odds integrity flag, missed run, circuit breaker).
   agent-maintenance: backfill, season lifecycle, hráčské disciplíny. agent-digest: týdenní/měsíční souhrny.
   Sport emoji dle sportu: fotbal=soccer, basketbal=basketball, hokej=ice_hockey.
   Max 3 notifikace per run (digest se nepočítá do limitu).
+  Jazyk zpráv: česky.
 Inputs: kanál, zpráva, sport emoji tag, priority (default/high/urgent)
 Outputs: notifikace odeslána, message ID
 Limitations: max 3 ntfy per run; překročení agreguje do jedné souhrnné zprávy; dostupnost závisí na MCP session
