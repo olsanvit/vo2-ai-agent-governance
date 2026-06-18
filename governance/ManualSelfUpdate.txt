@@ -26,7 +26,7 @@ Potvrď tyto změny:
    • {AgentName}_entities (Sheet) — složka /Prompts/{AgentType}s/
    • {AgentName}_names (Sheet) — složka /Prompts/Names/
    • {AgentName}_urls (Sheet) — složka /Prompts/Urls/
-   • {AgentName}_error.txt — složka /Problems/
+   • {AgentName}_error — složka /Problems/
    Všechny: create_file s parentId + root fallback, nikdy mazat
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
    • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
@@ -42,6 +42,6 @@ Potvrď tyto změny:
 9. Web Search Fallback (9.4.6+):
    • Prázdný _names queue (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do _names Sheet (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Prázdné/vyčerpané _urls: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do _urls Sheet (status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
-   • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do {AgentName}_error.txt jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
+   • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do {AgentName}_error jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
 Potvrď verzi 9.4.6, proveď BLOK 8 self-audit a poté spusť testovací běh.
