@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 9.4.8
+SkillsVersion: 10.0.0
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -1167,7 +1167,7 @@ Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konf
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
   reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
 
-## problem-report-writer — 9.4.8 Update
+## problem-report-writer — 10.0.0 Update
 
 Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ tab 'error', NIKDY samostatný soubor):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
@@ -1189,6 +1189,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.4.7)
 
-SkillsVersion: 9.4.8
+SkillsVersion: 10.0.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
