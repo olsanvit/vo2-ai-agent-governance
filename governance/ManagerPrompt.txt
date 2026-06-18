@@ -337,8 +337,11 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities (Sheet) — Columns: ImportantScore|TableName|Description|RowCount|LastPopulated
 Agent přidává nové tabulky (sheets_append_rows), aktualizuje RowCount + LastPopulated (sheets_find_row + sheets_update_row) po každém úspěšném běhu.
 
-### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet)
 Append-only; agent přidává při selhání; max 100 řádků.
+COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
+Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý Sheet — jen append.
+Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
 
 
@@ -423,6 +426,18 @@ Povinné kroky v tomto pořadí:
                  sync_agent_entities(agent_name="{AgentName}", entity_type="url", rows=<výstup>, value_col=0, meta_cols=["SourceTier","ReliabilityScore","EntityType","LastChecked","Status"])
     [ChatGPT]    search(special_filter_query_str="'1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U' in parents") → get_spreadsheet_range
     - pokud Sheet neexistuje nebo je prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
+8c. WEB SEARCH FALLBACK → aktivuje se pokud platí ALESPOŇ JEDNO z kroků 8a/8b:
+    - _names Sheet prázdný nebo 0 řádků ke zpracování
+    - _urls Sheet prázdný nebo 0 řádků ke zpracování
+    Odvodit doménu ze sportu/tématu z {AgentName}:
+    → Pokud _names prázdný: WebSearch "{sport} {league} teams/players/clubs {year}"
+      → append do {AgentName}_names (max 20 řádků), formát: EntityName|coverage=""|tables=""|lastProcessed=""
+      → log: "🔍 web_search_names_refill: {count} entit přidáno"
+    → Pokud _urls prázdný: WebSearch "{sport} {league} results OR stats OR fixtures 2025"
+      → append do {AgentName}_urls (max 20 řádků), formát: URL|SourceTier=A|ReliabilityScore=70.000|EntityType|LastChecked=now()|Status=new
+      → log: "🔍 web_search_urls_refill: {count} URL přidáno"
+    → Pokud WebSearch nedostupný nebo nic nenajde: přeskočit, log warning, nepovažovat za chybu
+    PRAVIDLA: max 20 záznamů per typ per run, nepřidávat duplicity, preferovat officiální zdroje
 9. Zkontrolovat existenci alespon 25 baseline entit
    - seznam tabulek pro počítání: ImportantScore >= 70 tabulky z Managers souboru (krok 8)
    - pokud Managers soubor chybí (první run): použít doporučené tabulky
@@ -525,8 +540,8 @@ Postup při prvním runu:
    create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
    create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["ProblemScore","Category","Description","Timestamp","StepStatus"]],fields:"userEnteredValue"}}])
      → pokud parentId není podporováno: create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet") — root fallback, log "error_file_created_in_root"
-     → obsah: prázdný (nebo záhlaví: "ProblemScore|Category|Description|Timestamp")
 5. Upsert AgentSchedules (AgentName, AgentType="Manager", ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT post-match pipeline — pouze schema init + discovery (max 5 datumů, max 10 zápasů)
 7. Uložit run report: runMode="first_run", success=schema_ready
