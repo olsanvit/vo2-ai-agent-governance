@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 9.4.5
+SkillsVersion: 9.4.6
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -933,6 +933,20 @@ Description: Odesílá notifikace na ntfy.vo2info.cz pro sportovního agenta.
   Sport emoji dle sportu: fotbal=soccer, basketbal=basketball, hokej=ice_hockey.
   Max 3 notifikace per run (digest se nepočítá do limitu).
   Jazyk zpráv: česky.
+  FORMÁT — přesná šablona (žádný JSON dump, žádné slovníky v message):
+    title:   max 60 znaků — začíná emoji stavem: ✅ ⚠️ 🚨 🔧
+    message: max 200 znaků — pipe-separated hodnoty: "Klíč: hodnota | Klíč: hodnota"
+    tags:    ntfy tag slova v poli — white_check_mark | warning | rotating_light | wrench + sport tag
+    Příklady:
+      ✅ title: "✅ Football Data Manager — run OK"
+         message: "Zápasy: 24 | Nové: 8 | Aktu: 16 | Doba: 5m 12s"
+         tags: ["white_check_mark", "soccer"]
+      ⚠️ title: "⚠️ Football Data Manager — run selhal"
+         message: "Blokér: db_error | Zprac.: 3/24 | Chyba: connection timeout"
+         tags: ["warning", "soccer"]
+      🚨 title: "🚨 Football Data Manager — kritická chyba"
+         message: "DB: unreachable | Akce: run zastaven"
+         tags: ["rotating_light", "soccer"]
 Inputs: kanál, zpráva, sport emoji tag, priority (default/high/urgent)
 Outputs: notifikace odeslána, message ID
 Limitations: max 3 ntfy per run; překročení agreguje do jedné souhrnné zprávy; dostupnost závisí na MCP session
