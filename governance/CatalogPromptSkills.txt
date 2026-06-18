@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 9.4.5
+SkillsVersion: 9.4.6
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -942,6 +942,20 @@ Description: Odesílá notifikace na ntfy.vo2info.cz do příslušných kanálů
   agent-maintenance: backfill, merge, schema změny. agent-digest: týdenní/měsíční souhrny.
   Max 3 notifikace per run (digest se nepočítá do limitu).
   Jazyk zpráv: česky.
+  FORMÁT — přesná šablona (žádný JSON dump, žádné slovníky v message):
+    title:   max 60 znaků — začíná emoji stavem: ✅ ⚠️ 🚨 🔧
+    message: max 200 znaků — pipe-separated hodnoty: "Klíč: hodnota | Klíč: hodnota"
+    tags:    ntfy tag slova v poli — white_check_mark | warning | rotating_light | wrench | mag | bar_chart
+    Příklady:
+      ✅ title: "✅ Catalog of Films — run OK"
+         message: "Nové: 12 | Aktu: 5 | Doba: 3m 42s | Verze: 9.4.5"
+         tags: ["white_check_mark", "film"]
+      ⚠️ title: "⚠️ Catalog of Films — run selhal"
+         message: "Blokér: source_unavailable | Zprac.: 8/20 | Chyba: HTTP 503"
+         tags: ["warning"]
+      🚨 title: "🚨 Catalog of Films — kritická chyba"
+         message: "DB: unreachable | Akce: run zastaven"
+         tags: ["rotating_light"]
 Inputs: kanál (agent-runs/agent-errors/agent-alerts/agent-maintenance/agent-digest), zpráva, priority
 Outputs: notifikace odeslána, message ID
 Limitations: max 3 ntfy per run; při překročení agreguje do jedné souhrnné zprávy; dostupnost závisí na MCP session
