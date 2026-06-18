@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -1029,21 +1029,23 @@ Limitations: vyžaduje min 10 runů pro benchmark; nové agenty mají insufficie
 -- N. ADVANCED OPERATIONS (12) -----------------------------------
 
 ## manager-baseline-file-manager
-Task types: baseline soubor agenta, Drive /Prompts/Managers/, RowCount, LastPopulated aktualizace, bootstrap
-Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Managers/
+Task types: baseline soubor agenta, tab 'entities' v master spreadsheet, RowCount, LastPopulated aktualizace, bootstrap
+Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} v Managers složce
   (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO). Načítá přehled sportovních tabulek
   (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
   Formát řádku: ImportantScore | TableName | Description | RowCount | LastPopulated
-  BOOTSTRAP: pokud soubor neexistuje (404 / file_not_found) → vytvořit nový soubor automaticky:
+  Hledání: search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+  Čtení: get_spreadsheet_range(spreadsheetId, range="entities!A:Z")
+  Zápis: sheets_append_rows(spreadsheetId, range="entities", rows=[...])
+  BOOTSTRAP: pokud master spreadsheet neexistuje → vytvořit automaticky:
     1. SELECT tablename, COUNT(*) FROM pg_tables JOIN ... pro všechny public tabulky
     2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
-    3. create_file({AgentName}_entities.txt, parent_folder_id=1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO, content=...)
-    4. Pokud create_file selže → capability_missing("drive_create_with_parent"), pokračovat degraded (ne blocked)
-  DRIVE SELF-TEST: na startu ověřit create_file capability pokusem o vytvoření prázdného souboru
-    _capability_test.txt; pokud selže → zaznamenat a pokračovat bez Drive zápisů (degraded, ne blocked).
+    3. sheets_create_spreadsheet(title="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+    4. batch_update_spreadsheet → 4 taby (entities, names, urls, error) + append headers
+    5. Pokud create selže → capability_missing("sheets_create_spreadsheet"), pokračovat degraded (ne blocked)
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
-Outputs: přečtený katalog (startup), aktualizovaný soubor zapsaný na Drive (end of run), bootstrap log
-Limitations: neaktualizuje pokud db_status = db_unreachable; nevytváří nové řádky do existujícího souboru (append zakázán); DryRun = nezapisuje; bootstrap vyžaduje DB přístup pro COUNT(*)
+Outputs: přečtený katalog (startup), aktualizovaný tab 'entities' zapsaný na Drive (end of run), bootstrap log
+Limitations: neaktualizuje pokud db_status = db_unreachable; DryRun = nezapisuje; bootstrap vyžaduje DB přístup pro COUNT(*)
 
 ## dry-run-mode-controller
 Task types: DryRun mode, testovací beh bez DB zápisů, simulace
@@ -1118,13 +1120,15 @@ Outputs: selected fallback source, circuit breaker update, ntfy high-priority al
 Limitations: Selenium fallback jen pokud direct HTTP blokován + Selenium endpoint dostupný; max 10 page loadů
 
 ## cross-agent-task-writer
-Task types: cross-agent zápis, Names soubory, Urls soubory, task assignment do Catalog agentů
-Description: Zapisuje úkoly pro Catalog agenty do jejich Names/Urls souborů na Drive (append-only).
+Task types: cross-agent zápis, tab 'names', tab 'urls', task assignment do Catalog agentů
+Description: Zapisuje úkoly pro Catalog agenty do jejich master spreadsheet {AgentName} (append-only).
   Manager agent koordinuje Catalog agenty přes tuto skill. Max 50 položek per zápis.
-  Zaznamenává operaci v highlights[]: "Cross-agent task: N items written to {AgentName}_names.txt".
-Inputs: cílový CatalogAgentName, seznam názvů (Names) nebo URL (Urls), typ souboru (names/urls)
-Outputs: append do Drive souboru, highlights[] záznam s počtem zapsaných položek
-Limitations: nesmí přepisovat celý soubor; max 50 položek per zápis; soubor max 500 řádků
+  Hledání: search_files(query="{cílový AgentName}", folderId="{agentTypeFolderId}")
+  Zápis: sheets_append_rows(spreadsheetId, range="names", rows=[...]) nebo range="urls"
+  Zaznamenává operaci v highlights[]: "Cross-agent task: N items written to {AgentName} tab 'names'".
+Inputs: cílový CatalogAgentName, seznam názvů (tab 'names') nebo URL (tab 'urls'), typ (names/urls)
+Outputs: append do příslušného tabu master spreadsheet, highlights[] záznam s počtem zapsaných položek
+Limitations: nesmí přepisovat celý tab; max 50 položek per zápis; tab max 500 řádků
 
 ## agent-schedule-manager
 Task types: AgentSchedules, denní čas spuštění, přehled agentů, přehled plánů (conflict detection zakázána)
@@ -1136,15 +1140,17 @@ Outputs: upsert do AgentSchedules, přehled tabulky agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT upsert při DryRun
 
 ## problem-report-writer
-Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
-Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Task types: problem report, tab 'error' v master spreadsheet, nedokončený run, chyby agenta
+Description: Zapíše problem report do tabu 'error' v master spreadsheet {AgentName}
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
-  Soubor {AgentName}_error obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
-  problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
+  Tab 'error' obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
+  problémy ve formátu "ProblemScore | Category | Description | Timestamp | StepStatus" (seřazeno sestupně dle ProblemScore),
   stav nedokončených kroků (ntfy, Calendar, DB report).
+  Hledání: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
+  Zápis: sheets_append_rows(spreadsheetId, range="error", rows=[...])
   Spouští se PŘED finálním reportem operátorovi.
 Inputs: AgentName, MCP identifikátor, errors[] s ProblemScore, stav ntfy/Calendar/DB report kroků
-Outputs: soubor {AgentName}_error v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Outputs: append do tabu 'error' v master spreadsheet {AgentName}
 Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")
 
 =============================================================
@@ -1161,18 +1167,18 @@ Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konf
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
   reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
 
-## problem-report-writer — 9.4.2 Update
+## problem-report-writer — 9.4.8 Update
 
-Soubor {AgentName}_error (VÝHRADNĚ singular, NIKDY _errors.txt):
+Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ tab 'error', NIKDY samostatný soubor):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
-  Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
-Soubor se vytváří při startu agenta (prázdný) — stejně jako _entities/_names/_urls.
-  [ChatGPT] create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
-            fallback: create_file bez parentId → root, log "error_file_created_in_root"
-Pokud soubor existuje: přečíst při startu a ověřit aktuálnost problémů.
-Při selhání: append nový řádek — NIKDY nepřepisovat celý soubor.
+  Master spreadsheet: {AgentName} v Managers složce (ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+Tab 'error' je součástí master spreadsheet — vytváří se při BOOTSTRAP spolu s ostatními taby.
+Pokud master spreadsheet existuje: přečíst tab 'error' při startu a ověřit aktuálnost problémů.
+  get_spreadsheet_range(spreadsheetId, range="error!A:Z")
+Při selhání: append nový řádek — NIKDY nepřepisovat celý tab.
+  sheets_append_rows(spreadsheetId, range="error", rows=[...])
 Pokud Drive write při selhání selže: uložit do AgentRunReports.Metadata pokud DB dostupná.
-NEVYTVÁŘET Google Doc jako náhradu za governed plain-text problem report.
+NEVYTVÁŘET samostatný soubor jako náhradu za tab 'error' v master spreadsheet.
 
 ## calendar-event-manager — 9.4.2 Update
 
@@ -1183,6 +1189,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.4.7)
 
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

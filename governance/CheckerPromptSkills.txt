@@ -1,5 +1,5 @@
 SkillsFor: CheckerPrompt
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -151,11 +151,13 @@ Outputs: notifikace odeslána
 Limitations: max 3/run
 
 ## problem-report-writer
-Task types: problem report, Drive zápis při selhání
-Description: Zapíše {AgentName}_error do Drive Problems složky
+Task types: problem report, tab 'error' v master spreadsheet, nedokončený run
+Description: Zapíše problem report do tabu 'error' v master spreadsheet {AgentName}
   pokud audit selhal nebo self-audit našel chyby.
+  Hledání: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
+  Zápis: sheets_append_rows(spreadsheetId, range="error", rows=[...])
 Inputs: AgentName, errors[] s ProblemScore, stav ntfy/DB kroků
-Outputs: {AgentName}_error v Problems složce
+Outputs: append do tabu 'error' v master spreadsheet {AgentName}
 Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
 
 -- F. SUGGESTIONS (2) ------------------------------------------
@@ -192,15 +194,16 @@ Outputs: upsert do AgentSchedules (POUZE při db_reachable), přehled agentů
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
   reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
 
-## problem-report-writer — 9.2.0 Update
+## problem-report-writer — 9.4.8 Update
 
-Soubor {AgentName}_error (VÝHRADNĚ singular, NIKDY _errors.txt):
+Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
-  Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
-Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back potvrzením.
+  Master spreadsheet: {AgentName} ve složce odpovídající AgentType (Checkers složka)
+Tab 'error' je součástí master spreadsheet — vytváří se při BOOTSTRAP spolu s ostatními taby.
+  get_spreadsheet_range(spreadsheetId, range="error!A:Z") při startu
+  sheets_append_rows(spreadsheetId, range="error", rows=[...]) při selhání
 Pokud Drive write selže: neclaimovat uložení; uložit do AgentRunReports.Metadata pokud DB dostupná.
-NEVYTVÁŘET Google Doc jako náhradu za governed plain-text problem report.
-Fallback Google Doc → uvést POUZE jako "fallback/unconfirmed artifact".
+NEVYTVÁŘET samostatný soubor jako náhradu za tab 'error' v master spreadsheet.
 
 ## calendar-event-manager — 9.2.0 Update
 
@@ -211,6 +214,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

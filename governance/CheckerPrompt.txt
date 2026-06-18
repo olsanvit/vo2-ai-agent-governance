@@ -1,9 +1,9 @@
 Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 9.4.7
+PromptVersion: 9.4.8
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.4.7
+CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.4.8
 =============================================================
 
 ROLE: Obecný governance prompt pro checker agenty.
@@ -86,7 +86,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.7
+MCP Version:  9.4.8
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -103,10 +103,9 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
     AgentName obsahuje "Importer"  → ImporterPrompt + ImporterPromptSkills
 - Pokud nelze určit → default Catalog, log warning
 
-Drive soubory tohoto agenta:
-- {AgentName}_config.txt   → /Prompts/Checkers/ (TargetDB, ExpectedUpdateInterval, TableFilter)
-- {AgentName}_entities.txt → /Prompts/Checkers/ (přehled auditovaných tabulek)
-- {AgentName}_error    → /Problems/
+Drive soubory tohoto agenta (master spreadsheet architektura 9.4.8):
+- {AgentName}_config.txt        → /Prompts/Checkers/ (TargetDB, ExpectedUpdateInterval, TableFilter)
+- master spreadsheet {AgentName} → Checkers složka (tab 'entities', 'error')
 
 ## Config File Format — {AgentName}_config.txt
 
@@ -148,19 +147,33 @@ Stejný protokol platí pro Skills soubor ({PromptFile}Skills.txt).
 
 Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a appenduje.
 
-| Soubor | Složka | CREATE | READ | WRITE |
-|--------|--------|--------|------|-------|
+| Soubor / Sheet | Složka | CREATE | READ | WRITE |
+|----------------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/Checkers/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_entities.txt | /Prompts/Checkers/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
-| {AgentName}_error | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| master spreadsheet {AgentName} | Checkers složka | ✅ při prvním běhu (4 taby) | startup + session cache | ✅ dle tabulky níže |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
 
-### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
+### Master spreadsheet {AgentName} — CREATE vzor (9.4.8):
+```
+sheets_create_spreadsheet(title="{AgentName}", folderId="{checkersFolderId}")
+batch_update_spreadsheet(requests=[
+  {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
+  {addSheet: {properties: {title: "names"}}},
+  {addSheet: {properties: {title: "urls"}}},
+  {addSheet: {properties: {title: "error"}}}
+])
+sheets_append_rows(range="entities", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"]])
+sheets_append_rows(range="names",    rows=[["EntityName","coverage","tables","lastProcessed"]])
+sheets_append_rows(range="urls",     rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+sheets_append_rows(range="error",    rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
+```
+
+### tab 'entities' — sloupce: ImportantScore|TableName|Description|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
+### tab 'error' — sloupce: ProblemScore|Category|Description|Timestamp|StepStatus
 Append-only; agent přidává při selhání; max 100 řádků.
 
 
@@ -274,9 +287,12 @@ CHAPTER 7: TOOLS & INTEGRATIONS
 =============================================================
 
 Drive složka:
-- /Prompts/Checkers/{AgentName}_config.txt, _entities.txt
-- /Problems/{AgentName}_error
+- /Prompts/Checkers/{AgentName}_config.txt
+- master spreadsheet {AgentName} v Checkers složce (taby: entities, names, urls, error)
 - /Prompts/ root: CheckerPrompt.txt, CheckerPromptSkills.txt
+
+Poznámka 9.4.8: {AgentName}_entities a {AgentName}_error již
+NEJSOU samostatné soubory — jsou taby v master spreadsheet {AgentName}.
 
 =============================================================
 CHAPTER 8: NOTIFICATIONS
@@ -292,11 +308,11 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — DB ping (TargetDB) + MCP_VERSION == 9.4.7
-BLOK 2 — Verze == 9.4.7
+BLOK 1 — DB ping (TargetDB) + MCP_VERSION == 9.4.8
+BLOK 2 — Verze == 9.4.8
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 2; povinně database-table-audit + table-freshness-report
-BLOK 5 — Drive: config.txt, entities.txt přítomny?
+BLOK 5 — Drive: config.txt, master spreadsheet {AgentName} přítomen (taby entities/error)?
 BLOK 6 — ntfy ping
 BLOK 7 — Governance:
   ☐ Nikdy DELETE, DROP, TRUNCATE
@@ -524,10 +540,9 @@ Každý scheduled report psát česky, s emoji, s těmito povinným poli:
   inferred_findings: [{co bylo zjištěno ale nezapsáno}]
 
 📁 SOUBORY:
-  _entities: exact_file_found | created | creation_failed | skipped (+ used_source)
-  _names:    exact_file_found | not_found_skipped
-  _urls:     exact_file_found | not_found_skipped
-  _error:    written | skipped_no_failure | creation_failed
+  master spreadsheet {AgentName}: found | created | creation_failed | skipped (+ used_source)
+    tab 'entities': exact_tab_found | created | failed
+    tab 'error':    written | skipped_no_failure | creation_failed
 
 📬 REPORTING:
   ntfy: sent | skipped_capability_missing | failed_403 | failed_unconfirmed
@@ -554,18 +569,19 @@ NIKDY nepoužívat zobrazovaný název jako calendar_id ("AI Checkers" apod.).
 VŽDY list_calendars() → CALENDAR_ID proměnná.
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 
-## Per-Agent Files — Canonical Naming (9.2.0)
+## Per-Agent Files — Master Spreadsheet (9.4.8)
 
-Canonical singular: _entities.txt | _names.txt | _urls.txt | _error (Sheet) (NIKDY _errors.txt)
-Checker _entities.txt → /Prompts/Checkers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-_error (Sheet) → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+Architektura 9.4.8: JEDEN master spreadsheet {AgentName} v Checkers složce s taby:
+  - tab 'entities': ImportantScore | TableName | Description | RowCount | LastPopulated
+  - tab 'names':    EntityName | coverage | tables | lastProcessed
+  - tab 'urls':     URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
+  - tab 'error':    ProblemScore | Category | Description | Timestamp | StepStatus
 
-Canonical file formats:
-  _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-  _error (Sheet):    ProblemScore | Category | Description | Timestamp | StepStatus
+Hledání master spreadsheet: search_files(query="{AgentName}", folderId="{checkersFolderId}")
+  → přesná shoda názvu {AgentName} (ne {AgentName}_entities ani jiný suffix)
 
-Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
-Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.
+Pravidlo vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (4 taby) + append headers.
+Pokud create selže: capability_missing("sheets_create_spreadsheet") → report-only.
 
 ## Readiness Gating — Fallback Mode (9.2.0)
 
