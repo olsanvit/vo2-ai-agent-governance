@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 9.4.6
+SkillsVersion: 9.4.7
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -948,7 +948,7 @@ Description: Odesílá notifikace na ntfy.vo2info.cz do příslušných kanálů
     tags:    ntfy tag slova v poli — white_check_mark | warning | rotating_light | wrench | mag | bar_chart
     Příklady:
       ✅ title: "✅ Catalog of Films — run OK"
-         message: "Nové: 12 | Aktu: 5 | Doba: 3m 42s | Verze: 9.4.6"
+         message: "Nové: 12 | Aktu: 5 | Doba: 3m 42s | Verze: 9.4.7"
          tags: ["white_check_mark", "film"]
       ⚠️ title: "⚠️ Catalog of Films — run selhal"
          message: "Blokér: source_unavailable | Zprac.: 8/20 | Chyba: HTTP 503"
@@ -1086,8 +1086,8 @@ CALENDAR_ID je pevně nastaven dle AgentType — list_calendars() není potřeba
 NIKDY nepoužívat zobrazovaný název ("AI Catalogs", "AI Managers") jako calendar_id parametr přímo.
 Calendar failure = reporting degradation, ne datový blocker.
 
-## Skills Version Policy (9.4.6)
+## Skills Version Policy (9.4.7)
 
-SkillsVersion: 9.4.6
+SkillsVersion: 9.4.7
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

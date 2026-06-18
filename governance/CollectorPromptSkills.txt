@@ -1,5 +1,5 @@
 SkillsFor: CollectorPrompt
-SkillsVersion: 9.4.1
+SkillsVersion: 9.4.7
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -368,4 +368,4 @@ Limitations: výhradně při 502 selhání smart_upsert_batch; bez read-back →
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 9.4.1
+SkillsVersion: 9.4.7

@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 9.4.6
+SkillsVersion: 9.4.7
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -1181,8 +1181,8 @@ CALENDAR_ID je pevně nastaven dle AgentType — list_calendars() není potřeba
 NIKDY nepoužívat zobrazovaný název ("AI Managers") jako calendar_id parametr přímo.
 Calendar failure = reporting degradation, ne datový blocker.
 
-## Skills Version Policy (9.4.6)
+## Skills Version Policy (9.4.7)
 
-SkillsVersion: 9.4.6
+SkillsVersion: 9.4.7
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
