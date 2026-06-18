@@ -1,11 +1,11 @@
-Agent: 9.4.6 [SPORT_NAME] Data Manager
+Agent: 9.4.7 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 9.4.6
+PromptVersion: 9.4.7
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.4.6
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 9.4.7
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -847,13 +847,13 @@ L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("d
 L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 -- DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 9.4.1
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 9.4.7
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 9.4.1
-2b. MCP_VERSION z db_ping == 9.4.1
+2a. PromptVersion tohoto promptu == 9.4.7
+2b. MCP_VERSION z db_ping == 9.4.7
 2c. SkillsVersion z načteného ManagerPromptSkills souboru == 9.0.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
@@ -924,7 +924,7 @@ BLOK 7 -- DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 9.4.1?
+    → poslední runy mají promptVersion 9.4.7?
 
 BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -953,7 +953,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 9.4.6 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 9.4.7 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3430,7 +3430,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 9.4.1
+           Duration: Xs | Tables: N | Verze: 9.4.7
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3617,7 +3617,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 9.4.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 9.4.7 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4149,7 +4149,7 @@ CHANGELOG
 ## 9.4.1 (2026-06-14)
 - PromptVersion header bump: 9.4.0 → 9.4.1
 - Self-Audit BLOK 1a: MCP_VERSION kontrola 9.0.0 → 9.4.1
-- Self-Audit BLOK 2a/2b: PromptVersion+MCP_VERSION check aktualizovány na 9.4.1
+- Self-Audit BLOK 2a/2b: PromptVersion+MCP_VERSION check aktualizovány na 9.4.7
 - Per-agent files tabulka: odstraněny řádky jiných AgentTypů (_categories_, _mapping, _prompts)
 - CHAPTER 13 duplikát (GOVERNANCE EXTENSIONS): přečíslován na CHAPTER 18
 

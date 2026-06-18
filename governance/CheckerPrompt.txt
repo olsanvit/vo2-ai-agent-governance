@@ -1,9 +1,9 @@
 Agent: 9.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 9.4.1
+PromptVersion: 9.4.7
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.4.1
+CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 9.4.7
 =============================================================
 
 ROLE: Obecný governance prompt pro checker agenty.
@@ -86,7 +86,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.1
+MCP Version:  9.4.7
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -292,8 +292,8 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — DB ping (TargetDB) + MCP_VERSION == 9.4.1
-BLOK 2 — Verze == 9.4.1
+BLOK 1 — DB ping (TargetDB) + MCP_VERSION == 9.4.7
+BLOK 2 — Verze == 9.4.7
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 2; povinně database-table-audit + table-freshness-report
 BLOK 5 — Drive: config.txt, entities.txt přítomny?

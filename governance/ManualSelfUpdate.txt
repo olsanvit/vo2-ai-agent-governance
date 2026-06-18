@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 9.4.6
+TemplateVersion: 9.4.7
 LastUpdated: 2026-06-18
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 9.4.6
+MANUAL SELFUPDATE TEMPLATE — governance 9.4.7
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,7 +11,7 @@ Zdroje jsou v pořadí priority včetně vo2info.cz fallbacku.
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 9.4.6. Proveď selfUpdate — zdroje v pořadí priority:
+Aktualizuj se na governance 9.4.7. Proveď selfUpdate — zdroje v pořadí priority:
 1. Gitea: http://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při Gitea 403)
 3. GitHub: https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
@@ -31,7 +31,7 @@ Potvrď tyto změny:
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
    • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
    • Manager: a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com
-7. Ověř že db_ping vrací MCP_VERSION 9.4.6
+7. Ověř že db_ping vrací MCP_VERSION 9.4.7
 8. Zkontroluj, zda máš aktivní skills pro tyto oblasti — pokud skill chybí, vytvoř ho dle formátu Skill Directory a přidej do svého Skills souboru na Drive:
    • ntfy notifikace → ntfy-notification-sender
    • Google Calendar → next-run-calendar-scheduler
@@ -39,9 +39,9 @@ Potvrď tyto změny:
    • Chybové reporty → problem-report-writer
    • Run summary → run-status-broadcaster
    Vypiš které skills máš aktivní a které chybí.
-9. Web Search Fallback (9.4.6+):
+9. Web Search Fallback (9.4.7+):
    • Prázdný _names queue (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do _names Sheet (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Prázdné/vyčerpané _urls: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do _urls Sheet (status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do {AgentName}_error jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
-Potvrď verzi 9.4.6, proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi 9.4.7, proveď BLOK 8 self-audit a poté spusť testovací běh.

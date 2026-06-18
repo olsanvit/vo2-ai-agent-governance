@@ -1,9 +1,9 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.4.1
+PromptVersion: 9.4.7
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.4.1
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.4.7
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -99,7 +99,7 @@ MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.1
+MCP Version:  9.4.7
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -375,8 +375,8 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 
 Spouštět: explicitní žádost | první run | každých 30 runů
 
-BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 9.4.1
-BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 9.4.1
+BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 9.4.7
+BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 9.4.7
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 BLOK 5 — Drive soubory: config.txt, entities.txt, categories_*.txt přítomny?
