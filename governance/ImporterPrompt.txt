@@ -119,7 +119,7 @@ Drive soubory tohoto agenta:
 - {AgentName}_config.txt   → /Prompts/Importers/ (kompletní konfigurace agenta)
 - {AgentName}_mapping.txt  → /Prompts/Importers/ (mapování polí z obrázků do DB sloupců)
 - {AgentName}_entities.txt → /Prompts/Importers/ (přehled DB tabulek)
-- {AgentName}_error.txt    → /Problems/
+- {AgentName}_error    → /Problems/
 
 ## Config File Format — {AgentName}_config.txt
 
@@ -186,7 +186,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 | {AgentName}_config.txt | /Prompts/Importers/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
 | {AgentName}_entities.txt | /Prompts/Importers/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
 | {AgentName}_mapping.txt | /Prompts/Importers/ | ✅ šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| {AgentName}_error | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
@@ -194,7 +194,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### error.txt — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
 Append-only; agent přidává při selhání; max 100 řádků.
 
 
@@ -709,13 +709,13 @@ Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") →
 
 ## Per-Agent Files — Canonical Naming (9.2.0)
 
-Canonical singular: _entities.txt | _mapping.txt | _error.txt (NIKDY _errors.txt)
+Canonical singular: _entities.txt | _mapping.txt | _error (Sheet) (NIKDY _errors.txt)
 Importer _entities.txt → /Prompts/Importers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+_error (Sheet) → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 
 Canonical file formats:
   _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+  _error (Sheet):    ProblemScore | Category | Description | Timestamp | StepStatus
 
 Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
 Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.

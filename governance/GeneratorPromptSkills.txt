@@ -166,10 +166,10 @@ Limitations: max 3/run
 
 ## problem-report-writer
 Task types: problem report, Drive zápis při selhání
-Description: Zapíše {AgentName}_error.txt do Drive Problems složky
+Description: Zapíše {AgentName}_error do Drive Problems složky
   pokud run selhal nebo self-audit našel chyby.
 Inputs: AgentName, errors[] s ProblemScore, stav ntfy/Calendar/DB kroků
-Outputs: {AgentName}_error.txt v Problems složce
+Outputs: {AgentName}_error v Problems složce
 Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
 
 -- F. ADVANCED (3) -----------------------------------------------
@@ -214,7 +214,7 @@ Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
 
 ## problem-report-writer — 9.2.0 Update
 
-Soubor {AgentName}_error.txt (VÝHRADNĚ singular, NIKDY _errors.txt):
+Soubor {AgentName}_error (VÝHRADNĚ singular, NIKDY _errors.txt):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
   Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back potvrzením.

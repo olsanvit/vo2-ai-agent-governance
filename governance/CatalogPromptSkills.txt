@@ -1044,12 +1044,12 @@ Limitations: čas v Europe/Prague; NEZDVOJIT upsert při DryRun
 Task types: problem report, Drive zápis při selhání, nedokončený run, chyby agenta
 Description: Zapíše problem report do Drive složky 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
   pokud run skončil s success=false nebo selhal ntfy/Calendar event/DB report.
-  Soubor {AgentName}_error.txt obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
+  Soubor {AgentName}_error obsahuje: MCP identifikátor (VO2QNAPDBAI/VO2QNAPDBTE/VO2QNAPDBMAB/VO2QNAPDBUSM),
   problémy ve formátu "ProblemScore | kategorie | popis" (seřazeno sestupně dle ProblemScore),
   stav nedokončených kroků (ntfy, Calendar, DB report).
   Spouští se PŘED finálním reportem operátorovi.
 Inputs: AgentName, MCP identifikátor, errors[] s ProblemScore, stav ntfy/Calendar/DB report kroků
-Outputs: soubor {AgentName}_error.txt v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
+Outputs: soubor {AgentName}_error v Drive folderId 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
 Limitations: best-effort — Drive nedostupný → přeskočit tiše, capability_missing("problem_report_drive")
 
 =============================================================
@@ -1067,11 +1067,11 @@ Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable
 
 ## problem-report-writer — 9.4.2 Update
 
-Soubor {AgentName}_error.txt (VÝHRADNĚ singular, NIKDY _errors.txt):
+Soubor {AgentName}_error (VÝHRADNĚ singular, NIKDY _errors.txt):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
   Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 Soubor se vytváří při startu agenta (prázdný) — stejně jako _entities/_names/_urls.
-  [ChatGPT] create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+  [ChatGPT] create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
             fallback: create_file bez parentId → root, log "error_file_created_in_root"
 Pokud soubor existuje: přečíst při startu a ověřit aktuálnost problémů.
 Při selhání: append nový řádek — NIKDY nepřepisovat celý soubor.

@@ -106,7 +106,7 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 Drive soubory tohoto agenta:
 - {AgentName}_config.txt   → /Prompts/Checkers/ (TargetDB, ExpectedUpdateInterval, TableFilter)
 - {AgentName}_entities.txt → /Prompts/Checkers/ (přehled auditovaných tabulek)
-- {AgentName}_error.txt    → /Problems/
+- {AgentName}_error    → /Problems/
 
 ## Config File Format — {AgentName}_config.txt
 
@@ -152,7 +152,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 |--------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/Checkers/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
 | {AgentName}_entities.txt | /Prompts/Checkers/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
-| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| {AgentName}_error | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
 
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
@@ -160,7 +160,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### error.txt — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
 Append-only; agent přidává při selhání; max 100 řádků.
 
 
@@ -275,7 +275,7 @@ CHAPTER 7: TOOLS & INTEGRATIONS
 
 Drive složka:
 - /Prompts/Checkers/{AgentName}_config.txt, _entities.txt
-- /Problems/{AgentName}_error.txt
+- /Problems/{AgentName}_error
 - /Prompts/ root: CheckerPrompt.txt, CheckerPromptSkills.txt
 
 =============================================================
@@ -556,13 +556,13 @@ Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") →
 
 ## Per-Agent Files — Canonical Naming (9.2.0)
 
-Canonical singular: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Canonical singular: _entities.txt | _names.txt | _urls.txt | _error (Sheet) (NIKDY _errors.txt)
 Checker _entities.txt → /Prompts/Checkers/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+_error (Sheet) → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 
 Canonical file formats:
   _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+  _error (Sheet):    ProblemScore | Category | Description | Timestamp | StepStatus
 
 Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
 Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.

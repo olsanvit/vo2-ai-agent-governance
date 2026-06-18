@@ -120,7 +120,7 @@ Drive soubory tohoto agenta:
 - {AgentName}_config.txt   → /Prompts/Generators/ (TargetDB, TargetTables, ImageTypes, ScopeFilter, ...)
 - {AgentName}_prompts.txt  → /Prompts/Generators/ (volitelné: prompt šablony per ImageType)
 - {AgentName}_entities.txt → /Prompts/Generators/ (přehled DB tabulek)
-- {AgentName}_error.txt    → /Problems/
+- {AgentName}_error    → /Problems/
 
 ## Config File Format — {AgentName}_config.txt
 
@@ -171,7 +171,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 |--------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/Generators/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
 | {AgentName}_entities.txt | /Prompts/Generators/ | ✅ při prvním běhu | startup + session cache | ✅ append nové; update RowCount + LastPopulated |
-| {AgentName}_error.txt | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
+| {AgentName}_error | /Problems/ | ✅ při prvním selhání | startup (pokud existuje) | ✅ append při selhání |
 | {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ✅ agent aktualizuje (Prompt Evolution) |
 
 ❌ = agent NIKDY nemodifikuje automaticky
@@ -180,7 +180,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### error.txt — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
 Append-only; agent přidává při selhání; max 100 řádků.
 
 
@@ -306,7 +306,7 @@ Kritické MCP tools:
 
 Drive složka:
 - /Prompts/Generators/{AgentName}_config.txt, _prompts.txt, _entities.txt
-- /Problems/{AgentName}_error.txt
+- /Problems/{AgentName}_error
 - /Prompts/ root: GeneratorPrompt.txt, GeneratorPromptSkills.txt
 
 Calendar: "AI Generators"; nenalezen → přeskočit tiše
@@ -609,13 +609,13 @@ Pokud přepsání zablokováno: reportovat overwrite_blocked s důvodem.
 
 ## Per-Agent Files — Canonical Naming (9.2.0)
 
-Canonical singular: _entities.txt | _names.txt | _urls.txt | _error.txt (NIKDY _errors.txt)
+Canonical singular: _entities.txt | _names.txt | _urls.txt | _error (Sheet) (NIKDY _errors.txt)
 Generator _entities.txt → /Prompts/Generators/ (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-_error.txt → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+_error (Sheet) → /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 
 Canonical file formats:
   _entities.txt: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-  _error.txt:    ProblemScore | Category | Description | Timestamp | StepStatus
+  _error (Sheet):    ProblemScore | Category | Description | Timestamp | StepStatus
 
 Pravidlo vytvoření: POUZE text/plain s přesným parent folderem + read-back ověřením.
 Pokud Drive create neumí parent folder: capability_missing("drive_text_create_with_parent") → report-only.

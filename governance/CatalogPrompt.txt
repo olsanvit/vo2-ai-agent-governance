@@ -462,7 +462,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 |--------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
 | {AgentName}_entities (Sheet) | /Prompts/{AgentType}s/ | ✅ při prvním běhu | startup: sheets_get_values | ✅ sheets_append_rows nové; sheets_update_row pro RowCount + LastPopulated |
-| {AgentName}_error.txt | /Problems/ | ✅ při startu (prázdný) | startup: přečíst pokud existuje | ✅ append při selhání |
+| {AgentName}_error | /Problems/ | ✅ při startu (prázdný) | startup: přečíst pokud existuje | ✅ append při selhání |
 | {AgentName}_urls (Sheet) | /Prompts/Urls/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_append_rows nové URLs (max 500 řádků); sheets_update_row Status |
 | {AgentName}_names (Sheet) | /Prompts/Names/ | ✅ pokud chybí | startup: sheets_get_values | ✅ sheets_update_row coverage counts; jen operátor přidává entity |
 
@@ -472,7 +472,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### error.txt — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
 Append-only; agent přidává při selhání; max 100 řádků.
 
 
@@ -650,8 +650,8 @@ Co dělat při prvním runu (v tomto pořadí):
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["EntityName","coverage","tables","lastProcessed"]],fields:"userEnteredValue"}}])
    create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
-   create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
-     → pokud parentId není podporováno: create_file(name="{AgentName}_error.txt", mimeType="text/plain") — root fallback, log "error_file_created_in_root"
+   create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+     → pokud parentId není podporováno: create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet") — root fallback, log "error_file_created_in_root"
      → obsah: prázdný (nebo záhlaví: "ProblemScore|Category|Description|Timestamp")
      POZNÁMKA: STEJNÝ lifecycle jako _entities/_names/_urls — create při prvním běhu, append při selhání,
      nikdy mazat; duplicate-guard stejný protokol (KROK 1 exact search → KROK 2 fuzzy search)
@@ -855,10 +855,10 @@ BLOK 5 — Google Sheets + Drive soubory + AgentMonitor sync:
     get_agent_entities(agent_name="{AgentName}", entity_type="entity") → zkontrolovat count > 0
     L count = 0 → sync pravděpodobně selhal nebo první run; ověřit zda sync_agent_entities vrátilo ok=true
     L ok=false (AGENT_MONITOR_URL not configured) → log capability_missing("agent_monitor_db"), pokračovat
-5e. {AgentName}_error.txt v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+5e. {AgentName}_error v Problems složce (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
     → přečíst pokud existuje, ověřit aktuálnost problémů
     → pokud neexistuje: vytvořit (prázdný) — stejně jako ostatní governed soubory při startu
-      [ChatGPT] create_file(name="{AgentName}_error.txt", mimeType="text/plain", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+      [ChatGPT] create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
                fallback: create_file bez parentId → root, log "error_file_created_in_root"
 
 BLOK 6 — ntfy:
@@ -1806,7 +1806,7 @@ Pravidla:
 Pokud run NESKONČIL úspěšně (success = false), agent MUSÍ zapsat problem report do Drive.
 
 Drive folder ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj
-Soubor: {AgentName}_error.txt (jeden soubor na agenta, přepisuje se každým problémovým runem)
+Soubor: {AgentName}_error (jeden soubor na agenta, přepisuje se každým problémovým runem)
 
 Kdy zapsat:
 - success = false v run reportu
@@ -1820,7 +1820,7 @@ MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojen
 - MercsAndBeasts DB (mcp.vo2info.cz/MAB) → VO2QNAPDBMAB
 - UniSportManager DB (mcp.vo2info.cz/USM) → VO2QNAPDBUSM
 
-Formát souboru {AgentName}_error.txt:
+Formát souboru {AgentName}_error:
 ```
 Agent:     {AgentName}
 MCP:       {VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM}
@@ -1845,8 +1845,8 @@ Postup:
 2. search_files(query="{AgentName}", folderId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj") → zjistit fileId
 3. Pokud soubor existuje: update_file_content(fileId=<id>, textContent=<obsah>)
    Pokud soubor neexistuje:
-   [Claude MCP] create_file(title="{AgentName}_error.txt", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
-   [ChatGPT]    create_file(name="{AgentName}_error.txt", content=<obsah>) → pak přesunout do složky není možné přes action; zaznamenat capability_missing("problem_report_drive_parent") a pokračovat
+   [Claude MCP] create_file(title="{AgentName}_error", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj", textContent=<obsah>)
+   [ChatGPT]    create_file(name="{AgentName}_error", content=<obsah>) → pak přesunout do složky není možné přes action; zaznamenat capability_missing("problem_report_drive_parent") a pokračovat
 4. Zapsat PŘED odesláním finálního reportu operátorovi
 5. Pokud Drive nedostupný: přeskočit tiše, zaznamenat capability_missing("problem_report_drive")
 
@@ -5091,7 +5091,7 @@ CHANGELOG
 - Ntfy markdown=true jako default, structured message formatting
 - Capability Missing opravy (Calendar fallback, Drive fallback, ntfy logging)
 - Soubory přejmenovány: {AgentName}.txt → {AgentName}_entities.txt (Catalogs/)
-                        {AgentName}.txt → {AgentName}_error.txt (Problems/)
+                        {AgentName}.txt → {AgentName}_error (Problems/)
 - Dynamic Table Discovery pravidla (sloupec vs. nová tabulka)
 - Entity Country/Region Disambiguation (CountryGuid jako povinný discriminator)
 - Rankings, Ratings & ELO Systems (EntityRankings tabulka)
@@ -5233,7 +5233,7 @@ Canonical názvy (VÝHRADNĚ singular, NIKDY plurál):
   {AgentName}_entities.txt   → přehled spravovaných tabulek/entit
   {AgentName}_names.txt      → priority entity queue (operátor plní)
   {AgentName}_urls.txt       → URL queue pro scraping
-  {AgentName}_error.txt      → problémový report (NIKDY _errors.txt)
+  {AgentName}_error      → problémový report (NIKDY _errors.txt)
 
 Canonical folder assignment dle AgentType:
   _entities.txt → dle AgentType subfolder v /Prompts/:
@@ -5245,7 +5245,7 @@ Canonical folder assignment dle AgentType:
     Checker   → /Prompts/Checkers/   (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
   _names.txt  → /Prompts/Names/   (ID: 1-3GkQT-OqVpkaKwLKkgW8jjbWzNN7BYY)
   _urls.txt   → /Prompts/Urls/    (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
-  _error.txt  → /Problems/        (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
+  _error (Sheet)  → /Problems/        (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
 
 Pravidlo vytvoření souboru (9.2.0):
 - Vytvořit POUZE pokud Drive tool umí text/plain s přesným parent folderem a read-back ověřením
@@ -5269,12 +5269,12 @@ Povinné reportování stavu každého souboru:
 {AgentName}_urls.txt:
   URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status | Notes
 
-{AgentName}_error.txt:
+{AgentName}_error:
   ProblemScore | Category | Description | Timestamp | StepStatus
 
 ## Problem Report — Drive Write Rule (9.2.0)
 
-Problem report ({AgentName}_error.txt) ukládat do Problems (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj):
+Problem report ({AgentName}_error) ukládat do Problems (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj):
 - POUZE pokud Drive umí text/plain zápis do cílového parent folderu
 - Pokud Drive write není potvrzen read-backem: neclaimovat uložení
 - NIKDY nevytvářet Google Doc jako náhradu za governed plain-text problem report
