@@ -364,11 +364,13 @@ Canonical source rules:
 Priorita zdrojů promptu (v tomto pořadí):
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
-  2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+  2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
+              raw: https://vo2info.cz/governance/{promptFile}.txt
+  3. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
               raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
-  3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-  4. DB cache → AgentPromptCache (poslední stažený obsah)
-  5. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
+  4. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  5. DB cache → AgentPromptCache (poslední stažený obsah)
+  6. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
 
 Postup při startu (Prompt Cache Protocol):
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
@@ -378,7 +380,10 @@ Postup při startu (Prompt Cache Protocol):
 3. ROZHODNUTÍ:
    a. cache_version == gitea_version → použít DB cache
    b. verze se liší → stáhnout plný obsah z Gitea → upsert AgentPromptCache
-   c. Gitea nedostupná → FALLBACK GitHub raw:
+   c. Gitea nedostupná → FALLBACK vo2info.cz:
+      CatalogPrompt:       https://vo2info.cz/governance/CatalogPrompt.txt
+      CatalogPromptSkills: https://vo2info.cz/governance/CatalogPromptSkills.txt
+   c2. vo2info nedostupná → FALLBACK GitHub raw:
       CatalogPrompt:       https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/CatalogPrompt.txt
       CatalogPromptSkills: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/CatalogPromptSkills.txt
    d. GitHub nedostupný → FALLBACK Drive:
@@ -437,7 +442,11 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
       → stáhnout plný obsah z Gitea (WebFetch celého souboru)
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
-   c. Gitea nedostupná → FALLBACK na Drive:
+   c. Gitea nedostupná → FALLBACK vo2info.cz:
+      https://vo2info.cz/governance/{promptFile}.txt
+   c2. vo2info nedostupná → FALLBACK GitHub raw:
+      https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{promptFile}.txt
+   c3. GitHub nedostupný → FALLBACK Drive:
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
       POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
    d. Gitea i Drive nedostupné + cache existuje → použít cache; log "prompt_upgrade_blocked"
@@ -486,18 +495,22 @@ Required runtime sequence:
 4. detect MCP_VERSION from running MCP/server runtime (via db_ping response or health endpoint)
 5. detect active agent version from runtime prompt header and PromptVersion
 6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache vs Gitea header (viz Prompt Cache Protocol):
-   PRIORITA: Gitea → Drive fallback → DB cache → bootstrap
+   PRIORITA: Gitea → vo2info.cz → GitHub → Drive → DB cache → bootstrap
    a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/{promptFile}.txt
       → extract PromptVersion z prvních 5 řádků
       → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
-   b) DRIVE (fallback pokud Gitea nedostupná):
+   b) VO2INFO (fallback pokud Gitea nedostupná/403):
+      WebFetch https://vo2info.cz/governance/{promptFile}.txt
+   b2) GITHUB (fallback pokud vo2info nedostupná):
+      WebFetch https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{promptFile}.txt
+   b3) DRIVE (fallback pokud GitHub nedostupný):
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
       [ChatGPT]    search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
       POZOR: fileId NIKDY neukládat — vždy search znovu (uložené ID → 404 po re-upload)
    c) classify prompt_status:
       - version_match: runtime version == Gitea/Drive PromptVersion == MCP_VERSION → pokračovat
       - version_mismatch: → selfUpdate (krok 8)
-      - prompt_upgrade_blocked: Gitea i Drive nedostupné → pokračovat s cache/bootstrap, log warning
+      - prompt_upgrade_blocked: Gitea i vo2info i Drive nedostupné → pokračovat s cache/bootstrap, log warning
 7. classify prompt_status as: version_match | version_mismatch | prompt_upgrade_blocked | prompt_upgrade_applied
 8. if version_mismatch: selfUpdate
    selfUpdate flow:
@@ -891,7 +904,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 9.4.5 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 9.4.6 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}

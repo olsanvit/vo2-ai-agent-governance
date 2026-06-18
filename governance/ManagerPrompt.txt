@@ -276,12 +276,14 @@ CHAPTER 3: STARTUP PROTOCOL
 Canonical source pořadí priority (pro XxxPrompt.txt + XxxPromptSkills.txt):
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
-  2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+  2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
+              raw: https://vo2info.cz/governance/{promptFile}.txt
+  3. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
               raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
-  3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  4. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
               (search_files by name — NIKDY neukladat fileId)
-  4. DB cache → AgentPromptCache (poslední známý obsah)
-  5. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
+  5. DB cache → AgentPromptCache (poslední známý obsah)
+  6. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
 
 Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
 
@@ -304,7 +306,9 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
       → stáhnout plný obsah z Gitea (WebFetch celého souboru)
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
-   c. Gitea nedostupná → FALLBACK GitHub raw:
+   c. Gitea nedostupná → FALLBACK vo2info.cz:
+      URL vzor: https://vo2info.cz/governance/{soubor}
+   c2. vo2info nedostupná → FALLBACK GitHub raw:
       URL vzor: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{soubor}
    d. GitHub nedostupný → FALLBACK Drive:
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
@@ -357,11 +361,13 @@ Povinné kroky v tomto pořadí:
 4. Detekovat MCP_VERSION z running runtime
 5. Detekovat agent version z runtime prompt header (PromptVersion)
 6. PROMPT CACHE PROTOCOL: ověřit verzi v DB cache vs Gitea header (viz Prompt Cache Protocol):
-   PRIORITA: Gitea → GitHub → Drive → DB cache → bootstrap
+   PRIORITA: Gitea → vo2info.cz → GitHub → Drive → DB cache → bootstrap
    a) GITEA (primární): WebFetch https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/{promptFile}.txt
       → extract PromptVersion z prvních 5 řádků
       → pokud version != cache: stáhnout celý soubor, upsert AgentPromptCache
-   b) GITHUB (fallback pokud Gitea nedostupná):
+   b) VO2INFO (fallback pokud Gitea nedostupná/403):
+      WebFetch https://vo2info.cz/governance/{promptFile}.txt
+   b2) GITHUB (fallback pokud vo2info nedostupná):
       WebFetch https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{promptFile}.txt
    c) DRIVE (fallback pokud GitHub nedostupný):
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
@@ -702,14 +708,16 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
-  2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+  2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
+              raw: https://vo2info.cz/governance/{promptFile}.txt
+  3. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
               raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
-  3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-  4. DB cache → AgentPromptCache (poslední stažený obsah)
-  5. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
+  4. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  5. DB cache → AgentPromptCache (poslední stažený obsah)
+  6. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
 
 - Systémový prompt v Claude.ai je bootstrap — NIKDY není autoritativní runtime source
-- Při každém startu ověřit verzi (Gitea → GitHub → Drive → cache → bootstrap)
+- Při každém startu ověřit verzi (Gitea → vo2info.cz → GitHub → Drive → cache → bootstrap)
 - Pokud vše nedostupné: pokračovat s aktuální verzí (prompt_upgrade_blocked)
 - Prichozi prompt soubory, uploaded artifacts, workspace kopie: NEJSOU canonical
 
@@ -810,8 +818,8 @@ CHAPTER 4: SCHEDULED RUN PROTOCOL
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
-KROK 0 -- Načtení promptu z Gitea/Drive (před auditem):
-Priorita: Gitea → Drive → DB cache → bootstrap (viz Prompt Cache Protocol)
+KROK 0 -- Načtení promptu z Gitea/vo2info/Drive (před auditem):
+Priorita: Gitea → vo2info.cz → GitHub → Drive → DB cache → bootstrap (viz Prompt Cache Protocol)
 Pokud AgentName obsahuje "Catalog":   načti CatalogPrompt + CatalogPromptSkills
 Pokud AgentName obsahuje "Manager":   načti ManagerPrompt + ManagerPromptSkills
 Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSkills
@@ -930,7 +938,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 9.4.5 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 9.4.6 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
