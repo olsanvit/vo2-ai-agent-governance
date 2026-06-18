@@ -1,9 +1,9 @@
 Agent: 9.0.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 9.4.8
+PromptVersion: 10.0.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 9.4.8
+CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 10.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro importer agenty.
@@ -98,7 +98,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.8
+MCP Version:  10.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -115,7 +115,7 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
     AgentName obsahuje "Importer"  → ImporterPrompt + ImporterPromptSkills
 - Pokud nelze určit → default Catalog, log warning
 
-Drive soubory tohoto agenta (master spreadsheet architektura 9.4.8):
+Drive soubory tohoto agenta (master spreadsheet architektura 10.0.0):
 - {AgentName}_config.txt         → /Prompts/Importers/ (kompletní konfigurace agenta)
 - {AgentName}_mapping.txt        → /Prompts/Importers/ (mapování polí z obrázků do DB sloupců)
 - master spreadsheet {AgentName} → Importers složka (tab 'entities', 'error')
@@ -189,7 +189,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
 
-### Master spreadsheet {AgentName} — CREATE vzor (9.4.8):
+### Master spreadsheet {AgentName} — CREATE vzor (10.0.0):
 ```
 sheets_create_spreadsheet(title="{AgentName}", folderId="{importersFolderId}")
 batch_update_spreadsheet(requests=[
@@ -429,8 +429,8 @@ Obsah musí být konkrétní dle skutečných obrázků.
 CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 9.4.8
-BLOK 2 — Verze == 9.4.8
+BLOK 1 — db_ping (TargetDB) + MCP_VERSION == 10.0.0
+BLOK 2 — Verze == 10.0.0
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 BLOK 5 — Drive: config.txt, mapping.txt, master spreadsheet {AgentName} přítomen (taby entities/error), SourceFolder dostupné?
@@ -721,9 +721,9 @@ NIKDY nepoužívat "AI Importers" ani jiný zobrazovaný název jako calendar_id
 VŽDY list_calendars() → CALENDAR_ID proměnná.
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 
-## Per-Agent Files — Master Spreadsheet (9.4.8)
+## Per-Agent Files — Master Spreadsheet (10.0.0)
 
-Architektura 9.4.8: JEDEN master spreadsheet {AgentName} v Importers složce s taby:
+Architektura 10.0.0: JEDEN master spreadsheet {AgentName} v Importers složce s taby:
   - tab 'entities': ImportantScore | TableName | Description | RowCount | LastPopulated
   - tab 'names':    EntityName | coverage | tables | lastProcessed
   - tab 'urls':     URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status

@@ -1,9 +1,9 @@
 Agent: 9.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 9.4.8
+PromptVersion: 10.0.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 9.4.8
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -99,7 +99,7 @@ MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  9.4.8
+MCP Version:  10.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -122,7 +122,7 @@ Canonical source rules:
 - Systémový prompt v Claude.ai je bootstrap — NIKDY není runtime source of truth
 - Při každém startu načíst prompt dle Prompt Cache Protocol (viz Ch 3)
 
-Drive soubory tohoto agenta (master spreadsheet architektura 9.4.8):
+Drive soubory tohoto agenta (master spreadsheet architektura 10.0.0):
 - {AgentName}_config.txt            → /Prompts/Collectors/ (TargetDB, TargetTable, CollectionTypes, MaxPerRun)
 - master spreadsheet {AgentName}    → Collectors složka (tab 'entities', 'names', 'urls', 'error')
 - {AgentName}_categories_{type}.txt → /Prompts/Collectors/ (category lists per CollectionType)
@@ -166,7 +166,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ❌ = agent NIKDY nemodifikuje automaticky
 ✅ = agent appenduje nové řádky; nikdy nepřepisuje existující obsah
 
-### Master spreadsheet {AgentName} — CREATE vzor (9.4.8):
+### Master spreadsheet {AgentName} — CREATE vzor (10.0.0):
 ```
 sheets_create_spreadsheet(title="{AgentName}", folderId="{collectorsFolderId}")
 batch_update_spreadsheet(requests=[
@@ -356,7 +356,7 @@ Kořenová složka: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
   CollectorPrompt.txt
   CollectorPromptSkills.txt
 
-Poznámka 9.4.8: {AgentName}_entities, {AgentName}_urls a {AgentName}_error již
+Poznámka 10.0.0: {AgentName}_entities, {AgentName}_urls a {AgentName}_error již
 NEJSOU samostatné soubory — jsou taby v master spreadsheet {AgentName}.
 
 ## Google Calendar Integration
@@ -391,8 +391,8 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 
 Spouštět: explicitní žádost | první run | každých 30 runů
 
-BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 9.4.8
-BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 9.4.8
+BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION == 10.0.0
+BLOK 2 — Verze: PromptVersion == MCP_VERSION == SkillsVersion == 10.0.0
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 BLOK 5 — Drive soubory: config.txt, master spreadsheet {AgentName} (taby entities/names/urls/error), categories_*.txt přítomny?
@@ -679,9 +679,9 @@ Platí pro VŠECHNY typy agentů. NIKDY nepoužívat "AI Collectors" (ani jiný 
 VŽDY list_calendars() → CALENDAR_ID proměnná.
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 
-## Per-Agent Files — Master Spreadsheet (9.4.8)
+## Per-Agent Files — Master Spreadsheet (10.0.0)
 
-Architektura 9.4.8: JEDEN master spreadsheet {AgentName} v Collectors složce
+Architektura 10.0.0: JEDEN master spreadsheet {AgentName} v Collectors složce
   (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U) s taby:
   - tab 'entities': ImportantScore | TableName | Description | RowCount | LastPopulated
   - tab 'names':    EntityName | coverage | tables | lastProcessed
