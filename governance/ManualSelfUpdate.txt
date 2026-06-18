@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 9.4.7
+TemplateVersion: 9.4.8
 LastUpdated: 2026-06-18
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 9.4.7
+MANUAL SELFUPDATE TEMPLATE — governance 9.4.8
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,7 +11,7 @@ Zdroje jsou v pořadí priority včetně vo2info.cz fallbacku.
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 9.4.7. Proveď selfUpdate — zdroje v pořadí priority:
+Aktualizuj se na governance 9.4.8. Proveď selfUpdate — zdroje v pořadí priority:
 1. Gitea: http://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při Gitea 403)
 3. GitHub: https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
@@ -22,12 +22,19 @@ Potvrď tyto změny:
 2. V reportech a odpovědích používej emoji pro přehlednost
 3. Na konci každého runu odešli send_notification přes správný VO2QNAPDB konektor — pokud tool nevidíš, řekni mi to, ať refreshnu konektor (JobQueue není náhrada). Formát: title max 60 znaků (začíná ✅⚠️🚨🔧), message max 200 znaků pipe-separated, tags jako ntfy slova ["white_check_mark" apod.]
 4. Aktualizuj si ikonu podle svého jména a tématu
-5. Ověř existenci svých Drive souborů — pokud chybí, vytvoř je:
-   • {AgentName}_entities (Sheet) — složka /Prompts/{AgentType}s/
-   • {AgentName}_names (Sheet) — složka /Prompts/Names/
-   • {AgentName}_urls (Sheet) — složka /Prompts/Urls/
-   • {AgentName}_error — složka /Problems/
-   Všechny: create_file s parentId + root fallback, nikdy mazat
+5. Ověř existenci svého master spreadsheet — pokud chybí, vytvoř ho:
+   • Jeden master spreadsheet {AgentName} ve složce odpovídající tvému AgentType:
+     - Catalog  → Catalogs složka  (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+     - Manager  → Managers složka  (ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+     - Collector → Collectors složka (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
+     - Checker/Generator/Importer → příslušná složka dle AgentType
+   • Spreadsheet musí mít 4 taby: entities | names | urls | error
+   • CREATE vzor:
+     sheets_create_spreadsheet(title="{AgentName}", folderId="{agentTypeFolderId}")
+     batch_update_spreadsheet(4 taby: entities, names, urls, error)
+     sheets_append_rows — headers pro každý tab
+   • Hledání před vytvořením: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
+   • Nikdy mazat; nikdy vytvářet 4 oddělené soubory (stará architektura 9.4.7)
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
    • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
    • Manager: a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com
@@ -39,9 +46,9 @@ Potvrď tyto změny:
    • Chybové reporty → problem-report-writer
    • Run summary → run-status-broadcaster
    Vypiš které skills máš aktivní a které chybí.
-9. Web Search Fallback (9.4.7+):
-   • Prázdný _names queue (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do _names Sheet (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
-   • Prázdné/vyčerpané _urls: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do _urls Sheet (status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
-   • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do {AgentName}_error jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
+9. Web Search Fallback (9.4.8+):
+   • Prázdný tab 'names' v master spreadsheet {AgentName} (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do tab 'names' (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
+   • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
+   • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do tab 'error' v master spreadsheet {AgentName} jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
-Potvrď verzi 9.4.7, proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi 9.4.8, proveď BLOK 8 self-audit a poté spusť testovací běh.

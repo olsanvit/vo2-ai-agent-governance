@@ -1,5 +1,5 @@
 SkillsFor: CollectorPrompt
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -58,7 +58,7 @@ Limitations: max 1000 párů per run
 ## collection-schema-initializer
 Task types: první run, schema setup, collector tabulky
 Description: Inicializuje schema pro nový collector agent. Vytvoří potřebné
-  tabulky dle {AgentName}_entities.txt nebo defaultního schématu.
+  tabulky dle tabu 'entities' v master spreadsheet {AgentName} nebo defaultního schématu.
   Přidá všechny BaseGuid + scoring sloupce.
 Inputs: AgentName, target types (Mobile/Desktop/...), custom column list
 Outputs: vytvořené tabulky, updated entities soubor
@@ -212,11 +212,12 @@ Outputs: Calendar event vytvořen
 Limitations: pouze "AI Collectors" kalendář
 
 ## problem-report-writer
-Task types: problem report, Drive zápis při selhání
-Description: Zapíše {AgentName}_error do Drive Problems složky
-  (1w91GGAKnReBc6bWFtrucjlVMYr7NhURj) pokud run selhal.
+Task types: problem report, tab 'error' v master spreadsheet, nedokončený run
+Description: Zapíše problem report do tabu 'error' v master spreadsheet {AgentName} pokud run selhal.
+  Hledání: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
+  Zápis: sheets_append_rows(spreadsheetId, range="error", rows=[...])
 Inputs: AgentName, errors[] s ProblemScore, stav ntfy/Calendar/DB kroků
-Outputs: {AgentName}_error v Problems složce
+Outputs: append do tabu 'error' v master spreadsheet {AgentName}
 Limitations: best-effort; Drive nedostupný → fallback AgentRunReports.Metadata
 
 -- E. IMAGE HANDLING (4) ----------------------------------------
@@ -275,28 +276,31 @@ Outputs: upsert do AgentSchedules, přehled agentů
 Limitations: čas v Europe/Prague; NEZDVOJIT při DryRun
 
 ## baseline-collector-file-manager
-Task types: baseline entities soubor, Drive Collectors/, RowCount aktualizace
-Description: Čte a aktualizuje {AgentName}_entities.txt v Drive /Prompts/Collectors/.
-  Přehled DB tabulek s ImportantScore, RowCount, LastPopulated.
-  Vytváří soubor pokud neexistuje (query DB tables).
-  BOOTSTRAP: pokud soubor neexistuje (404 / file_not_found) → vytvořit nový soubor automaticky:
+Task types: baseline soubor agenta, tab 'entities' v master spreadsheet, RowCount aktualizace, bootstrap
+Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} v Collectors složce
+  (folder ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U). Přehled DB tabulek s ImportantScore, RowCount, LastPopulated.
+  Hledání: search_files(query="{AgentName}", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+  Čtení: get_spreadsheet_range(spreadsheetId, range="entities!A:Z")
+  Zápis: sheets_append_rows(spreadsheetId, range="entities", rows=[...])
+  BOOTSTRAP: pokud master spreadsheet neexistuje → vytvořit automaticky:
     1. SELECT tablename, COUNT(*) FROM pg_tables WHERE schemaname='public' GROUP BY tablename
     2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
-    3. Najít Collectors folder: search_files("Collectors") → vzít výsledek s type=folder (přesná shoda)
-    4. create_file({AgentName}_entities.txt, parent_folder_id={folderId}, content=entitiesHeader+rows)
-    5. Pokud create_file selže → capability_missing("drive_create_with_parent"), pokračovat degraded (ne blocked)
-  DRIVE SELF-TEST: na startu ověřit create_file capability pokusem o vytvoření _capability_test.txt
+    3. sheets_create_spreadsheet(title="{AgentName}", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
+    4. batch_update_spreadsheet → 4 taby (entities, names, urls, error) + append headers
+    5. Pokud create selže → capability_missing("sheets_create_spreadsheet"), pokračovat degraded (ne blocked)
 Inputs: AgentName, seznam tabulek s aktuálním RowCount
-Outputs: přečtený katalog (startup), aktualizovaný na Drive (end of run)
+Outputs: přečtený katalog (startup), aktualizovaný tab 'entities' na Drive (end of run)
 Limitations: neaktualizuje pokud db_unreachable; Drive selhání = degraded, ne blocked
 
 ## cross-agent-task-writer
-Task types: cross-agent zápis, Urls soubory, task assignment
-Description: Zapisuje URL úkoly pro jiné agenty do jejich _urls.txt souborů.
+Task types: cross-agent zápis, tab 'urls', tab 'names', task assignment
+Description: Zapisuje URL úkoly pro jiné agenty do jejich master spreadsheet {AgentName} (append-only).
+  Hledání: search_files(query="{cílový AgentName}", folderId="{agentTypeFolderId}")
+  Zápis: sheets_append_rows(spreadsheetId, range="urls", rows=[...]) nebo range="names"
   Max 50 nových URL per zápis. Append-only.
-Inputs: cílový AgentName, seznam URL
-Outputs: append do Drive souboru, highlights[] záznam
-Limitations: max 50 položek per zápis; soubor nesmí překročit 500 řádků
+Inputs: cílový AgentName, seznam URL (tab 'urls') nebo názvů (tab 'names')
+Outputs: append do příslušného tabu master spreadsheet, highlights[] záznam
+Limitations: max 50 položek per zápis; tab nesmí překročit 500 řádků
 
 ## weekly-digest-reporter
 Task types: weekly digest, měsíční digest, souhrnný report
@@ -315,10 +319,10 @@ PATCH 9.1.0 — COLLECTOR BOOTSTRAP ADDENDUM
 
 NOVÉ v 9.1.0: baseline-collector-file-manager nyní obsahuje explicitní BOOTSTRAP proceduru
 analogickou s Catalog a Manager agenty:
-- search_files("Collectors") → folder lookup (ne hardcoded folder ID)
+- search_files(query="{AgentName}", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U") → master spreadsheet lookup
 - SELECT pg_tables → seed entities s ImportantScore=50 defaultem
-- create_file selhání → capability_missing + degraded (ne blocked)
-- DRIVE SELF-TEST na startu
+- sheets_create_spreadsheet selhání → capability_missing + degraded (ne blocked)
+- master spreadsheet vytváří 4 taby: entities, names, urls, error
 
 =============================================================
 PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
@@ -332,21 +336,23 @@ Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Vkládat/aktualizovat AgentSchedules POUZE při db_reachable.
 Reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán.
 
-## baseline-collector-file-manager — 9.2.0 Update
-(doplňuje PATCH 9.1.0 BOOTSTRAP a DRIVE SELF-TEST)
+## baseline-collector-file-manager — 9.4.8 Update
+(doplňuje PATCH 9.1.0 BOOTSTRAP — přechod na master spreadsheet)
 
-Canonical soubor: {AgentName}_entities.txt (VÝHRADNĚ singular)
+Canonical: tab 'entities' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor)
 Canonical formát: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back.
-Pokud create selže: capability_missing("drive_text_create_with_parent"), pokračovat degraded.
-Povinné reportování stavu: exact_file_found | created | creation_failed | used_source | reason
+Vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (4 taby) + sheets_append_rows (headers)
+Pokud create selže: capability_missing("sheets_create_spreadsheet"), pokračovat degraded.
+Povinné reportování stavu: exact_spreadsheet_found | created | creation_failed | used_source | reason
 
-## problem-report-writer — 9.2.0 Update
+## problem-report-writer — 9.4.8 Update
 
-Soubor {AgentName}_error (VÝHRADNĚ singular, NIKDY _errors.txt)
+Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor)
 Formát: ProblemScore | Category | Description | Timestamp | StepStatus
-Složka: /Problems/ (ID: 1w91GGAKnReBc6bWFtrucjlVMYr7NhURj)
-Vytvoření POUZE pokud Drive umí text/plain s parent folderem + read-back.
+Master spreadsheet: {AgentName} v Collectors složce (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
+Tab 'error' je součástí master spreadsheet — vytváří se při BOOTSTRAP spolu s ostatními taby.
+  get_spreadsheet_range(spreadsheetId, range="error!A:Z") při startu
+  sheets_append_rows(spreadsheetId, range="error", rows=[...]) při selhání
 Fallback: AgentRunReports.Metadata pokud Drive selže.
 
 ## calendar-event-manager — 9.2.0 Update
@@ -368,4 +374,4 @@ Limitations: výhradně při 502 selhání smart_upsert_batch; bez read-back →
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 9.4.7
+SkillsVersion: 9.4.8
