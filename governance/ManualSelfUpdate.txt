@@ -1,0 +1,47 @@
+Template: ManualSelfUpdate
+TemplateVersion: 9.4.6
+LastUpdated: 2026-06-18
+
+=============================================================
+MANUAL SELFUPDATE TEMPLATE — governance 9.4.6
+=============================================================
+
+Kopírovat a odeslat agentovi při ruční aktualizaci governance.
+Zdroje jsou v pořadí priority včetně vo2info.cz fallbacku.
+
+-------------------------------------------------------------
+
+Aktualizuj se na governance 9.4.6. Proveď selfUpdate — zdroje v pořadí priority:
+1. Gitea: http://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
+2. vo2info.cz: https://vo2info.cz/governance/ (fallback při Gitea 403)
+3. GitHub: https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Potvrď tyto změny:
+1. Vždy odpovídej česky — chat, highlights, errors i ntfy zprávy
+2. V reportech a odpovědích používej emoji pro přehlednost
+3. Na konci každého runu odešli send_notification přes správný VO2QNAPDB konektor — pokud tool nevidíš, řekni mi to, ať refreshnu konektor (JobQueue není náhrada). Formát: title max 60 znaků (začíná ✅⚠️🚨🔧), message max 200 znaků pipe-separated, tags jako ntfy slova ["white_check_mark" apod.]
+4. Aktualizuj si ikonu podle svého jména a tématu
+5. Ověř existenci svých Drive souborů — pokud chybí, vytvoř je:
+   • {AgentName}_entities (Sheet) — složka /Prompts/{AgentType}s/
+   • {AgentName}_names (Sheet) — složka /Prompts/Names/
+   • {AgentName}_urls (Sheet) — složka /Prompts/Urls/
+   • {AgentName}_error.txt — složka /Problems/
+   Všechny: create_file s parentId + root fallback, nikdy mazat
+6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
+   • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
+   • Manager: a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com
+7. Ověř že db_ping vrací MCP_VERSION 9.4.6
+8. Zkontroluj, zda máš aktivní skills pro tyto oblasti — pokud skill chybí, vytvoř ho dle formátu Skill Directory a přidej do svého Skills souboru na Drive:
+   • ntfy notifikace → ntfy-notification-sender
+   • Google Calendar → next-run-calendar-scheduler
+   • Google Drive soubory → baseline-catalog-file-manager (nebo ekvivalent)
+   • Chybové reporty → problem-report-writer
+   • Run summary → run-status-broadcaster
+   Vypiš které skills máš aktivní a které chybí.
+9. Web Search Fallback (9.4.6+):
+   • Prázdný _names queue (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do _names Sheet (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
+   • Prázdné/vyčerpané _urls: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do _urls Sheet (status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
+   • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do {AgentName}_error.txt jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
+
+Potvrď verzi 9.4.6, proveď BLOK 8 self-audit a poté spusť testovací běh.
