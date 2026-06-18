@@ -20,7 +20,7 @@ STARTUP SEKVENCE (18 kroků -- viz Ch 3: db_ping, version check, freshness, Driv
 2.  PROMPT VERSION -> ověřit přes Gitea (fallback: Drive → cache) + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
-## GOVERNED FILE DUPLICATE-GUARD (platí pro _entities, _names, _urls)
+## GOVERNED FILE DUPLICATE-GUARD (platí pro _entities, _names, _urls, _error)
 
 Před každým vytvořením governed Sheetu MUSÍ agent projít tímto protokolem:
 
@@ -164,30 +164,28 @@ SCHEDULED RUN (v tomto poradi):
              [Claude MCP] sheets_get_values → zpracovat před standardním scrapingem
              [ChatGPT]    get_spreadsheet_range → zpracovat před standardním scrapingem
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
-3b. EMPTY QUEUE SEED DISCOVERY → aktivuje se POUZE pokud platí OBOJE:
+3b. WEB SEARCH FALLBACK → aktivuje se pokud platí ALESPOŇ JEDNO:
              - _names fronta má 0 zpracovatelných položek (jen hlavička nebo prázdný Sheet)
              - _urls fronta má 0 zpracovatelných položek (jen hlavička nebo prázdný Sheet)
              Cíl: agent sám najde seed data aby příští run mohl sbírat reálná data.
-             Postup:
-             a) Odvodit doménu katalogu z {AgentName} (např. "VINWMIVehicles" → výrobci vozidel)
-             b) Provést web search: WebFetch nebo search s dotazy jako:
+             a) Odvodit doménu z {AgentName} (např. "VINWMIVehicles" → výrobci vozidel)
+             b) Pokud _names prázdný → WebSearch/WebFetch:
                 - "list of {domain} [wikipedia OR official source]"
                 - "top {domain} manufacturers/names/brands"
-                - "{domain} data sources API"
-             c) Z výsledků extrahovat:
-                - Entity jména → zapsat do {AgentName}_names (Sheet):
-                  [ChatGPT] batch_update_spreadsheet(appendCells) → max 20 nových řádků
-                            formát: EntityName|coverage=""|tables=""|lastProcessed=""
-                - Zdrojové URL → zapsat do {AgentName}_urls (Sheet):
-                  [ChatGPT] batch_update_spreadsheet(appendCells) → max 20 nových řádků
-                            formát: URL|SourceTier=A|ReliabilityScore=70.000|EntityType|LastChecked=now()|Status=new
-             d) Log do highlights[]: "🔍 Empty queue seed: {N} jmen a {M} URL přidáno do Drive"
-             e) Pokud web search selže nebo nic nenajde: log warning, pokračovat bez blokování
+                → extrahovat jména → append do {AgentName}_names (max 20 řádků)
+                  formát: EntityName|coverage=""|tables=""|lastProcessed=""
+                  log: "🔍 web_search_names_refill: {count} entit přidáno"
+             c) Pokud _urls prázdný → WebSearch/WebFetch:
+                - "{domain} data sources API OR results OR fixtures 2025"
+                → extrahovat URL → append do {AgentName}_urls (max 20 řádků)
+                  formát: URL|SourceTier=A|ReliabilityScore=70.000|EntityType|LastChecked=now()|Status=new
+                  log: "🔍 web_search_urls_refill: {count} URL přidáno"
+             d) Pokud WebSearch nedostupný nebo nic nenajde: přeskočit, log warning, nepovažovat za chybu
              PRAVIDLA:
              - Nepřidávat duplicity (normalizovat jméno před zápisem)
-             - Maximálně 20 jmen + 20 URL per run (nespamovat Sheet)
+             - Max 20 jmen + 20 URL per run
              - Preferovat autoritativní zdroje: Wikipedia, ISO normy, oficiální registry
-             - Volitelné zdroje: Wikidata, DBpedia, veřejné API katalogy
+             - Volitelné: Wikidata, DBpedia, veřejné API katalogy
 4.  INCREMENTAL SYNC -> delta od LastRunAt, full refresh pro prázdné tabulky
 5.  DATA COLLECTION -> Score >= 90.000 first, pak >= 70.000, >= 50.000, <50.000 opportunisticky
     L rate limit: 1 req/s scraping, 5 req/s API, max 500 req/run
@@ -472,8 +470,11 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 ### entities.txt — Řádek: ImportantScore|TableName|RowCount|LastPopulated
 Agent přidává nové tabulky, aktualizuje RowCount + LastPopulated po každém úspěšném běhu.
 
-### _error (Sheet) — Řádek: ProblemScore|Category|Description|Timestamp
+### _error (Sheet)
 Append-only; agent přidává při selhání; max 100 řádků.
+COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
+Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý Sheet — jen append.
+Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
 
 
@@ -651,8 +652,8 @@ Co dělat při prvním runu (v tomto pořadí):
    create_file(name="{AgentName}_urls",     mimeType="application/vnd.google-apps.spreadsheet")
      + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
    create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet", parentId="1w91GGAKnReBc6bWFtrucjlVMYr7NhURj")
+     + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["ProblemScore","Category","Description","Timestamp","StepStatus"]],fields:"userEnteredValue"}}])
      → pokud parentId není podporováno: create_file(name="{AgentName}_error", mimeType="application/vnd.google-apps.spreadsheet") — root fallback, log "error_file_created_in_root"
-     → obsah: prázdný (nebo záhlaví: "ProblemScore|Category|Description|Timestamp")
      POZNÁMKA: STEJNÝ lifecycle jako _entities/_names/_urls — create při prvním běhu, append při selhání,
      nikdy mazat; duplicate-guard stejný protokol (KROK 1 exact search → KROK 2 fuzzy search)
 5. Upsert AgentSchedules (AgentName, AgentType, ScheduledRunTime, Timezone)
