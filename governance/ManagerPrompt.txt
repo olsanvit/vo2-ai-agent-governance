@@ -368,7 +368,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
      → NEPOSÍLAT ⚠️ ntfy alert jen kvůli root umístění
   c) Lifecycle souboru je stejný bez ohledu na umístění
 
-## Simplified Startup Sequence 9.0.0
+## Simplified Startup Sequence 10.0.0
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -484,7 +484,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (9.0.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.0)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -797,7 +797,7 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Sheets Agent Data Structure -- 9.3.0
+## Google Sheets Agent Data Structure -- 10.0.0
 
 Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
@@ -828,7 +828,7 @@ Postup pri startu:
    [ChatGPT]    get_spreadsheet_range(spreadsheetId=<id>, range="urls!A:Z")
 4. Pokud master spreadsheet neexistuje: vytvorit (viz First Run Protocol); pokud tab prazdny: preskocit (ne chyba)
 
-## Google Sheets Sports Baseline Catalog -- 9.3.0
+## Google Sheets Sports Baseline Catalog -- 10.0.0
 
 Sport agenti udrzuji katalogovy Sheet v Google Drive.
 Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO), tab "entities"
@@ -887,7 +887,7 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol -- 9.0.0
+## Self-Audit Protocol -- 10.0.0
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -912,7 +912,7 @@ BLOK 1 -- DB & MCP konektivita:
 BLOK 2 -- Verze:
 2a. PromptVersion tohoto promptu == 10.0.0
 2b. MCP_VERSION z db_ping == 10.0.0
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 9.0.0
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 10.0.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
@@ -922,7 +922,7 @@ list_entity_images | rate_limit_guard | schema_report | score_breakdown_report |
 sync_agent_entities | get_agent_entities
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 9.0.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 10.0.0 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L sync_agent_entities nebo get_agent_entities chybí:
   - AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
@@ -931,7 +931,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 9.0.0
+4a. SkillsVersion načteného souboru == 10.0.0
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -3842,10 +3842,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 9.0.0
-SchemaVersion: 9.0.0
-RuntimeSafetyVersion: 9.0.0
-PromptVersion: 9.2.0
+GovernanceVersion: 10.0.0
+SchemaVersion: 10.0.0
+RuntimeSafetyVersion: 10.0.0
+PromptVersion: 10.0.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
