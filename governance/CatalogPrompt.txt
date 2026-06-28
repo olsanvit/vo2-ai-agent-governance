@@ -511,7 +511,7 @@ Zápis: sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCe
   c) Lifecycle souboru je stejný bez ohledu na umístění
 
 
-## Simplified Startup Runtime Sequence 9.0.0
+## Simplified Startup Runtime Sequence 10.0.0
 
 Required runtime sequence:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -819,7 +819,7 @@ Pokud AgentSchedules neexistuje nebo je prázdná:
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol — 9.0.0
+## Self-Audit Protocol — 10.0.0
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -844,7 +844,7 @@ BLOK 1 — DB & MCP konektivita:
 BLOK 2 — Verze:
 2a. PromptVersion tohoto promptu == 10.0.0
 2b. MCP_VERSION z db_ping == 10.0.0
-2c. SkillsVersion z načteného PromptSkills souboru == 9.0.0
+2c. SkillsVersion z načteného PromptSkills souboru == 10.0.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
@@ -854,7 +854,7 @@ list_entity_images | rate_limit_guard | schema_report | score_breakdown_report |
 sync_agent_entities | get_agent_entities
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 9.0.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 10.0.0 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L sync_agent_entities nebo get_agent_entities chybí:
   - AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
@@ -863,7 +863,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 9.0.0
+4a. SkillsVersion načteného souboru == 10.0.0
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -2904,12 +2904,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 9.0.0
-- SchemaVersion: 9.0.0
-- RuntimeSafetyVersion: 9.0.0
+- GovernanceVersion: 10.0.0
+- SchemaVersion: 10.0.0
+- RuntimeSafetyVersion: 10.0.0
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 9.0.0
-- PromptVersion: 9.0.0
+- ImageGovernanceVersion: 10.0.0
+- PromptVersion: 10.0.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -3159,7 +3159,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 9.2.0
+PromptVersion: 10.0.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -3968,17 +3968,17 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 9.2.0
-SchemaVersion: 9.2.0
-RuntimeSafetyVersion: 9.2.0
+GovernanceVersion: 10.0.0
+SchemaVersion: 10.0.0
+RuntimeSafetyVersion: 10.0.0
 ScoringVersion: 3.0
-ImageGovernanceVersion: 9.2.0
-ProviderGovernanceVersion: 9.3.0
+ImageGovernanceVersion: 10.0.0
+ProviderGovernanceVersion: 10.0.0
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 9.2.0 je governance dokument pro Catalog agenty.
+CatalogPrompt 10.0.0 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -4365,7 +4365,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 9.2.0
+- canonical document body exposes PromptVersion == 10.0.0
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -4683,7 +4683,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 9.2.0
+- PromptVersion: 10.0.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -4742,7 +4742,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 9.2.0) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 10.0.0) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -4752,7 +4752,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 9.2.0
+PromptVersion: 10.0.0
 Generated: 2026-06-09
 
 
