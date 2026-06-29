@@ -2173,13 +2173,13 @@ function createMcpServer() {
   });
 
 
-  wrapTool("sync_agent_entities", "Sync rows from a Drive Sheet into AgentMonitor DB. Call during agent init after sheets_get_values. Upserts new/changed rows, returns diff.", z.object({
+  wrapTool("sync_agent_entities", "Sync rows from a Drive Sheet into AgentMonitor DB. Call during agent init after sheets_get_values. Upserts new/changed rows, returns diff.", {
     agent_name:  z.string().describe("Agent name (matches agent_entities.agent_name)"),
     entity_type: z.enum(["entity","name","url","error"]).describe("Type of entity"),
     rows:        z.array(z.any()).describe("All rows from the Sheet (including header row 0 which is skipped)"),
     value_col:   z.number().optional().describe("0-based column index for the main value (default: 0)"),
     meta_cols:   z.array(z.string()).optional().describe("Column names for extra metadata columns (after value_col)"),
-  }), async ({ agent_name, entity_type, rows, value_col = 0, meta_cols = [] }) => {
+  }, async ({ agent_name, entity_type, rows, value_col = 0, meta_cols = [] }) => {
     if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
     const dataRows = rows.slice(1); // skip header
     let inserted = 0, updated = 0, skipped = 0;
@@ -2201,11 +2201,11 @@ function createMcpServer() {
     return { ok: true, agent_name, entity_type, inserted, updated, skipped, total: dataRows.length };
   });
 
-  wrapTool("get_agent_entities", "Read agent base entities from AgentMonitor DB. Fast — no Drive call needed after sync.", z.object({
+  wrapTool("get_agent_entities", "Read agent base entities from AgentMonitor DB. Fast — no Drive call needed after sync.", {
     agent_name:  z.string().describe("Agent name"),
     entity_type: z.enum(["entity","name","url","error"]).describe("Type of entity"),
     active_only: z.boolean().optional().describe("Return only active=true rows (default: true)"),
-  }), async ({ agent_name, entity_type, active_only = true }) => {
+  }, async ({ agent_name, entity_type, active_only = true }) => {
     if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
     const res = await monPool.query(
       `SELECT id, value, metadata, active, created_at, updated_at
