@@ -637,7 +637,7 @@ function createMcpServer() {
   });
 
 
-  wrapTool("sync_agent_entities", "Sync rows from a Drive Sheet into AgentMonitor DB. Call during agent init after sheets_get_values. Upserts new/changed rows, returns diff.", {
+  wrap("sync_agent_entities", "Sync rows from a Drive Sheet into AgentMonitor DB. Call during agent init after sheets_get_values. Upserts new/changed rows, returns diff.", {
     agent_name:  z.string().describe("Agent name (matches agent_entities.agent_name)"),
     entity_type: z.enum(["entity","name","url","error"]).describe("Type of entity"),
     rows:        z.array(z.any()).describe("All rows from the Sheet (including header row 0 which is skipped)"),
@@ -665,7 +665,7 @@ function createMcpServer() {
     return { ok: true, agent_name, entity_type, inserted, updated, skipped, total: dataRows.length };
   });
 
-  wrapTool("get_agent_entities", "Read agent base entities from AgentMonitor DB. Fast — no Drive call needed after sync.", {
+  wrap("get_agent_entities", "Read agent base entities from AgentMonitor DB. Fast — no Drive call needed after sync.", {
     agent_name:  z.string().describe("Agent name"),
     entity_type: z.enum(["entity","name","url","error"]).describe("Type of entity"),
     active_only: z.boolean().optional().describe("Return only active=true rows (default: true)"),
@@ -684,7 +684,7 @@ function createMcpServer() {
 
   // ── Agent Catalog Tools ─────────────────────────────────────────────────────
 
-  wrapTool("upsert_agent_catalog", "Register or update an agent in the local catalog with its Google SpreadsheetId for automatic QNAP sync.", {
+  wrap("upsert_agent_catalog", "Register or update an agent in the local catalog with its Google SpreadsheetId for automatic QNAP sync.", {
     name:           z.string().describe("Unique agent name"),
     spreadsheet_id: z.string().optional().describe("Google Spreadsheet ID (from URL)"),
     drive_folder:   z.string().optional().describe("Google Drive folder ID (optional)"),
@@ -716,7 +716,7 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, name, spreadsheetId: spreadsheet_id ?? null }) }] };
   });
 
-  wrapTool("get_agent_catalog", "List all agents in the catalog with their SpreadsheetId and last sync time.", {
+  wrap("get_agent_catalog", "List all agents in the catalog with their SpreadsheetId and last sync time.", {
     active_only: z.boolean().optional().describe("Return only active agents (default: false)"),
   }, async ({ active_only = false }) => {
     if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
@@ -730,7 +730,7 @@ function createMcpServer() {
     }
   });
 
-  wrapTool("sync_sheets_now", "Manually trigger immediate sync of all agent catalog spreadsheets to local QNAP storage.", {}, async () => {
+  wrap("sync_sheets_now", "Manually trigger immediate sync of all agent catalog spreadsheets to local QNAP storage.", {}, async () => {
     await syncAgentCatalogSheets();
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, message: "Sync completed — check server logs for details" }) }] };
   });
