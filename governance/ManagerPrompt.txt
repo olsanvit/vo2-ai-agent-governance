@@ -1,11 +1,11 @@
-Agent: 10.0.0 [SPORT_NAME] Data Manager
+Agent: 10.0.1 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.1
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -344,7 +344,7 @@ COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
 Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý tab — jen append.
 Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
-## Readiness Stavy — 10.0.0
+## Readiness Stavy — 10.0.1
 
 - `ready` — vše OK, žádná varování
 - `ready_with_warnings` — funkčně OK, ale jsou ne-blokující problémy:
@@ -359,7 +359,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
 - `blocked` — DB nedostupná, žádné zápisy
 - `not_ready` — kritická chyba při startu
 
-## drive_create_with_parent PROTOKOL — 10.0.0
+## drive_create_with_parent PROTOKOL — 10.0.1
 
   a) Zkusit: create_file(name="...", mimeType="...", parentId="{folderId}")
   b) Pokud parentId není podporováno nebo selže:
@@ -369,7 +369,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
      → NEPOSÍLAT ⚠️ ntfy alert jen kvůli root umístění
   c) Lifecycle souboru je stejný bez ohledu na umístění
 
-## Simplified Startup Sequence 10.0.0
+## Simplified Startup Sequence 10.0.1
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -485,7 +485,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.1)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -798,7 +798,7 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Sheets Agent Data Structure -- 10.0.0
+## Google Sheets Agent Data Structure -- 10.0.1
 
 Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
@@ -829,7 +829,7 @@ Postup pri startu:
    [ChatGPT]    get_spreadsheet_range(spreadsheetId=<id>, range="urls!A:Z")
 4. Pokud master spreadsheet neexistuje: vytvorit (viz First Run Protocol); pokud tab prazdny: preskocit (ne chyba)
 
-## Google Sheets Sports Baseline Catalog -- 10.0.0
+## Google Sheets Sports Baseline Catalog -- 10.0.1
 
 Sport agenti udrzuji katalogovy Sheet v Google Drive.
 Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO), tab "entities"
@@ -888,7 +888,7 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol -- 10.0.0
+## Self-Audit Protocol -- 10.0.1
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -906,14 +906,14 @@ L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("d
 L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 -- DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 10.0.0
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 10.0.1
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 10.0.0
-2b. MCP_VERSION z db_ping == 10.0.0
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 10.0.0
+2a. PromptVersion tohoto promptu == 10.0.1
+2b. MCP_VERSION z db_ping == 10.0.1
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 10.0.1
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
@@ -923,7 +923,7 @@ list_entity_images | rate_limit_guard | schema_report | score_breakdown_report |
 sync_agent_entities | get_agent_entities
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 10.0.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 10.0.1 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L sync_agent_entities nebo get_agent_entities chybí:
   - AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
@@ -932,7 +932,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 10.0.0
+4a. SkillsVersion načteného souboru == 10.0.1
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -976,7 +976,7 @@ BLOK 7 -- DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 10.0.0?
+    → poslední runy mají promptVersion 10.0.1?
 
 BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -1005,7 +1005,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.0.0 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 10.0.1 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3481,7 +3481,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 10.0.0
+           Duration: Xs | Tables: N | Verze: 10.0.1
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3668,7 +3668,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 10.0.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 10.0.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -3843,10 +3843,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 10.0.0
-SchemaVersion: 10.0.0
-RuntimeSafetyVersion: 10.0.0
-PromptVersion: 10.0.0
+GovernanceVersion: 10.0.1
+SchemaVersion: 10.0.1
+RuntimeSafetyVersion: 10.0.1
+PromptVersion: 10.0.1
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4355,7 +4355,7 @@ Platí pro VŠECHNY typy agentů. NIKDY nepoužívat zobrazovaný název jako ca
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
 
-## Per-Agent Files — Canonical Naming (10.0.0)
+## Per-Agent Files — Canonical Naming (10.0.1)
 
 Master spreadsheet: {AgentName} → /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
 Jeden spreadsheet na agenta s taby: entities | names | urls | error (NIKDY separate soubory)
