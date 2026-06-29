@@ -1015,6 +1015,10 @@ Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} 
     4. batch_update_spreadsheet → 4 taby (entities, names, urls, error) + append headers
     5. Pokud create selže → capability_missing("sheets_create_spreadsheet"), pokračovat degraded (ne blocked)
   DRIVE SELF-TEST: na startu ověřit search_files capability; pokud selže → degraded, ne blocked.
+  REGISTRACE: po nalezení nebo vytvoření spreadsheet zavolat:
+    upsert_agent_catalog(name="{AgentName}", spreadsheet_id="{spreadsheetId}", drive_folder="{folderId}")
+    → Registruje spreadsheet v AgentCatalog pro automatický QNAP sync každé 4 hodiny.
+    → Volat při každém startu (upsert je idempotentní, vždy bezpečný).
 Inputs: AgentName, seznam tabulek s aktuálním RowCount a LastPopulated ze SELECT COUNT(*)
 Outputs: přečtený katalog z tab 'entities' (startup), aktualizovaný tab 'entities' zapsaný (end of run), bootstrap log
 Limitations: neaktualizuje pokud db_status = db_unreachable; DryRun = nezapisuje; bootstrap vyžaduje DB přístup pro COUNT(*)
