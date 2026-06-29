@@ -1,10 +1,10 @@
-Agent: 10.0.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 10.0.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.0.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.0.1
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -344,7 +344,7 @@ ntfy:         https://ntfy.vo2info.cz
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH
-MCP Version:  10.0.0
+MCP Version:  10.0.1
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -486,7 +486,7 @@ COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
 Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý tab — jen append.
 Zápis: sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCells, sheetId=3)
 
-## Readiness Stavy — 10.0.0
+## Readiness Stavy — 10.0.1
 
 - `ready` — vše OK, žádná varování
 - `ready_with_warnings` — funkčně OK, ale jsou ne-blokující problémy:
@@ -501,7 +501,7 @@ Zápis: sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCe
 - `blocked` — DB nedostupná, žádné zápisy
 - `not_ready` — kritická chyba při startu
 
-## drive_create_with_parent PROTOKOL — 10.0.0
+## drive_create_with_parent PROTOKOL — 10.0.1
 
   a) Zkusit: create_file(name="...", mimeType="...", parentId="{folderId}")
   b) Pokud parentId není podporováno nebo selže:
@@ -512,7 +512,7 @@ Zápis: sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCe
   c) Lifecycle souboru je stejný bez ohledu na umístění
 
 
-## Simplified Startup Runtime Sequence 10.0.0
+## Simplified Startup Runtime Sequence 10.0.1
 
 Required runtime sequence:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -588,7 +588,7 @@ Required runtime sequence:
     - pokud tab neexistuje nebo je prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.1)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -820,7 +820,7 @@ Pokud AgentSchedules neexistuje nebo je prázdná:
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol — 10.0.0
+## Self-Audit Protocol — 10.0.1
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -838,14 +838,14 @@ L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("d
 L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 — DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 10.0.0
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 10.0.1
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 10.0.0
-2b. MCP_VERSION z db_ping == 10.0.0
-2c. SkillsVersion z načteného PromptSkills souboru == 10.0.0
+2a. PromptVersion tohoto promptu == 10.0.1
+2b. MCP_VERSION z db_ping == 10.0.1
+2c. SkillsVersion z načteného PromptSkills souboru == 10.0.1
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
@@ -855,7 +855,7 @@ list_entity_images | rate_limit_guard | schema_report | score_breakdown_report |
 sync_agent_entities | get_agent_entities
 L send_notification chybí nebo vrací 403:
   - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 10.0.0 → server potřebuje update (governance/server.js)
+  - tool neexistuje = server.js verze < 10.0.1 → server potřebuje update (governance/server.js)
   - log capability_missing("ntfy_auth"), pokračovat
 L sync_agent_entities nebo get_agent_entities chybí:
   - AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
@@ -864,7 +864,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 10.0.0
+4a. SkillsVersion načteného souboru == 10.0.1
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -905,7 +905,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 10.0.0?
+    → poslední runy mají promptVersion 10.0.1?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -933,7 +933,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.0.0 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 10.0.1 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -1696,7 +1696,7 @@ Kdy zvážit separaci:
 - Compliance požadavky (GDPR oddělení PII dat)
 - Různé backup/retention politiky
 
-## Google Drive Master Spreadsheet Governance — 10.0.0
+## Google Drive Master Spreadsheet Governance — 10.0.1
 
 Každý agent udržuje master spreadsheet jako **Google Sheet** v Drive (jeden soubor se 4 taby).
 Baseline entities = DB tabulky, ne individuální záznamy.
@@ -2905,12 +2905,12 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 10.0.0
-- SchemaVersion: 10.0.0
-- RuntimeSafetyVersion: 10.0.0
+- GovernanceVersion: 10.0.1
+- SchemaVersion: 10.0.1
+- RuntimeSafetyVersion: 10.0.1
 - ScoringVersion: 3.0
-- ImageGovernanceVersion: 10.0.0
-- PromptVersion: 10.0.0
+- ImageGovernanceVersion: 10.0.1
+- PromptVersion: 10.0.1
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -3160,7 +3160,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -3969,17 +3969,17 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 10.0.0
-SchemaVersion: 10.0.0
-RuntimeSafetyVersion: 10.0.0
+GovernanceVersion: 10.0.1
+SchemaVersion: 10.0.1
+RuntimeSafetyVersion: 10.0.1
 ScoringVersion: 3.0
-ImageGovernanceVersion: 10.0.0
-ProviderGovernanceVersion: 10.0.0
+ImageGovernanceVersion: 10.0.1
+ProviderGovernanceVersion: 10.0.1
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 10.0.0 je governance dokument pro Catalog agenty.
+CatalogPrompt 10.0.1 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -4366,7 +4366,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 10.0.0
+- canonical document body exposes PromptVersion == 10.0.1
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -4684,7 +4684,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 10.0.0
+- PromptVersion: 10.0.1
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -4743,7 +4743,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 10.0.0) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 10.0.1) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -4753,7 +4753,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 Generated: 2026-06-09
 
 
@@ -5217,7 +5217,7 @@ Povinný postup VŽDY:
 3. Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše
 4. Calendar failure NIKDY automaticky neblokuje datový běh — uvést v reportu.
 
-## Per-Agent Files — Canonical Naming a Folder Assignment (10.0.0)
+## Per-Agent Files — Canonical Naming a Folder Assignment (10.0.1)
 
 Master spreadsheet (jeden soubor se 4 taby):
   {AgentName}  → master spreadsheet s tabumy: entities, names, urls, error
@@ -5245,7 +5245,7 @@ Pravidlo vytvoření souboru (9.2.0):
 Povinné reportování stavu každého souboru:
   exact_file_found | created | creation_failed | used_source | reason
 
-## Canonical File Formats (10.0.0)
+## Canonical File Formats (10.0.1)
 
 Master spreadsheet {AgentName}, tab "entities":
   ImportantScore | TableName | Description | RowCount | LastPopulated
@@ -5259,7 +5259,7 @@ Master spreadsheet {AgentName}, tab "urls":
 Master spreadsheet {AgentName}, tab "error":
   ProblemScore | Category | Description | Timestamp | StepStatus
 
-## Problem Report — Sheets Write Rule (10.0.0)
+## Problem Report — Sheets Write Rule (10.0.1)
 
 Problem report ukládat do tabu 'error' v master spreadsheet {AgentName}:
 - sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCells, sheetId=3)

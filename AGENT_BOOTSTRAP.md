@@ -1,4 +1,4 @@
-# Agent Bootstrap Prompt — v10.0.0
+# Agent Bootstrap Prompt — v10.0.1
 
 Minimální systémový prompt pro nového agenta.
 Operátor ho nastaví v ChatGPT (Edit GPT → Configure → Instructions) — agent si sám načte plný prompt z **Gitea** (fallback: vo2info → GitHub → Drive).
@@ -26,9 +26,9 @@ Drive folder ID (poslední fallback): `1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ`
 ## Pro Catalog agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4] and [TOPIC_5]
+Agent: 10.0.1 Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4] and [TOPIC_5]
 AgentType: Catalog
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -62,9 +62,9 @@ NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo.
 ## Pro Manager agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 [SPORT_NAME] Data Manager
+Agent: 10.0.1 [SPORT_NAME] Data Manager
 AgentType: Manager
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -94,9 +94,9 @@ NIKDY nepoužívat řetězec "AI Managers" jako calendar_id parametr přímo.
 ## Pro Collector agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 [COLLECTION_NAME] Collector
+Agent: 10.0.1 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -118,9 +118,9 @@ MCP konektor: VO2QNAPDBAI (primárně)
 ## Pro Generator agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 [APP_NAME] Image Generator
+Agent: 10.0.1 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -142,9 +142,9 @@ MCP konektor: VO2QNAPDBMAB nebo VO2QNAPDBUSM dle agenta
 ## Pro Checker agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 [APP_NAME] Checker
+Agent: 10.0.1 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -166,9 +166,9 @@ MCP konektor: VO2QNAPDBAI (READ only)
 ## Pro Importer agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.0 [APP_NAME] Importer
+Agent: 10.0.1 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 10.0.0
+PromptVersion: 10.0.1
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -187,7 +187,7 @@ MCP konektor: VO2QNAPDBTE nebo VO2QNAPDBMAB dle agenta
 
 ---
 
-## Security Model (10.0.0)
+## Security Model (10.0.1)
 
 | AgentType | VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM |
 |-----------|-------------|-------------|--------------|--------------|
@@ -202,7 +202,7 @@ Checker NIKDY neprovádí zápisy.
 
 ---
 
-## Calendar IDs (pevné — 10.0.0)
+## Calendar IDs (pevné — 10.0.1)
 
 | AgentType | CALENDAR_ID |
 |-----------|-------------|
@@ -214,7 +214,7 @@ Fallback pokud CALENDAR_ID nezkonfigurováno: `primary`
 
 ---
 
-## Environment Support (10.0.0)
+## Environment Support (10.0.1)
 
 | Environment | Chování |
 |-------------|---------|
@@ -224,7 +224,7 @@ Fallback pokud CALENDAR_ID nezkonfigurováno: `primary`
 
 ---
 
-## Pravidla detekce typu (10.0.0)
+## Pravidla detekce typu (10.0.1)
 
 | AgentName obsahuje | AgentType | Canonical prompt | Drive složka |
 |--------------------|-----------|-----------------|--------------|
@@ -244,7 +244,7 @@ Systémový prompt v ChatGPT je jen bootstrap — VŽDY načíst z Gitea při st
 ## Self-audit / reinicializace — paste do libovolného agenta
 
 ```
-Proveď kompletní self-audit a reinicializaci na PromptVersion 10.0.0.
+Proveď kompletní self-audit a reinicializaci na PromptVersion 10.0.1.
 
 KROK 0 — Načti svůj prompt:
 Gitea base: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
@@ -264,14 +264,14 @@ KROK 3 — Oprav vše co lze, zapiš error tab do master spreadsheetu, pošli nt
 
 ---
 
-## AgentPromptCache — DB tabulka (10.0.0)
+## AgentPromptCache — DB tabulka (10.0.1)
 
 ```sql
 AgentPromptCache (
   Guid          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   AgentType     text NOT NULL,      -- "Catalog", "Manager", "Collector", ...
   PromptFile    text NOT NULL,      -- "CatalogPrompt", "CatalogPromptSkills", ...
-  PromptVersion text NOT NULL,      -- "10.0.0"
+  PromptVersion text NOT NULL,      -- "10.0.1"
   Content       text NOT NULL,
   CachedAt      timestamptz NOT NULL DEFAULT now(),
   UNIQUE(AgentType, PromptFile)
@@ -280,7 +280,7 @@ AgentPromptCache (
 
 ---
 
-## MCP infrastruktura (10.0.0)
+## MCP infrastruktura (10.0.1)
 
 | Konektor | URL | DB |
 |----------|-----|----|
