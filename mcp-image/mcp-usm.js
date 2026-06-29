@@ -27,7 +27,7 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/app/uploads";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "";
-const MCP_VERSION = "9.4.1";
+const MCP_VERSION = "9.4.2";
 const NTFY_BASE_URL = process.env.NTFY_URL || "https://ntfy.vo2info.cz";
 const NTFY_USER = process.env.NTFY_USER || "";
 const NTFY_PASS = process.env.NTFY_PASS || "";
@@ -468,19 +468,20 @@ function createMcpServer() {
     return { ok: true, db: "UniSportManager", version: MCP_VERSION, now: r.rows[0].now, uptime: process.uptime() };
   });
 
-  wrap("send_notification", "Send a notification to ntfy.vo2info.cz.", {
+  wrap("send_notification", "Send a notification to ntfy.vo2info.cz. Use markdown=true for rich formatting (bold, lists, code blocks). Use click for deep-link URL.", {
     topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest"]),
     title:    z.string(),
     message:  z.string(),
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
     tags:     z.array(z.string()).optional(),
-  }, async ({ topic, title, message, priority = "default", tags = [] }) => {
+    markdown: z.boolean().optional(),
+    click:    z.string().optional(),
+  }, async ({ topic, title, message, priority = "default", tags = [], markdown = true, click }) => {
     const ntfyUrl = `${NTFY_BASE_URL}/${topic}`;
-    const body = message;
-    const headers = { "Content-Type": "text/plain; charset=utf-8" };
-    headers["Title"] = title;
-    headers["Priority"] = priority;
-    if (tags && tags.length > 0) headers["Tags"] = tags.join(",");
+    const payload = { title, message, priority, tags, markdown };
+    if (click) payload.click = click;
+    const body = JSON.stringify(payload);
+    const headers = { "Content-Type": "application/json" };
     if (NTFY_USER && NTFY_PASS) {
       headers["Authorization"] = "Basic " + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString("base64");
     }

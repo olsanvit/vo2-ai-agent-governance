@@ -225,11 +225,12 @@ SCHEDULED RUN (v tomto poradi):
 
              FORMÁT VOLÁNÍ (přesně takto, žádný JSON dump do message):
                send_notification(
-                 topic    = "<topic>",          -- agent-runs | agent-alerts | agent-errors | agent-maintenance
+                 topic    = "<topic>",          -- agent-runs | agent-alerts | agent-errors | agent-maintenance | agent-digest
                  title    = "<emoji> <AgentName> — <stav>",   -- max 60 znaků
                  message  = "<krátký text>",    -- max 200 znaků, pipe-separated klíčové hodnoty
                  priority = "<priority>",        -- min | default | high | urgent
-                 tags     = ["<ntfy_tag>"]       -- ntfy tag slova (white_check_mark, warning, rotating_light, wrench)
+                 tags     = ["<ntfy_tag>"],      -- ntfy tag slova (white_check_mark, warning, rotating_light, wrench)
+                 markdown = true                 -- default true, umožňuje **bold**, listy, kód v ntfy apce
                )
              NIKDY: nedávej JSON strukturu, slovníky ani víceřádkový obsah do message
 

@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "9.4.1";
+const MCP_VERSION = "9.4.2";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
@@ -1970,19 +1970,20 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify(SCORE_COLUMNS, null, 2) }] };
   });
 
-  wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz.", {
-    topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "qnap-health", "qnap-alerts"]),
+  wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz. Use markdown=true for rich formatting (bold, lists, code blocks). Use click for deep-link URL.", {
+    topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest", "qnap-health", "qnap-alerts"]),
     title:    z.string(),
     message:  z.string(),
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
     tags:     z.array(z.string()).optional(),
-  }, async ({ topic, title, message, priority = "default", tags = [] }) => {
+    markdown: z.boolean().optional(),
+    click:    z.string().optional(),
+  }, async ({ topic, title, message, priority = "default", tags = [], markdown = true, click }) => {
     const ntfyUrl = `${NTFY_BASE_URL}/${topic}`;
-    const body = message;
-    const headers = { "Content-Type": "text/plain; charset=utf-8" };
-    headers["Title"] = title;
-    headers["Priority"] = priority;
-    if (tags && tags.length > 0) headers["Tags"] = tags.join(",");
+    const payload = { title, message, priority, tags, markdown };
+    if (click) payload.click = click;
+    const body = JSON.stringify(payload);
+    const headers = { "Content-Type": "application/json" };
     if (NTFY_USER && NTFY_PASS) {
       headers["Authorization"] = "Basic " + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString("base64");
     }
