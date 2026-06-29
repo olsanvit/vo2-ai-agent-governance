@@ -1,4 +1,4 @@
-# vo2-governance 9.4.2
+# vo2-governance 10.0.1
 
 Released: 2026-06-29
 
@@ -8,7 +8,7 @@ Oprava ntfy notifikací (síťová izolace) a upgrade formátu `send_notificatio
 
 ## Changes
 
-### 1. mcp-mab.js a mcp-usm.js: v9.4.1 → v9.4.2
+### 1. mcp-mab.js a mcp-usm.js: v9.4.1 → v10.0.1
 
 **`send_notification` — JSON formát s markdown podporou:**
 - Změna z `text/plain` na `Content-Type: application/json`
@@ -32,11 +32,12 @@ Oprava ntfy notifikací (síťová izolace) a upgrade formátu `send_notificatio
 
 ## Files Modified
 
-- `mcp-image/mcp-mab.js` (v9.4.2)
-- `mcp-image/mcp-usm.js` (v9.4.2)
+- `mcp-image/mcp-mab.js` (v10.0.1)
+- `mcp-image/mcp-usm.js` (v10.0.1)
 - `governance/CatalogPrompt.txt`
 - `governance/ManagerPrompt.txt`
-- `VERSION` (9.3.0 → 9.4.2)
+- `server.js` (MCP_VERSION 9.4.0 → 10.0.1)
+- `VERSION` (9.3.0 → 10.0.1)
 
 ## Infrastructure Changes (QNAP only, not in git)
 
