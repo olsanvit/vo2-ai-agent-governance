@@ -127,6 +127,77 @@ async function drivePatch(fileId, params) {
   return res.json();
 }
 
+// ── Agent Catalog Sheets Sync ──────────────────────────────────────────────────
+const SHEETS_SYNC_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const LOCAL_SHEETS_DIR = path.join(UPLOAD_DIR, "sheets");
+const DEFAULT_CATALOG_SHEETS = ["Entities", "Names", "Urls", "Errors"];
+const ENTITY_TYPE_MAP = { Entities: "entity", Names: "name", Urls: "url", Errors: "error" };
+
+async function syncAgentCatalogSheets() {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+  if (!monPool) return;
+
+  let catalogExists = false;
+  try {
+    await monPool.query(`SELECT 1 FROM "AgentCatalog" LIMIT 1`);
+    catalogExists = true;
+  } catch { return; }
+
+  const result = await monPool.query(
+    `SELECT "Name", "SpreadsheetId", "Sheets" FROM "AgentCatalog" WHERE "SpreadsheetId" IS NOT NULL AND "IsActive" = TRUE`
+  );
+  let synced = 0, errors = 0;
+
+  for (const agent of result.rows) {
+    const sheetNames = agent.Sheets
+      ? agent.Sheets.split(",").map(s => s.trim()).filter(Boolean)
+      : DEFAULT_CATALOG_SHEETS;
+    const dir = path.join(LOCAL_SHEETS_DIR, agent.Name);
+    await fs.mkdir(dir, { recursive: true });
+
+    for (const sheetName of sheetNames) {
+      try {
+        const data = await sheetsGet(`spreadsheets/${agent.SpreadsheetId}/values/${encodeURIComponent(sheetName)}`);
+        const values = data.values ?? [];
+        await fs.writeFile(
+          path.join(dir, `${sheetName}.json`),
+          JSON.stringify({ syncedAt: new Date().toISOString(), agentName: agent.Name, sheet: sheetName, rowCount: values.length, values }, null, 2)
+        );
+        const entityType = ENTITY_TYPE_MAP[sheetName];
+        if (entityType && values.length > 1) {
+          for (const row of values.slice(1)) {
+            const value = String(row[0] ?? "").trim();
+            if (!value) continue;
+            await monPool.query(
+              `INSERT INTO agent_entities (agent_name, entity_type, value, updated_at)
+               VALUES ($1,$2,$3,NOW())
+               ON CONFLICT (agent_name, entity_type, value)
+               DO UPDATE SET updated_at=NOW(), active=TRUE`,
+              [agent.Name, entityType, value]
+            ).catch(() => {});
+          }
+        }
+        synced++;
+      } catch (e) {
+        console.error(`[sheets-sync] ${agent.Name}/${sheetName}: ${e.message}`);
+        errors++;
+      }
+    }
+    await monPool.query(`UPDATE "AgentCatalog" SET "LastSyncedAt" = NOW() WHERE "Name" = $1`, [agent.Name]).catch(() => {});
+  }
+  console.log(`[sheets-sync] ${result.rows.length} agents, ${synced} sheets OK, ${errors} errors`);
+}
+
+function startSheetsSyncLoop() {
+  setTimeout(async () => {
+    await syncAgentCatalogSheets().catch(e => console.error("[sheets-sync] Startup sync failed:", e.message));
+    setInterval(
+      () => syncAgentCatalogSheets().catch(e => console.error("[sheets-sync] Periodic sync failed:", e.message)),
+      SHEETS_SYNC_INTERVAL_MS
+    );
+  }, 30_000);
+}
+
 let pgcryptoAvailable = false;
 let citextAvailable = false;
 let postgisAvailable = false;
@@ -2147,6 +2218,60 @@ function createMcpServer() {
   });
 
 
+  // ── Agent Catalog Tools ─────────────────────────────────────────────────────
+
+  wrapTool("upsert_agent_catalog", "Register or update an agent in the local catalog with its Google SpreadsheetId for automatic QNAP sync.", {
+    name:           z.string().describe("Unique agent name"),
+    spreadsheet_id: z.string().optional().describe("Google Spreadsheet ID (from URL)"),
+    drive_folder:   z.string().optional().describe("Google Drive folder ID (optional)"),
+    sheets:         z.string().optional().describe("Comma-separated sheet names to sync (default: Entities,Names,Urls,Errors)"),
+    is_active:      z.boolean().optional().describe("Whether to include in automatic sync (default: true)"),
+  }, async ({ name, spreadsheet_id, drive_folder, sheets, is_active = true }) => {
+    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
+    await monPool.query(`
+      CREATE TABLE IF NOT EXISTS "AgentCatalog" (
+        "Name" TEXT PRIMARY KEY,
+        "SpreadsheetId" TEXT,
+        "DriveFolder" TEXT,
+        "Sheets" TEXT,
+        "LastSyncedAt" TIMESTAMPTZ,
+        "IsActive" BOOLEAN DEFAULT TRUE,
+        "CreatedAt" TIMESTAMPTZ DEFAULT NOW(),
+        "UpdatedAt" TIMESTAMPTZ DEFAULT NOW()
+      )`);
+    const data = { SpreadsheetId: spreadsheet_id ?? null, DriveFolder: drive_folder ?? null, Sheets: sheets ?? null, IsActive: is_active, UpdatedAt: new Date() };
+    await monPool.query(
+      `INSERT INTO "AgentCatalog" ("Name","SpreadsheetId","DriveFolder","Sheets","IsActive","UpdatedAt")
+       VALUES ($1,$2,$3,$4,$5,NOW())
+       ON CONFLICT ("Name") DO UPDATE SET
+         "SpreadsheetId"=COALESCE($2,"AgentCatalog"."SpreadsheetId"),
+         "DriveFolder"=COALESCE($3,"AgentCatalog"."DriveFolder"),
+         "Sheets"=COALESCE($4,"AgentCatalog"."Sheets"),
+         "IsActive"=$5, "UpdatedAt"=NOW()`,
+      [name, spreadsheet_id ?? null, drive_folder ?? null, sheets ?? null, is_active]
+    );
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, name, spreadsheetId: spreadsheet_id ?? null }) }] };
+  });
+
+  wrapTool("get_agent_catalog", "List all agents in the catalog with their SpreadsheetId and last sync time.", {
+    active_only: z.boolean().optional().describe("Return only active agents (default: false)"),
+  }, async ({ active_only = false }) => {
+    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
+    try {
+      const res = await monPool.query(
+        `SELECT * FROM "AgentCatalog" ${active_only ? 'WHERE "IsActive" = TRUE' : ''} ORDER BY "Name"`
+      );
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: res.rowCount, agents: res.rows }) }] };
+    } catch {
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, agents: [], note: "AgentCatalog table does not exist yet" }) }] };
+    }
+  });
+
+  wrapTool("sync_sheets_now", "Manually trigger immediate sync of all agent catalog spreadsheets to local QNAP storage.", {}, async () => {
+    await syncAgentCatalogSheets();
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, message: "Sync completed — check server logs for details" }) }] };
+  });
+
   return server;
 }
 
@@ -2265,6 +2390,7 @@ async function initDbWithRetry(attempt = 1) {
 }
 
 initDbWithRetry()
+  .then(() => startSheetsSyncLoop())
   .catch(err => {
     console.error("Unexpected error in initDbWithRetry:", err);
   });

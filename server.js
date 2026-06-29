@@ -105,6 +105,73 @@ async function drivePatch(fileId, params) {
   return res.json();
 }
 
+// ── Agent Catalog Sheets Sync ──────────────────────────────────────────────────
+const SHEETS_SYNC_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const LOCAL_SHEETS_DIR = path.join(UPLOAD_DIR, "sheets");
+const DEFAULT_CATALOG_SHEETS = ["Entities", "Names", "Urls", "Errors"];
+const ENTITY_TYPE_MAP = { Entities: "entity", Names: "name", Urls: "url", Errors: "error" };
+
+async function syncAgentCatalogSheets() {
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+  const exists = await tableExists("AgentCatalog");
+  if (!exists) return;
+
+  const result = await pool.query(
+    `SELECT "Name", "SpreadsheetId", "Sheets" FROM "AgentCatalog" WHERE "SpreadsheetId" IS NOT NULL AND "IsActive" = TRUE`
+  );
+  let synced = 0, errors = 0;
+
+  for (const agent of result.rows) {
+    const sheetNames = agent.Sheets
+      ? agent.Sheets.split(",").map(s => s.trim()).filter(Boolean)
+      : DEFAULT_CATALOG_SHEETS;
+    const dir = path.join(LOCAL_SHEETS_DIR, agent.Name);
+    await fs.mkdir(dir, { recursive: true });
+
+    for (const sheetName of sheetNames) {
+      try {
+        const data = await sheetsGet(`spreadsheets/${agent.SpreadsheetId}/values/${encodeURIComponent(sheetName)}`);
+        const values = data.values ?? [];
+        await fs.writeFile(
+          path.join(dir, `${sheetName}.json`),
+          JSON.stringify({ syncedAt: new Date().toISOString(), agentName: agent.Name, sheet: sheetName, rowCount: values.length, values }, null, 2)
+        );
+        const entityType = ENTITY_TYPE_MAP[sheetName];
+        if (entityType && values.length > 1) {
+          await ensureTable("AgentEntities");
+          await ensureColumnsInternal("AgentEntities", {
+            AgentName: "", EntityType: "", Value: "", ExtraData: {}, SyncedAt: new Date().toISOString()
+          });
+          for (const row of values.slice(1)) {
+            const value = String(row[0] ?? "").trim();
+            if (!value) continue;
+            await upsertRecord("AgentEntities",
+              { AgentName: agent.Name, EntityType: entityType, Value: value },
+              { AgentName: agent.Name, EntityType: entityType, Value: value, SyncedAt: new Date().toISOString() }
+            );
+          }
+        }
+        synced++;
+      } catch (e) {
+        console.error(`[sheets-sync] ${agent.Name}/${sheetName}: ${e.message}`);
+        errors++;
+      }
+    }
+    await pool.query(`UPDATE "AgentCatalog" SET "LastSyncedAt" = NOW() WHERE "Name" = $1`, [agent.Name]).catch(() => {});
+  }
+  console.log(`[sheets-sync] ${result.rows.length} agents, ${synced} sheets OK, ${errors} errors`);
+}
+
+function startSheetsSyncLoop() {
+  setTimeout(async () => {
+    await syncAgentCatalogSheets().catch(e => console.error("[sheets-sync] Startup sync failed:", e.message));
+    setInterval(
+      () => syncAgentCatalogSheets().catch(e => console.error("[sheets-sync] Periodic sync failed:", e.message)),
+      SHEETS_SYNC_INTERVAL_MS
+    );
+  }, 30_000);
+}
+
 let pgcryptoAvailable = false;
 let citextAvailable = false;
 let postgisAvailable = false;
@@ -2050,6 +2117,43 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, spreadsheetId, title, folderId: folderId ?? null, url: `https://docs.google.com/spreadsheets/d/${spreadsheetId}` }, null, 2) }] };
   });
 
+  // ── Agent Catalog Tools ─────────────────────────────────────────────────────
+
+  wrapTool("upsert_agent_catalog", "Register or update an agent in the local catalog with its Google SpreadsheetId for automatic QNAP sync.", {
+    name:           z.string().describe("Unique agent name"),
+    spreadsheet_id: z.string().optional().describe("Google Spreadsheet ID (from URL)"),
+    drive_folder:   z.string().optional().describe("Google Drive folder ID (optional)"),
+    sheets:         z.string().optional().describe("Comma-separated sheet names to sync (default: Entities,Names,Urls,Errors)"),
+    is_active:      z.boolean().optional().describe("Whether to include in automatic sync (default: true)"),
+  }, async ({ name, spreadsheet_id, drive_folder, sheets, is_active = true }) => {
+    await ensureTable("AgentCatalog");
+    await ensureColumnsInternal("AgentCatalog", {
+      Name: "", SpreadsheetId: "", DriveFolder: "", Sheets: "",
+      LastSyncedAt: new Date().toISOString(), IsActive: true,
+    });
+    const data = { Name: name, IsActive: is_active };
+    if (spreadsheet_id !== undefined) data.SpreadsheetId = spreadsheet_id;
+    if (drive_folder !== undefined) data.DriveFolder = drive_folder;
+    if (sheets !== undefined) data.Sheets = sheets;
+    await upsertRecord("AgentCatalog", { Name: name }, data);
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, name, spreadsheetId: spreadsheet_id ?? null }) }] };
+  });
+
+  wrapTool("get_agent_catalog", "List all agents in the catalog with their SpreadsheetId and last sync time.", {
+    active_only: z.boolean().optional().describe("Return only active agents (default: false)"),
+  }, async ({ active_only = false }) => {
+    const exists = await tableExists("AgentCatalog");
+    if (!exists) return { content: [{ type: "text", text: JSON.stringify({ ok: true, agents: [] }) }] };
+    const criteria = active_only ? { IsActive: true } : {};
+    const rows = await findRecords("AgentCatalog", criteria, 200);
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: rows.length, agents: rows }) }] };
+  });
+
+  wrapTool("sync_sheets_now", "Manually trigger immediate sync of all agent catalog spreadsheets to local QNAP storage.", {}, async () => {
+    await syncAgentCatalogSheets();
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, message: "Sync completed — check server logs for details" }) }] };
+  });
+
   // ── Agent Monitor Tools (9.4.0) ─────────────────────────────────────────────
 
   wrapTool("sync_agent_entities", "Sync entity rows into AgentEntities table (AgentMonitor DB cache). rows is a 2D array (row 0 = header). value_col is 0-based index of the main entity value. meta_cols are additional column names to store in ExtraData.", {
@@ -2279,6 +2383,7 @@ async function initDbWithRetry(attempt = 1) {
 }
 
 initDbWithRetry()
+  .then(() => startSheetsSyncLoop())
   .catch(err => {
     console.error("Unexpected error in initDbWithRetry:", err);
   });
