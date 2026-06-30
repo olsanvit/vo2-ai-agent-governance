@@ -24,8 +24,7 @@ Potvrď tyto změny:
 4. Aktualizuj si ikonu podle svého jména a tématu
 5. Ověř existenci svého master spreadsheet — pokud chybí, vytvoř ho:
    • Jeden master spreadsheet {AgentName} ve složce odpovídající tvému AgentType:
-     - Catalog  → Catalogs složka  (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
-     - Manager  → Managers složka  (ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+     - Catalog/Manager → Agents složka (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
      - Collector → Collectors složka (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
      - Checker/Generator/Importer → příslušná složka dle AgentType
    • Spreadsheet musí mít 7 tabů: entities | names | urls | error | todo | notes | config

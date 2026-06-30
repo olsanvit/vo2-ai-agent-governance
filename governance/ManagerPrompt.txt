@@ -59,7 +59,7 @@ SCHEDULED RUN (v tomto poradi):
 10. SEASON LIFECYCLE -> nova/ukoncena sezona?
 11. BACKFILL -> max 100/tabulka (vcetne MatchConditions, MatchBroadcast, EntityLocalizations)
 12. VIEWS REFRESH -> standings, top scorers, form, H2H
-13. MANAGERS UPDATE -> tab 'entities' v master spreadsheet {AgentName} v /Prompts/Managers/
+13. MANAGERS UPDATE -> tab 'entities' v master spreadsheet {AgentName} v /Prompts/Agents/
 13a.DIGEST CHECK -> kazdych 7 runu/pondeli = weekly; kazdych 30 dni = monthly
 14. RUN REPORT → upsert_record("AgentRunReports",...)
 14a.SCHEDULE UPDATE → AgentSchedules upsert (skip if DryRun) — NON-BLOCKING
@@ -144,7 +144,7 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
   pokud tool nevidíš: refreshni konektor v ChatGPT — NIKDY nenahrazovat JobQueue ani přímým HTTP
 - Ikona agenta: při selfUpdate vygeneruj návrh ikony odpovídající svému jménu a tématu (DALL-E nebo
   popis pro operátora) a připomeň: "Aktualizujte ikonu agenta v GPT Editoru (Edit GPT → Configure → Picture)"
-- error tab: součástí master spreadsheet {AgentName} (folderId: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO); lifecycle shodný s ostatními taby master spreadsheet
+- error tab: součástí master spreadsheet {AgentName} (folderId: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd); lifecycle shodný s ostatními taby master spreadsheet
 - Nikdy hard-delete -- vzdy soft delete (IsDeleted = true)
 - Vzdy ulozit run report -- i pri plnem selhani; pokud DB down: zaznamenat v textu + ntfy
 - Max 3 ntfy/run -- nespamovat
@@ -326,7 +326,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 | Soubor | Složka | CREATE | READ | WRITE |
 |--------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/{AgentType}s/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName} (master spreadsheet) | /Prompts/Managers/ | ✅ při prvním běhu | startup: search_files → sheets_get_values | ✅ tabs: entities/names/urls/error/todo/notes/config |
+| {AgentName} (master spreadsheet) | /Prompts/Agents/ | ✅ při prvním běhu | startup: search_files → sheets_get_values | ✅ tabs: entities/names/urls/error/todo/notes/config |
 | tab "entities" v {AgentName} | master spreadsheet | součást create master | startup: sheets_get_values(range="entities") | ✅ sheets_append_rows nové; sheets_update_row pro RowCount + LastPopulated |
 | tab "names" v {AgentName} | master spreadsheet | součást create master | startup: sheets_get_values(range="names") | ✅ sheets_update_row coverage counts; jen operátor přidává entity |
 | tab "urls" v {AgentName} | master spreadsheet | součást create master | startup: sheets_get_values(range="urls") | ✅ sheets_append_rows nové URLs (max 500 řádků); sheets_update_row Status |
@@ -418,15 +418,15 @@ Povinné kroky v tomto pořadí:
    - agent musi mit aktivnich ASPON 11 skills
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
    - pokud ukol neni pokryt: navrhnout novy skill (Drive/Gitea dle workflow operátora)
-8. Nacist master spreadsheet {AgentName} z /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO) — tab "entities"
-   [Claude MCP] search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → <spreadsheetId>
+8. Nacist master spreadsheet {AgentName} z /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) — tab "entities"
+   [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → <spreadsheetId>
                 sheets_get_values(spreadsheetId=<spreadsheetId>, range="entities") → seznam vlastnich DB tabulek agenta
                 sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<výstup>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
-   [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range
+   [ChatGPT]    search(special_filter_query_str="'10AjWPydQjqNKePABVa33GvDZ9JN7xnGd' in parents") → get_spreadsheet_range
    - spreadsheetId NIKDY neukládat natvrdo — vždy search_files znovu (uložené ID → 404 po re-upload)
    - sync propíše nové řádky přidané operátorem v Sheetu do AgentMonitor DB
    - pokud sheets_get_values vrátí 403 (service account nemá přístup ke stávajícímu spreadsheet):
-     → vytvoř nový: sheets_create_spreadsheet(title="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+     → vytvoř nový: sheets_create_spreadsheet(title="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
      → přidej 7 tabů: entities | names | urls | error | todo | notes | config (s headers)
      → upsert_record("AgentCatalog", {Name: "{AgentName}"}, {SpreadsheetId: <nové ID>})
      → ntfy (topic: agent-alerts): "{AgentName} ⚠️ master sheet 403 → nový vytvořen {newSpreadsheetId}"
@@ -435,7 +435,7 @@ Povinné kroky v tomto pořadí:
      a) run_select_sql("SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name")
      b) pro každou tabulku: run_select_sql("SELECT COUNT(*) as cnt, MAX(UpdatedAt) as last FROM {TableName}")
      c) přiřadit výchozí ImportantScore dle defaultní tabulky z Ch 1 (Matches=100, Teams=100, atd.; neznámé = 50)
-     [Claude MCP] d) sheets_create_spreadsheet(title="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+     [Claude MCP] d) sheets_create_spreadsheet(title="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
                      batch_update_spreadsheet(requests=[
                        {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                        {addSheet: {properties: {title: "names"}}},
@@ -453,7 +453,7 @@ Povinné kroky v tomto pořadí:
                      sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
                      sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
                      sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<nové řádky vč. hlavičky>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
-     [ChatGPT]    d) create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+     [ChatGPT]    d) create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
                      batch_update_spreadsheet(requests=[
                        {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                        {addSheet: {properties: {title: "names"}}},
@@ -472,17 +472,17 @@ Povinné kroky v tomto pořadí:
      [Claude MCP] → sheets_append_rows (nové) / sheets_find_row + sheets_update_row (aktualizace)
      [ChatGPT]    → batch_update_spreadsheet(appendCells) / search_spreadsheet_rows + batch_update_spreadsheet(updateCells)
    DŮLEŽITÉ: načíst PŘED Baseline-25 check (krok 9)
-8a. Načíst tab 'names' z master spreadsheet {AgentName} v /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-    [Claude MCP] search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → <spreadsheetId> (master spreadsheet)
+8a. Načíst tab 'names' z master spreadsheet {AgentName} v /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
+    [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → <spreadsheetId> (master spreadsheet)
                  sheets_get_values(spreadsheetId=<spreadsheetId>, range="names") → seznam týmů/soutěží/hráčů k prioritnímu dohledání (Score 90+)
                  sync_agent_entities(agent_name="{AgentName}", entity_type="name", rows=<výstup>, value_col=0, meta_cols=["coverage","tables","lastProcessed"])
-    [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range(range="names!A:Z") (tab 'names' v master spreadsheet {AgentName})
+    [ChatGPT]    search(special_filter_query_str="'10AjWPydQjqNKePABVa33GvDZ9JN7xnGd' in parents") → get_spreadsheet_range(range="names!A:Z") (tab 'names' v master spreadsheet {AgentName})
     - pokud tab prázdný nebo neexistuje: přeskočit tiše (ne chyba); sync_agent_entities nevolat
-8b. Načíst tab 'urls' z master spreadsheet {AgentName} v /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-    [Claude MCP] search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → <spreadsheetId> (master spreadsheet)
+8b. Načíst tab 'urls' z master spreadsheet {AgentName} v /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
+    [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → <spreadsheetId> (master spreadsheet)
                  sheets_get_values(spreadsheetId=<spreadsheetId>, range="urls") → seznam URL k projití před standardním scrapingem
                  sync_agent_entities(agent_name="{AgentName}", entity_type="url", rows=<výstup>, value_col=0, meta_cols=["SourceTier","ReliabilityScore","EntityType","LastChecked","Status"])
-    [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range(range="urls!A:Z") (tab 'urls' v master spreadsheet {AgentName})
+    [ChatGPT]    search(special_filter_query_str="'10AjWPydQjqNKePABVa33GvDZ9JN7xnGd' in parents") → get_spreadsheet_range(range="urls!A:Z") (tab 'urls' v master spreadsheet {AgentName})
     - pokud tab prázdný nebo neexistuje: přeskočit tiše (ne chyba); sync_agent_entities nevolat
 8b2. Načíst tab 'todo' z master spreadsheet {AgentName} — instrukce od operátora
     [Claude MCP] sheets_get_values(spreadsheetId=<master id>, range="todo")
@@ -608,7 +608,7 @@ Postup při prvním runu:
 3. Ověřit sport-specifické tabulky: Competitions, Seasons, Teams, Players, Matches
 4. Vytvořit Google Sheets pokud neexistují (nejdříve ověřit existenci — nevytvářet duplicity):
    [Claude MCP]
-   sheets_create_spreadsheet(title="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+   sheets_create_spreadsheet(title="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
    batch_update_spreadsheet(requests=[
      {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
      {addSheet: {properties: {title: "names"}}},
@@ -626,7 +626,7 @@ Postup při prvním runu:
    sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
    sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
    [ChatGPT]
-   create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+   create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
    batch_update_spreadsheet(requests=[
      {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
      {addSheet: {properties: {title: "names"}}},
@@ -858,7 +858,7 @@ Pokud capability neni potvrzena:
 Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
 - Managers/{AgentName} (master spreadsheet) -- jeden spreadsheet se 7 taby pro všechny per-agent data
-  Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
+  Drive folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd
   Tab "entities": ImportantScore | TableName | Description | RowCount | LastPopulated
     Číst: [Claude MCP] search_files → sheets_get_values(range="entities") / [ChatGPT] search → get_spreadsheet_range(range="entities!A:Z")
     Přidat: [Claude MCP] sheets_append_rows(range="entities") / [ChatGPT] batch_update_spreadsheet(appendCells, sheetId=0)
@@ -882,8 +882,8 @@ Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
 Postup pri startu:
 1. Nacist master spreadsheet {AgentName} z Managers slozky -> prehled vlastnich DB tabulek agenta (tab "entities")
-   [Claude MCP] search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → sheets_get_values(range="entities")
-   [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → get_spreadsheet_range(range="entities!A:Z")
+   [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → sheets_get_values(range="entities")
+   [ChatGPT]    search(special_filter_query_str="'10AjWPydQjqNKePABVa33GvDZ9JN7xnGd' in parents") → get_spreadsheet_range(range="entities!A:Z")
 2. Nacist tab "names" z master spreadsheet -> pridat do priority queue (Score 90+)
    [Claude MCP] sheets_get_values(spreadsheetId=<id>, range="names")
    [ChatGPT]    get_spreadsheet_range(spreadsheetId=<id>, range="names!A:Z")
@@ -897,7 +897,7 @@ Postup pri startu:
 ## Google Sheets Sports Baseline Catalog -- 10.0.3
 
 Sport agenti udrzuji katalogovy Sheet v Google Drive.
-Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO), tab "entities"
+Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Agents/ (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd), tab "entities"
 
 COLUMNS: ImportantScore | TableName | Description | RowCount | LastPopulated
 Řádek 1: záhlaví. Data od řádku 2. ImportantScore ma 3 desetinna mista (napr. 91.156, 74.320, 50.000)
@@ -915,7 +915,7 @@ RowCount = 0 pro ImportantScore < 70  -> note v highlights, zadny blok
 
 Lifecycle rules:
 - pokud master spreadsheet neexistuje: vytvorit po prvnim uspesnem runu:
-  [Claude MCP] sheets_create_spreadsheet(title="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+  [Claude MCP] sheets_create_spreadsheet(title="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
                batch_update_spreadsheet(requests=[
                  {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                  {addSheet: {properties: {title: "names"}}},
@@ -932,7 +932,7 @@ Lifecycle rules:
                + sheets_append_rows(range="todo",     rows=[["Status","Priority","Created","Category","Text","Result"]])
                + sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
                + sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
-  [ChatGPT]    create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
+  [ChatGPT]    create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
                batch_update_spreadsheet(requests=[
                  {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                  {addSheet: {properties: {title: "names"}}},
@@ -1014,8 +1014,8 @@ BLOK 4 -- Skills:
 L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále nelze → capability_missing("skills_file_unavailable")
 
 BLOK 5 -- Google Sheets + Drive soubory + AgentMonitor sync:
-5. Master spreadsheet {AgentName} v /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-    [Claude MCP] search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → existuje?
+5. Master spreadsheet {AgentName} v /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
+    [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → existuje?
                  → tab "entities": sheets_get_values(range="entities") → záhlaví: ImportantScore|TableName|Description|RowCount|LastPopulated
                    existuje + má data: sync_agent_entities(agent_name, entity_type="entity", rows=<výstup>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
                  → tab "names": sheets_get_values(range="names") → záhlaví: EntityName|coverage|tables|lastProcessed
@@ -1024,7 +1024,7 @@ BLOK 5 -- Google Sheets + Drive soubory + AgentMonitor sync:
                    existuje + má data: sync_agent_entities(agent_name, entity_type="url", rows=<výstup>, value_col=0, meta_cols=["SourceTier","ReliabilityScore","EntityType","LastChecked","Status"])
                  → tab "error": sheets_get_values(range="error") → přečíst pokud existuje, ověřit aktuálnost problémů
                  L master spreadsheet chybí → vytvořit (viz First Run Protocol): sheets_create_spreadsheet + batch_update_spreadsheet (7 tabů) + záhlaví
-    [ChatGPT]    search(special_filter_query_str="'1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO' in parents") → existuje?
+    [ChatGPT]    search(special_filter_query_str="'10AjWPydQjqNKePABVa33GvDZ9JN7xnGd' in parents") → existuje?
                  get_spreadsheet_range(range="entities!A:Z") → zkontrolovat záhlaví tab entities
                  get_spreadsheet_range(range="names!A:Z") → zkontrolovat záhlaví tab names
                  get_spreadsheet_range(range="urls!A:Z") → zkontrolovat záhlaví tab urls
@@ -1075,7 +1075,7 @@ Výstup self-auditu + oprava:
 - upsert_record("AgentRunReports", ..., {runMode="self_audit", success=..., highlights=[], errors=[]})
 - errors > 0:
     → opravit vše co lze opravit (Drive soubory, schema mezery, chybějící systémové tabulky, selfUpdate)
-    → zapsat problem report do tabu 'error' v master spreadsheet {AgentName} (1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO) pro chyby mimo dosah agenta
+    → zapsat problem report do tabu 'error' v master spreadsheet {AgentName} (10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) pro chyby mimo dosah agenta
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
@@ -1141,7 +1141,7 @@ Run status markers:
 
 Pokud run NESKONČIL úspěšně (success = false), agent MUSÍ zapsat problem report do tabu "error" v master spreadsheet.
 
-Master spreadsheet: {AgentName} ve složce /Prompts/Managers/ (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+Master spreadsheet: {AgentName} ve složce /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 Tab: "error" — append-only; max 100 řádků
 
 Kdy zapsat:
@@ -1178,7 +1178,7 @@ NEDOKONČENÉ KROKY:
 
 Postup:
 1. Sestavit řádek záznamu podle formátu výše (jeden řádek per problém)
-2. search_files(query="{AgentName}", folderId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO") → zjistit spreadsheetId master spreadsheet
+2. search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → zjistit spreadsheetId master spreadsheet
 3. Pokud spreadsheet existuje:
    [Claude MCP] sheets_append_rows(spreadsheetId=<id>, range="error", rows=[<data>])
    [ChatGPT]    batch_update_spreadsheet(requests=[{appendCells:{sheetId:3,rows:[<data>],fields:"userEnteredValue"}}])
@@ -1343,7 +1343,7 @@ Automaticke znovuotevreni exhausted datumu:
     L tabulka write selže → log do errors[], přeskočit tabulku, pokračovat další
 15. Views refresh → standings, top scorers, form, H2H
     L view refresh selže → log warning do errors[], pokračovat (views nejsou blocker runu)
-16. Managers update → Drive /Prompts/Managers/{AgentName} (master spreadsheet), tab 'entities' (folder: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+16. Managers update → Drive /Prompts/Agents/{AgentName} (master spreadsheet), tab 'entities' (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
     L Drive nedostupný → přeskočit, log capability_missing("drive"), pokračovat
 16a.Weekly/monthly digest check:
     Počítání runů pro digest trigger:
@@ -2178,7 +2178,7 @@ Postup:
 3. Použít smart_upsert_batch (max MAX_BATCH_SIZE per call)
 4. Pro > 10 000 záznamů: rozdělit na dávky, ukládat cursor do AgentTableSync
 5. Logovat progress: "Import: {N}/{total} zpracováno"
-6. Po dokončení: aktualizovat tab 'entities' v master spreadsheet {AgentName} v Drive (/Prompts/Managers/)
+6. Po dokončení: aktualizovat tab 'entities' v master spreadsheet {AgentName} v Drive (/Prompts/Agents/)
 7. Ntfy: send_notification(topic="agent-maintenance", title="Batch import dokončen")
 
 Pravidla:
@@ -2820,19 +2820,19 @@ Manager agent má v Google Drive /Prompts/ přístup k těmto složkám:
 Kořenová složka: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
 Podsložky:
-- /Prompts/Managers/          — Prompt soubory pro Manager agenty
-- /Prompts/Managers/{AgentName} (master spreadsheet, tab 'entities') — Seznam vlastních DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
+- /Prompts/Agents/          — Prompt soubory pro Manager agenty
+- /Prompts/Agents/{AgentName} (master spreadsheet, tab 'entities') — Seznam vlastních DB tabulek agenta (ImportantScore, RowCount, LastPopulated)
                                 Format: ImportantScore|TableName|RowCount|LastPopulated, jedna tabulka na řádek
-- /Prompts/Catalogs/{AgentName} (master spreadsheet, tab 'entities') — Katalogový soubor tabulek Catalog agenta
+- /Prompts/Agents/{AgentName} (master spreadsheet, tab 'entities') — Katalogový soubor tabulek Catalog agenta
                                 Format: ImportantScore|TableName|RowCount|LastPopulated
-- /Prompts/Managers/{AgentName} (master spreadsheet, tab 'names') — Task queue pro entity names (Manager i Catalog agenti, každý má svůj master spreadsheet)
-- /Prompts/Managers/{AgentName} (master spreadsheet, tab 'urls') — Task queue pro URL k projití (Manager i Catalog agenti, každý má svůj master spreadsheet)
+- /Prompts/Agents/{AgentName} (master spreadsheet, tab 'names') — Task queue pro entity names (Manager i Catalog agenti, každý má svůj master spreadsheet)
+- /Prompts/Agents/{AgentName} (master spreadsheet, tab 'urls') — Task queue pro URL k projití (Manager i Catalog agenti, každý má svůj master spreadsheet)
 
 Použití při běhu Manager agenta:
-- Načíst master spreadsheet {AgentName} z /Prompts/Managers/, tab 'entities' → přehled vlastních DB tabulek agenta
+- Načíst master spreadsheet {AgentName} z /Prompts/Agents/, tab 'entities' → přehled vlastních DB tabulek agenta
 - Číst run reporty (run_select_sql na AgentRunReports)
 - Zapisovat úkoly do Names/Urls souborů Catalog agentů (append-only)
-- Aktualizovat tab 'entities' v master spreadsheet {AgentName} (/Prompts/Managers/) po každém úspěšném runu
+- Aktualizovat tab 'entities' v master spreadsheet {AgentName} (/Prompts/Agents/) po každém úspěšném runu
 
 ## Job Queue System
 
@@ -2891,8 +2891,8 @@ Co Manager agent dělá:
 7. Vytvářet cross-agent calendar eventy
 
 Cross-agent task assignment (Manager → Catalog):
-- Manager zapíše název do tabu 'names' v master spreadsheet {CatalogAgentName} (/Prompts/Managers/)
-- Manager zapíše URL do tabu 'urls' v master spreadsheet {CatalogAgentName} (/Prompts/Managers/)
+- Manager zapíše název do tabu 'names' v master spreadsheet {CatalogAgentName} (/Prompts/Agents/)
+- Manager zapíše URL do tabu 'urls' v master spreadsheet {CatalogAgentName} (/Prompts/Agents/)
 - Catalog agent zpracuje soubory při svém příštím běhu (Score 90+)
 - Po zpracování: Catalog agent přesune položky do bloku "# PROCESSED"
 
@@ -2915,7 +2915,7 @@ Names soubor (task queue pro entity names):
 
 Urls soubor (task queue pro URL k navštívení):
 - Plní: operátor (manuálně) + agent (auto-discovery Tier A/B zdrojů)
-- Max 500 položek | tab 'urls' v master spreadsheet {AgentName} (/Prompts/Managers/, ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+- Max 500 položek | tab 'urls' v master spreadsheet {AgentName} (/Prompts/Agents/, ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 
 Formát: URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
 Příklady:
@@ -4273,7 +4273,7 @@ CHANGELOG
 
 ## 9.4.8 (2026-06-18)
 - Architektura: 4 oddělené Google Sheet soubory → 1 master spreadsheet {AgentName} s taby entities/names/urls/error/todo/notes/config
-- Všechny search_files/create operace přesměrovány na master spreadsheet v Managers složce (ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+- Všechny search_files/create operace přesměrovány na master spreadsheet v Agents složce (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 - Sheet1 range → specifické taby: "entities", "names", "urls", "error"
 - BLOK 5 self-auditu konsolidován: 5a/5b/5c/5e → jeden bod o master spreadsheet
 - Per-agent Files tabulka: 4 separate soubory → 7 tabů v master spreadsheet
@@ -4431,7 +4431,7 @@ Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
 
 ## Per-Agent Files — Canonical Naming (10.0.3)
 
-Master spreadsheet: {AgentName} → /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
+Master spreadsheet: {AgentName} → /Prompts/Agents/ (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 Jeden spreadsheet na agenta se 7 taby: entities | names | urls | error | todo | notes | config (NIKDY separate soubory)
 
 Canonical tab formats:
@@ -4446,7 +4446,7 @@ NEVYTVÁŘET samostatné soubory pro names/urls/error — vždy taby v master sp
 
 ## Problem Report — Drive Write Rule (9.2.0)
 
-Problem report do tabu 'error' v master spreadsheet {AgentName} (/Prompts/Managers/, ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO) — append pomocí sheets_append_rows.
+Problem report do tabu 'error' v master spreadsheet {AgentName} (/Prompts/Agents/, ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) — append pomocí sheets_append_rows.
 Pokud Drive write není potvrzen: neclaimovat uložení.
 Pokud DB funguje: uložit problém do AgentRunReports.Metadata (i při Drive selhání).
 Fallback: záloha do AgentRunReports.Metadata — NIKDY samostatný soubor mimo master spreadsheet.

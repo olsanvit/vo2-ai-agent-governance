@@ -1001,17 +1001,17 @@ Limitations: max 10 000 řádků per tabulka; nespouštět pokud db_status != db
 
 ## baseline-catalog-file-manager
 Task types: baseline catalog, master spreadsheet, tab 'entities', RowCount, LastPopulated aktualizace, bootstrap
-Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} v Catalogs složce
-  (folder ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH). Načítá přehled tabulek
+Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} v Agents složce
+  (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd). Načítá přehled tabulek
   (ImportantScore, RowCount, LastPopulated) na startu pro prioritizaci. Aktualizuje na konci runu.
   Formát řádku (tab 'entities'): ImportantScore | TableName | Description | RowCount | LastPopulated
-  Hledání: search_files(query="{AgentName}", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+  Hledání: search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
   Čtení: get_spreadsheet_range(spreadsheetId, range="entities!A:Z")
   Zápis: sheets_append_rows(spreadsheetId, range="entities", rows=[...])
   BOOTSTRAP: pokud master spreadsheet neexistuje → vytvořit automaticky:
     1. SELECT tablename, COUNT(*) FROM pg_tables pro všechny public tabulky v agent DB
     2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
-    3. sheets_create_spreadsheet(title="{AgentName}", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+    3. sheets_create_spreadsheet(title="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
     4. batch_update_spreadsheet → 7 tabů (entities, names, urls, error, todo, notes, config) + append headers
     5. Pokud create selže → capability_missing("sheets_create_spreadsheet"), pokračovat degraded (ne blocked)
   DRIVE SELF-TEST: na startu ověřit search_files capability; pokud selže → degraded, ne blocked.
@@ -1083,7 +1083,7 @@ Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable
 
 Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ tab 'error', NIKDY samostatný soubor):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus
-  Master spreadsheet: {AgentName} v Catalogs složce (ID: 1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH)
+  Master spreadsheet: {AgentName} v Agents složce (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 Tab 'error' je součástí master spreadsheet — vytváří se při BOOTSTRAP spolu s ostatními taby.
 Pokud master spreadsheet existuje: přečíst tab 'error' při startu a ověřit aktuálnost problémů.
   get_spreadsheet_range(spreadsheetId, range="error!A:Z")
