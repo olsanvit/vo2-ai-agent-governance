@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 10.0.2
+TemplateVersion: 10.0.3
 LastUpdated: 2026-06-18
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 10.0.2
+MANUAL SELFUPDATE TEMPLATE — governance 10.0.3
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,7 +11,7 @@ Zdroje jsou v pořadí priority včetně vo2info.cz fallbacku.
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 10.0.2. Proveď selfUpdate — zdroje v pořadí priority:
+Aktualizuj se na governance 10.0.3. Proveď selfUpdate — zdroje v pořadí priority:
 1. Gitea: http://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při Gitea 403)
 3. GitHub: https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
@@ -46,9 +46,9 @@ Potvrď tyto změny:
    • Chybové reporty → problem-report-writer
    • Run summary → run-status-broadcaster
    Vypiš které skills máš aktivní a které chybí.
-9. Web Search Fallback (10.0.2+):
+9. Web Search Fallback (10.0.3+):
    • Prázdný tab 'names' v master spreadsheet {AgentName} (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do tab 'names' (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do tab 'error' v master spreadsheet {AgentName} jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
-Potvrď verzi 10.0.2, proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi 10.0.3, proveď BLOK 8 self-audit a poté spusť testovací běh.
