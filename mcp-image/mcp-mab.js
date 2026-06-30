@@ -11,9 +11,11 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "10.0.1";
+const MCP_VERSION = "10.0.2";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
+const MAX_SELECT_ROWS = Number(process.env.MAX_SELECT_ROWS || 500);
+const SELECT_STATEMENT_TIMEOUT_MS = Number(process.env.SELECT_STATEMENT_TIMEOUT_MS || 30000);
 const MAX_IMAGE_BYTES = Number(process.env.MAX_IMAGE_BYTES || 15 * 1024 * 1024);
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/app/uploads";
 const PUBLIC_UPLOAD_BASE_URL = process.env.PUBLIC_UPLOAD_BASE_URL || "";
@@ -1720,11 +1722,25 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify({ table: t, row_count, exact, last_update }, null, 2) }] };
   });
 
-  wrapTool("run_select_sql", "Run safe read-only SELECT SQL.", { sql: z.string() }, async ({ sql }) => {
-    assertSelectSql(sql);
-    const r = await pool.query(sql);
-    return { content: [{ type: "text", text: JSON.stringify(r.rows, null, 2) }] };
-  });
+  wrapTool("run_select_sql",
+    `Run safe read-only SELECT SQL. Max ${MAX_SELECT_ROWS} rows returned (hard cap). Provide LIMIT in your SQL to control count. For wide tables like Matches, always select specific columns — never SELECT *.`,
+    { sql: z.string(), limit: z.number().optional() },
+    async ({ sql, limit }) => {
+      assertSelectSql(sql);
+      const effectiveLimit = Math.min(limit ?? MAX_SELECT_ROWS, MAX_SELECT_ROWS);
+      const hasLimit = /\blimit\b/i.test(sql);
+      const safeSql = hasLimit ? sql : `${sql.trimEnd().replace(/;$/, "")} LIMIT ${effectiveLimit}`;
+      const client = await pool.connect();
+      try {
+        await client.query(`SET LOCAL statement_timeout = ${SELECT_STATEMENT_TIMEOUT_MS}`);
+        await client.query(`SET LOCAL work_mem = '64MB'`);
+        const r = await client.query(safeSql);
+        return { content: [{ type: "text", text: JSON.stringify({ rowCount: r.rowCount, rows: r.rows }, null, 2) }] };
+      } finally {
+        client.release();
+      }
+    }
+  );
 
   wrapTool("list_indexes", "List indexes for a table.", { table: z.string() }, async ({ table }) => {
     const t = normalizeIdentifierName(table);
@@ -2011,6 +2027,8 @@ function createMcpServer() {
           version: MCP_VERSION,
           maxBatchSize: MAX_BATCH_SIZE,
           maxExportRows: MAX_EXPORT_ROWS,
+          maxSelectRows: MAX_SELECT_ROWS,
+          selectStatementTimeoutMs: SELECT_STATEMENT_TIMEOUT_MS,
           maxImageBytes: MAX_IMAGE_BYTES,
           uploadDir: UPLOAD_DIR,
           publicUploadBaseUrl: PUBLIC_UPLOAD_BASE_URL,
