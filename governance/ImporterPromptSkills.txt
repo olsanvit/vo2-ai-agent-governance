@@ -232,7 +232,7 @@ Outputs: upsert do AgentSchedules (POUZE při db_reachable), startup report konf
 Limitations: vkládat/aktualizovat AgentSchedules POUZE při db_reachable;
   reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán
 
-## problem-report-writer — 10.0.1 Update
+## problem-report-writer — 10.0.3 Update
 
 Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor):
   Formát: ProblemScore | Category | Description | Timestamp | StepStatus

@@ -336,7 +336,7 @@ Conflict detection: zakázána. Paralelní běh více agentů je povolený.
 Vkládat/aktualizovat AgentSchedules POUZE při db_reachable.
 Reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán.
 
-## baseline-collector-file-manager — 10.0.1 Update
+## baseline-collector-file-manager — 10.0.3 Update
 (doplňuje PATCH 9.1.0 BOOTSTRAP — přechod na master spreadsheet)
 
 Canonical: tab 'entities' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor)
@@ -345,7 +345,7 @@ Vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (4 taby) + she
 Pokud create selže: capability_missing("sheets_create_spreadsheet"), pokračovat degraded.
 Povinné reportování stavu: exact_spreadsheet_found | created | creation_failed | used_source | reason
 
-## problem-report-writer — 10.0.1 Update
+## problem-report-writer — 10.0.3 Update
 
 Tab 'error' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor)
 Formát: ProblemScore | Category | Description | Timestamp | StepStatus

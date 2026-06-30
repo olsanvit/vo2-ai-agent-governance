@@ -5,7 +5,7 @@ Alias: [SPORT_ALIAS_OPTIONAL]
 PromptVersion: 10.0.3
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.1
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.3
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -344,7 +344,7 @@ COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
 Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý tab — jen append.
 Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
-## Readiness Stavy — 10.0.1
+## Readiness Stavy — 10.0.3
 
 - `ready` — vše OK, žádná varování
 - `ready_with_warnings` — funkčně OK, ale jsou ne-blokující problémy:
@@ -359,7 +359,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
 - `blocked` — DB nedostupná, žádné zápisy
 - `not_ready` — kritická chyba při startu
 
-## drive_create_with_parent PROTOKOL — 10.0.1
+## drive_create_with_parent PROTOKOL — 10.0.3
 
   a) Zkusit: create_file(name="...", mimeType="...", parentId="{folderId}")
   b) Pokud parentId není podporováno nebo selže:
@@ -369,7 +369,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
      → NEPOSÍLAT ⚠️ ntfy alert jen kvůli root umístění
   c) Lifecycle souboru je stejný bez ohledu na umístění
 
-## Simplified Startup Sequence 10.0.1
+## Simplified Startup Sequence 10.0.3
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -594,7 +594,7 @@ Výsledek < 25:
 Doporučené tabulky pro počítání baseline (ImportantScore >= 90.000):
   Competitions, Seasons, Teams, Players, Venues, Matches (ImportantScore >= 90.000 per baseline catalog)
 
-## First Run Protocol -- 8.5.0
+## First Run Protocol -- 10.0.3
 
 Detekce prvního runu:
   run_select_sql("SELECT COUNT(*) FROM AgentRunReports WHERE AgentName='{AgentName}'") = 0
@@ -613,24 +613,36 @@ Postup při prvním runu:
      {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
      {addSheet: {properties: {title: "names"}}},
      {addSheet: {properties: {title: "urls"}}},
-     {addSheet: {properties: {title: "error"}}}
+     {addSheet: {properties: {title: "error"}}},
+     {addSheet: {properties: {title: "todo"}}},
+     {addSheet: {properties: {title: "notes"}}},
+     {addSheet: {properties: {title: "config"}}}
    ])
    sheets_append_rows(range="entities", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"]])
    sheets_append_rows(range="names",    rows=[["EntityName","coverage","tables","lastProcessed"]])
    sheets_append_rows(range="urls",     rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
    sheets_append_rows(range="error",    rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
+   sheets_append_rows(range="todo",     rows=[["Status","Priority","Created","Category","Text","Result"]])
+   sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
+   sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
    [ChatGPT]
    create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
    batch_update_spreadsheet(requests=[
      {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
      {addSheet: {properties: {title: "names"}}},
      {addSheet: {properties: {title: "urls"}}},
-     {addSheet: {properties: {title: "error"}}}
+     {addSheet: {properties: {title: "error"}}},
+     {addSheet: {properties: {title: "todo"}}},
+     {addSheet: {properties: {title: "notes"}}},
+     {addSheet: {properties: {title: "config"}}}
    ])
    + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[["ImportantScore","TableName","Description","RowCount","LastPopulated"]],fields:"userEnteredValue"}}])
    + batch_update_spreadsheet(requests=[{appendCells:{sheetId:1,rows:[["EntityName","coverage","tables","lastProcessed"]],fields:"userEnteredValue"}}])
    + batch_update_spreadsheet(requests=[{appendCells:{sheetId:2,rows:[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]],fields:"userEnteredValue"}}])
    + batch_update_spreadsheet(requests=[{appendCells:{sheetId:3,rows:[["ProblemScore","Category","Description","Timestamp","StepStatus"]],fields:"userEnteredValue"}}])
+   + batch_update_spreadsheet(requests=[{appendCells:{sheetId:4,rows:[["Status","Priority","Created","Category","Text","Result"]],fields:"userEnteredValue"}}])
+   + batch_update_spreadsheet(requests=[{appendCells:{sheetId:5,rows:[["Topic","Note","CreatedAt"]],fields:"userEnteredValue"}}])
+   + batch_update_spreadsheet(requests=[{appendCells:{sheetId:6,rows:[["Key","Value","Description"]],fields:"userEnteredValue"}}])
 5. Upsert AgentSchedules (AgentName, AgentType="Manager", ScheduledRunTime, Timezone)
 6. NESPOUŠTĚT post-match pipeline — pouze schema init + discovery (max 5 datumů, max 10 zápasů)
 7. Uložit run report: runMode="first_run", success=schema_ready
@@ -638,7 +650,7 @@ Postup při prvním runu:
 
 Při prvním runu: readiness = "first_run_init" — run může pokračovat (ne blocked).
 
-## Baseline Validation Rules -- 8.5.0
+## Baseline Validation Rules -- 10.0.3
 
 ODLIŠUJ Drive soubor od DB tabulky:
 
@@ -654,7 +666,7 @@ ODLIŠUJ Drive soubor od DB tabulky:
    → ImportantScore >= 70.000: ensure_table → pokud selže → readiness = blocked
    → ImportantScore < 70.000: ensure_table → pokud selže → log warning, skip
 
-## Concurrent Runs Governance -- 8.5.0
+## Concurrent Runs Governance -- 10.0.3
 
 Lock key = hashtext(COALESCE(NULLIF(SportName,''), 'unknown') || '|' || AgentName)::bigint & 2147483647
   (per sport + per agent — různé sporty mohou běžet paralelně)
@@ -841,11 +853,11 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Sheets Agent Data Structure -- 10.0.1
+## Google Sheets Agent Data Structure -- 10.0.3
 
 Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
-- Managers/{AgentName} (master spreadsheet) -- jeden spreadsheet pro všechny per-agent data
+- Managers/{AgentName} (master spreadsheet) -- jeden spreadsheet se 7 taby pro všechny per-agent data
   Drive folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO
   Tab "entities": ImportantScore | TableName | Description | RowCount | LastPopulated
     Číst: [Claude MCP] search_files → sheets_get_values(range="entities") / [ChatGPT] search → get_spreadsheet_range(range="entities!A:Z")
@@ -857,6 +869,14 @@ Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
     Max 500 polozek | Zpracovat pred standardnim scrapingem
   Tab "error": ProblemScore | Category | Description | Timestamp | StepStatus
     Append-only; agent přidává při selhání; max 100 řádků
+  Tab "todo": Status | Priority | Created | Category | Text | Result
+    Agent čte pending při startu (krok 8b2), zpracuje jako instrukce, zapíše Status=done/failed + Result
+    Operátor přidává instrukce; agent NIKDY nepřidává nové řádky — jen aktualizuje Status+Result
+  Tab "notes": Topic | Note | CreatedAt
+    Read-only kontext od operátora; agent nikdy nepíše do notes
+  Tab "config": Key | Value | Description
+    Per-agent přepisy governance defaults; agent načte při startu (krok 8b4)
+    Podporované klíče: ImportantScore.{TableName} | SLA.hours | MaxMatchesPerRun | SkipLeagues | PriorityQueue
 - Root folder (ManagerPrompt.txt, ManagerPromptSkills.txt):
   Drive folder ID: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
@@ -870,9 +890,11 @@ Postup pri startu:
 3. Nacist tab "urls" z master spreadsheet -> projit pred standardnim web scrapingem
    [Claude MCP] sheets_get_values(spreadsheetId=<id>, range="urls")
    [ChatGPT]    get_spreadsheet_range(spreadsheetId=<id>, range="urls!A:Z")
-4. Pokud master spreadsheet neexistuje: vytvorit (viz First Run Protocol); pokud tab prazdny: preskocit (ne chyba)
+4. Nacist tab "todo" → zpracovat pending instrukce (viz krok 8b2)
+5. Nacist tab "config" → aplikovat přepisy governance defaults (viz krok 8b4)
+6. Pokud master spreadsheet neexistuje: vytvorit (viz First Run Protocol); pokud tab prazdny: preskocit (ne chyba)
 
-## Google Sheets Sports Baseline Catalog -- 10.0.1
+## Google Sheets Sports Baseline Catalog -- 10.0.3
 
 Sport agenti udrzuji katalogovy Sheet v Google Drive.
 Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO), tab "entities"
@@ -898,18 +920,27 @@ Lifecycle rules:
                  {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                  {addSheet: {properties: {title: "names"}}},
                  {addSheet: {properties: {title: "urls"}}},
-                 {addSheet: {properties: {title: "error"}}}
+                 {addSheet: {properties: {title: "error"}}},
+                 {addSheet: {properties: {title: "todo"}}},
+                 {addSheet: {properties: {title: "notes"}}},
+                 {addSheet: {properties: {title: "config"}}}
                ])
                + sheets_append_rows(range="entities", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
                + sheets_append_rows(range="names",    rows=[["EntityName","coverage","tables","lastProcessed"]])
                + sheets_append_rows(range="urls",     rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
                + sheets_append_rows(range="error",    rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
+               + sheets_append_rows(range="todo",     rows=[["Status","Priority","Created","Category","Text","Result"]])
+               + sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
+               + sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
   [ChatGPT]    create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO")
                batch_update_spreadsheet(requests=[
                  {updateSheetProperties: {properties: {sheetId: 0, title: "entities"}, fields: "title"}},
                  {addSheet: {properties: {title: "names"}}},
                  {addSheet: {properties: {title: "urls"}}},
-                 {addSheet: {properties: {title: "error"}}}
+                 {addSheet: {properties: {title: "error"}}},
+                 {addSheet: {properties: {title: "todo"}}},
+                 {addSheet: {properties: {title: "notes"}}},
+                 {addSheet: {properties: {title: "config"}}}
                ])
                + batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
 - pokud Sheet existuje: aktualizovat na konci kazdeho uspesneho runu:
@@ -931,7 +962,7 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol -- 10.0.1
+## Self-Audit Protocol -- 10.0.3
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -1048,7 +1079,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.0.1 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 10.0.3 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3524,7 +3555,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 10.0.1
+           Duration: Xs | Tables: N | Verze: 10.0.3
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3711,7 +3742,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 10.0.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 10.0.3 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -3886,9 +3917,9 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 10.0.1
-SchemaVersion: 10.0.1
-RuntimeSafetyVersion: 10.0.1
+GovernanceVersion: 10.0.3
+SchemaVersion: 10.0.3
+RuntimeSafetyVersion: 10.0.3
 PromptVersion: 10.0.3
 
 Breaking change:
@@ -4398,10 +4429,10 @@ Platí pro VŠECHNY typy agentů. NIKDY nepoužívat zobrazovaný název jako ca
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
 
-## Per-Agent Files — Canonical Naming (10.0.1)
+## Per-Agent Files — Canonical Naming (10.0.3)
 
 Master spreadsheet: {AgentName} → /Prompts/Managers/ (folder ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
-Jeden spreadsheet na agenta s taby: entities | names | urls | error (NIKDY separate soubory)
+Jeden spreadsheet na agenta se 7 taby: entities | names | urls | error | todo | notes | config (NIKDY separate soubory)
 
 Canonical tab formats:
   tab "entities": ImportantScore | TableName | Description | RowCount | LastPopulated
