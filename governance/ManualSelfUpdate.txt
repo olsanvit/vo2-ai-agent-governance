@@ -57,4 +57,6 @@ Potvrď tyto změny:
    • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do tab 'error' v master spreadsheet {AgentName} jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
+10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
+
 Potvrď verzi 10.0.3, proveď BLOK 8 self-audit a poté spusť testovací běh.
