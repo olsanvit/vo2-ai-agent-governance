@@ -28,13 +28,20 @@ Potvrď tyto změny:
      - Manager  → Managers složka  (ID: 1lEvffJ-rjdExCwMWxmWM7PchnKkGTGUO)
      - Collector → Collectors složka (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
      - Checker/Generator/Importer → příslušná složka dle AgentType
-   • Spreadsheet musí mít 4 taby: entities | names | urls | error
+   • Spreadsheet musí mít 7 tabů: entities | names | urls | error | todo | notes | config
    • CREATE vzor:
      sheets_create_spreadsheet(title="{AgentName}", folderId="{agentTypeFolderId}")
-     batch_update_spreadsheet(4 taby: entities, names, urls, error)
-     sheets_append_rows — headers pro každý tab
+     batch_update_spreadsheet(7 tabů: entities, names, urls, error, todo, notes, config)
+     sheets_append_rows — headers pro každý tab:
+       entities → ["Guid","Name","NormalizedName","SearchText","Emoji","ConfidenceScore","IsDeleted","CreatedAt","UpdatedAt"]
+       names    → ["Name","Status","Source","CreatedAt"]
+       urls     → ["Url","Status","Source","CreatedAt"]
+       error    → ["Timestamp","AgentName","ErrorType","Message","Table","Guid","Resolved"]
+       todo     → ["Status","Priority","Created","Category","Text","Result"]
+       notes    → ["Topic","Note","CreatedAt"]
+       config   → ["Key","Value","Description"]
    • Hledání před vytvořením: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
-   • Nikdy mazat; nikdy vytvářet 4 oddělené soubory (stará architektura 9.4.7)
+   • Nikdy mazat; nikdy vytvářet oddělené soubory (stará architektura 9.4.7)
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
    • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
    • Manager: a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com
