@@ -1,7 +1,7 @@
-Agent: 10.0.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 10.0.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 10.0.1
+PromptVersion: 10.0.2
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.0.1
@@ -551,6 +551,10 @@ Required runtime sequence:
    selfUpdate flow:
    c) verify: Drive PromptVersion >= agent version (no downgrade)
    d) activate: apply fetched prompt as active runtime prompt
+   d2) write-back Drive: update_file_content({promptFile}.txt, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ", obsah nové verze)
+       — Drive fallback zůstane aktuální pro příští run kdy Gitea/GitHub nedostupné
+   d3) write-back Drive: update_file_content({skillsFile}.txt, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ", obsah nové skills verze)
+       → pokud Drive write selže: logovat warning, run NEBLOKOVAT (write-back je best-effort)
    e) record: prompt_status = prompt_upgrade_applied, log in highlights[]
    f) ntfy (topic: agent-runs): "{AgentName} 🔄 prompt upgradován {old} → {new}"
 
@@ -573,6 +577,12 @@ Required runtime sequence:
                  sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<výstup>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
     [ChatGPT]    search(query="{AgentName}", special_filter_query_str="'1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH' in parents") → get_spreadsheet_range(range="entities!A:Z")
     - pokud spreadsheet neexistuje nebo je tab prázdný: přeskočit tiše (ne chyba); sync_agent_entities nevolat
+    - pokud sheets_get_values vrátí 403 (service account nemá přístup ke stávajícímu spreadsheet):
+      → vytvoř nový: sheets_create_spreadsheet(title="{AgentName}", folderId="1-vX64o8hs25FPkAVH52P9lXUhLCC1FjH")
+      → přidej 4 taby: entities | names | urls | error (s headers)
+      → upsert_record("AgentCatalog", {Name: "{AgentName}"}, {SpreadsheetId: <nové ID>})
+      → ntfy (topic: agent-alerts): "{AgentName} ⚠️ master sheet 403 → nový vytvořen {newSpreadsheetId}"
+      → pokračuj s novým spreadsheet (nevracet se k 403 souboru)
     - spreadsheetId NIKDY neukládat natvrdo — vždy search_files znovu (uložené ID → 404 po re-upload)
     - sync propíše nové řádky přidané operátorem v tabu entities do AgentMonitor DB
     - použít jako výchozí přehled pro prioritizaci tabulek v běhu
@@ -627,7 +637,7 @@ Mandatory rules:
 - startup diagnostics must include effective DB target hostname, port, and DB name (never secrets)
 - loopback targets (localhost, 127.0.0.1, ::1) inside containers must be surfaced as deployment-risk diagnostics
 - ECONNREFUSED 127.0.0.1:5432 in containerized runtime = likely loopback-target misconfiguration
-- startup DB ping may retry up to 5 times with 3s delay before classifying db_unreachable
+- startup DB ping may retry up to 3 times with 60s delay before classifying db_unreachable (QNAP/server restart může trvat 2–3 min)
 - readiness_status == ready only when: DB reachable + prompt/version OK + baseline validation passed
 
 ## Baseline Validation Rules — Drive soubor vs. DB tabulka
@@ -838,14 +848,14 @@ L Vše nedostupné → pokračovat s bootstrap verzí; log capability_missing("d
 L Drive soubory nedostupné → fallback: get_agent_entities(agent_name, entity_type="entity") z AgentMonitor DB cache
 
 BLOK 1 — DB & MCP konektivita:
-1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být 10.0.1
+1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být >= 10.0.1
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 10.0.1
-2b. MCP_VERSION z db_ping == 10.0.1
-2c. SkillsVersion z načteného PromptSkills souboru == 10.0.1
+2a. PromptVersion tohoto promptu == 10.0.2
+2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
+2c. SkillsVersion z načteného PromptSkills souboru == 10.0.2
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
@@ -864,7 +874,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 10.0.1
+4a. SkillsVersion načteného souboru == 10.0.2
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |

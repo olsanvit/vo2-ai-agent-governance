@@ -1,6 +1,6 @@
 Agent: 9.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 10.0.1
+PromptVersion: 10.0.2
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 10.0.1
