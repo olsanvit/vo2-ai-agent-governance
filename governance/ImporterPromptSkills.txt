@@ -19,7 +19,7 @@ PRAVIDLA POUŽITÍ SKILLS
 - skill NENÍ v tomto Skill Directory: ZABLOKOVAT použití
 
 =============================================================
-SKILL DIRECTORY (20 skills)
+SKILL DIRECTORY (28 skills)
 =============================================================
 
 -- A. PARSING (4) ----------------------------------------------
@@ -251,6 +251,64 @@ NIKDY nepoužívat zobrazovaný název jako calendar_id parametr přímo.
 VŽDY list_calendars() → hledat název odpovídající AgentType → uložit jako CALENDAR_ID proměnnou.
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 Calendar failure = reporting degradation, ne datový blocker.
+
+-- [G]. NOVÉ V 10.1.0 -----------------------------------------------
+
+## mcp-version-validator
+Task types: MCP version check, startup, minimum version, mcp_version_mismatch
+Description: Ověřuje MCP_VERSION >= 10.0.18 při startupu. Pokud verze je nižší → hlásí mcp_version_mismatch v AgentRunReport, přeskočí všechny mutační operace (upsert, ensure_table, ensure_columns), pokračuje pouze v read-only módu.
+Inputs: current MCP_VERSION (string), minimum required version (default "10.0.18")
+Outputs: pass/fail, action_taken (proceed/skip_mutations), version_delta
+Limitations: porovnává semver major.minor.patch; pre-release tagy ignoruje
+
+## mcp-502-recovery-handler
+Task types: 502 error, MCP nedostupnost, retry logika, db_502_permanent
+Description: Zpracovává 502 Bad Gateway errory z MCP serveru. Exponential backoff: 1s → 2s → 4s, max 3 pokusy. Po 3 selháních nastaví db_502_permanent, přeskočí všechny DB operace pro daný run, pokračuje s Drive/API tasky. Loguje každý retry pokus.
+Inputs: failed tool call, retry_count (aktuální), max_retries (default 3)
+Outputs: retry result (success/fail), skip_decision (proceed/skip_db), total_wait_ms
+Limitations: pouze pro 502 HTTP status; jiné chyby (404, 500, timeout) neřeší tímto flow
+
+## agent-startup-health-broadcaster
+Task types: ntfy, startup summary, readiness report, agent-status
+Description: Po dokončení startup sekvence pošle na ntfy kanál agent-status stručné shrnutí: agent name, prompt verze, MCP verze, DB status (ok/unavailable), počet dostupných tabulek, prompt source (gitea/drive/cache), run ID. Pomáhá operátorovi sledovat stav všech agentů po jejich spuštění.
+Inputs: všechny výsledky startup sekvence (version, db_status, tables_count, prompt_source, run_id)
+Outputs: ntfy zpráva odeslaná na agent-status topic, startup_summary objekt pro AgentRunReport
+Limitations: pokud ntfy nedostupné → přeskoč, loguj ntfy_unavailable, nepřerušuj startup
+
+## governance-prompt-cache-sync
+Task types: AgentPromptCache, verze synchronizace, cache invalidace, cache_refreshed
+Description: Po načtení nové verze governance promptu z Drive nebo Gitea aktualizuje záznam v AgentPromptCache tabulce. Ověřuje, že cached PromptVersion odpovídá právě načtené. Pokud ne → přepíše cache novým obsahem a loguje cache_refreshed v Metadata.
+Inputs: agent_name, prompt_content, new_version, source (gitea/drive/github)
+Outputs: cache_status (hit/miss/refreshed), previous_version, new_version
+Limitations: cache write může selhat pokud DB nedostupná — v takovém případě přeskoč cache update a pokračuj
+
+## skill-changelog-recorder
+Task types: audit skills, changelog, verzování, skill_added/skill_modified/skill_removed
+Description: Loguje přidání, úpravu nebo odebrání skills. Záznam obsahuje: datum, skill_name, change_type (added/modified/removed), reason, operator. Záznamy ukládá do sekce SKILL_CHANGELOG na konci ImporterPromptSkills.txt a do AgentRunReport jako metadata.
+Inputs: skill_name, change_type, reason, operator (volitelně)
+Outputs: changelog entry s datumem, status (logged/error)
+Limitations: pouze loguje — nespouští žádné akce automaticky
+
+## drive-file-version-selector
+Task types: Drive soubory, více verzí, newest selection, governance, drive_file_multiple_versions
+Description: Při načítání governance souborů z Drive složky vyhledá všechny soubory odpovídající vzoru (např. "ImporterPrompt") a vybere ten s nejvyšším VersionNumber: z obsahu (ne z názvu souboru). Zabrání použití zastaralé verze. Pokud existuje více verzí → reportuje drive_file_multiple_versions.
+Inputs: folder_id, filename_pattern, version_field (default "VersionNumber:")
+Outputs: vybraný file_id, verze, datum, seznam ignorovaných souborů s jejich verzemi
+Limitations: musí číst obsah každého souboru pro verzi — pomalé při >10 souborech
+
+## agent-entity-sync-manager
+Task types: sync_agent_entities, get_agent_entities, cross-agent entity sharing
+Description: Orchestruje synchronizaci entit mezi agenty přes MCP nástroje sync_agent_entities a get_agent_entities. Volat po úspěšném upsert nové entity aby ji ostatní agenti mohli využít. Conflict resolution: vyšší ConfidenceScore wins.
+Inputs: EntityType, Guid seznam, source_agent_name, target_agents (seznam nebo ALL)
+Outputs: sync_result (synced/conflict/skipped per entita), conflict_report
+Limitations: max 100 entit na sync operaci; nefunguje pokud MCP_VERSION < 10.0.18
+
+## column-deprecation-manager
+Task types: odebrání sloupce, deprecate_column, schema cleanup
+Description: Bezpečně deprecuje databázové sloupce dvoustupňovým procesem: přejmenování na _deprecated_ prefix (ihned) a DROP po 30 dnech s operátorským potvrzením. Nikdy nespouští DROP automaticky.
+Inputs: tabulka, sloupec k deprecaci, důvod
+Outputs: ALTER TABLE RENAME script (fáze 1), reminder pro DROP (fáze 2 po 30 dnech), audit log
+Limitations: DROP (fáze 2) vyžaduje explicitní operátorský pokyn — nikdy automaticky
 
 ## Skills Version Policy (9.2.0)
 

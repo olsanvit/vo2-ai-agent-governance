@@ -639,6 +639,9 @@ function createMcpServer() {
     const nodemailer = (await import("nodemailer")).default;
     const transporter = nodemailer.createTransport({
       host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
+      tls: {
+        rejectUnauthorized: true,
+      },
       auth: { user: SMTP_USER, pass: SMTP_PASS },
     });
     const info = await transporter.sendMail({
@@ -765,6 +768,16 @@ app.get("/health", async (req, res) => {
 });
 
 app.get("/ping", (req, res) => res.json({ ok: true, version: MCP_VERSION }));
+
+app.get("/metrics", (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${AUTH_TOKEN}`) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
+  res.json({ version: MCP_VERSION, uptime: process.uptime(), metrics });
+});
 
 app.post("/mcp", async (req, res) => {
   if (!AUTH_TOKEN) return res.status(500).json({ error: "AUTH_TOKEN not configured" });

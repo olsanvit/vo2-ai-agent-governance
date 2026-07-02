@@ -1382,7 +1382,15 @@ async function enableRls(table) {
   return { enabled: true };
 }
 
+const FORBIDDEN_SQL_KEYWORDS = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|UNION|INTO)\b/i;
+
 async function createRlsPolicy(table, policyName, usingSql = "true") {
+  if (FORBIDDEN_SQL_KEYWORDS.test(usingSql)) {
+    throw new Error(`create_rls_policy: zakázaný SQL příkaz v usingSql`);
+  }
+  if (usingSql.length > 500) {
+    throw new Error(`create_rls_policy: usingSql příliš dlouhý (max 500 znaků)`);
+  }
   const t = normalizeIdentifierName(table);
   const p = normalizeIdentifierName(policyName);
   await pool.query(`DROP POLICY IF EXISTS "${p}" ON "${t}"`);
@@ -2365,6 +2373,12 @@ app.get("/health", async (req, res) => {
 });
 
 app.get("/metrics", (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${AUTH_TOKEN}`) {
+    res.writeHead(401, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Unauthorized' }));
+    return;
+  }
   res.json({
     ...metrics,
     uptime: process.uptime(),
