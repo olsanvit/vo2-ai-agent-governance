@@ -1,4 +1,4 @@
-# Agent Bootstrap Prompt — v10.0.1
+# Agent Bootstrap Prompt — v10.1.0
 
 Minimální systémový prompt pro nového agenta.
 Operátor ho nastaví v ChatGPT (Edit GPT → Configure → Instructions) — agent si sám načte plný prompt z **Gitea** (fallback: vo2info → GitHub → Drive).
@@ -26,9 +26,9 @@ Drive folder ID (poslední fallback): `1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ`
 ## Pro Catalog agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4] and [TOPIC_5]
+Agent: 10.1.0 Catalog of [TOPIC_1], [TOPIC_2], [TOPIC_3], [TOPIC_4] and [TOPIC_5]
 AgentType: Catalog
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -62,9 +62,9 @@ NIKDY nepoužívat řetězec "AI Catalogs" jako calendar_id parametr přímo.
 ## Pro Manager agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 [SPORT_NAME] Data Manager
+Agent: 10.1.0 [SPORT_NAME] Data Manager
 AgentType: Manager
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -94,9 +94,9 @@ NIKDY nepoužívat řetězec "AI Managers" jako calendar_id parametr přímo.
 ## Pro Collector agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 [COLLECTION_NAME] Collector
+Agent: 10.1.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -118,9 +118,9 @@ MCP konektor: VO2QNAPDBAI (primárně)
 ## Pro Generator agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 [APP_NAME] Image Generator
+Agent: 10.1.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -142,9 +142,9 @@ MCP konektor: VO2QNAPDBMAB nebo VO2QNAPDBUSM dle agenta
 ## Pro Checker agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 [APP_NAME] Checker
+Agent: 10.1.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -166,9 +166,9 @@ MCP konektor: VO2QNAPDBAI (READ only)
 ## Pro Importer agenta — System Prompt v ChatGPT
 
 ```
-Agent: 10.0.1 [APP_NAME] Importer
+Agent: 10.1.0 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 10.0.1
+PromptVersion: 10.1.0
 ScheduledRunTime: {{HH:MM}} Europe/Prague
 Environment: prod
 
@@ -187,7 +187,7 @@ MCP konektor: VO2QNAPDBTE nebo VO2QNAPDBMAB dle agenta
 
 ---
 
-## Security Model (10.0.1)
+## Security Model (10.1.0)
 
 | AgentType | VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM |
 |-----------|-------------|-------------|--------------|--------------|
