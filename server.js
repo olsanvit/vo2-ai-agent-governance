@@ -42,7 +42,9 @@ let _sheetsTokenExpiry = 0;
 
 async function getSheetsToken() {
   if (_sheetsToken && Date.now() < _sheetsTokenExpiry - 60_000) return _sheetsToken;
-  const saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  let saJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
+  if (!saJson && process.env.GOOGLE_SERVICE_ACCOUNT_JSON_FILE)
+    saJson = await fs.readFile(process.env.GOOGLE_SERVICE_ACCOUNT_JSON_FILE, "utf8");
   if (!saJson) throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON not configured — Sheets API unavailable");
   const sa = JSON.parse(saJson);
   const now = Math.floor(Date.now() / 1000);
@@ -114,7 +116,7 @@ const DEFAULT_CATALOG_SHEETS = ["Entities", "Names", "Urls", "Errors"];
 const ENTITY_TYPE_MAP = { Entities: "entity", Names: "name", Urls: "url", Errors: "error" };
 
 async function syncAgentCatalogSheets() {
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON) return;
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON && !process.env.GOOGLE_SERVICE_ACCOUNT_JSON_FILE) return;
   const exists = await tableExists("AgentCatalog");
   if (!exists) return;
 
@@ -1385,6 +1387,13 @@ async function enableRls(table) {
 async function createRlsPolicy(table, policyName, usingSql = "true") {
   const t = normalizeIdentifierName(table);
   const p = normalizeIdentifierName(policyName);
+  const FORBIDDEN_SQL_KEYWORDS = /\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|TRUNCATE|EXEC|EXECUTE|UNION|INTO)\b/i;
+  if (FORBIDDEN_SQL_KEYWORDS.test(usingSql)) {
+    throw new Error(`create_rls_policy: zakázaný SQL příkaz v usingSql parametru`);
+  }
+  if (usingSql.length > 500) {
+    throw new Error(`create_rls_policy: usingSql příliš dlouhý (max 500 znaků)`);
+  }
   await pool.query(`DROP POLICY IF EXISTS "${p}" ON "${t}"`);
   await pool.query(`CREATE POLICY "${p}" ON "${t}" USING (${usingSql})`);
   return { created: true };

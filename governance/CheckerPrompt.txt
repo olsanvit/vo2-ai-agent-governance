@@ -1,9 +1,9 @@
-Agent: 10.0.3 [APP_NAME] Checker
+Agent: 10.1.0 [APP_NAME] Checker
 AgentType: Checker
 PromptVersion: 10.1.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 10.0.3
+CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 10.1.0
 =============================================================
 
 ROLE: Obecný governance prompt pro checker agenty.
@@ -356,7 +356,7 @@ CHAPTER 7: TOOLS & INTEGRATIONS
 
 Drive složka:
 - /Prompts/Checkers/{AgentName}_config.txt
-- master spreadsheet {AgentName} v Checkers složce (taby: entities, names, urls, error)
+- master spreadsheet {AgentName} v Checkers složce (taby: entities, names, urls, error, todo, notes, config)
 - /Prompts/ root: CheckerPrompt.txt, CheckerPromptSkills.txt
 
 Poznámka 10.0.3: {AgentName}_entities a {AgentName}_error již
@@ -377,7 +377,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — DB ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 10.0.3
+BLOK 2 — Verze == 10.1.0
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 8; povinně database-table-audit + table-freshness-report
 
@@ -546,6 +546,13 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
+## 10.1.0 (2026-07-02)
+- Verze synchronizována s governance 10.1.0
+- Agent header aktualizován na 10.1.0
+- ANTI-HALLUCINATION PRAVIDLA přidána
+- Opraveny reference na počet tabů master spreadsheet (7 tabů)
+- SELF-UPDATE DETEKCE sub-krok v Ch 1
+
 ## 9.4.1 (2026-06-14) — Konzistence a opravy CheckerPrompt
 - STARTUP: 7 kroků → 9 kroků; SKILLS CACHE PROTOCOL a SYSTÉMOVÉ TABULKY doplněny do Ch 1
 - Ch 3 startup: "Drive header" opraveno na "Gitea header"
@@ -677,7 +684,7 @@ Architektura 10.0.3: JEDEN master spreadsheet {AgentName} v Checkers složce s t
 Hledání master spreadsheet: search_files(query="{AgentName}", folderId="{checkersFolderId}")
   → přesná shoda názvu {AgentName} (ne {AgentName}_entities ani jiný suffix)
 
-Pravidlo vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (4 taby) + append headers.
+Pravidlo vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (7 tabů: entities, names, urls, error, todo, notes, config) + append headers.
 Pokud create selže: capability_missing("sheets_create_spreadsheet") → report-only.
 
 ## Readiness Gating — Fallback Mode (9.2.0)

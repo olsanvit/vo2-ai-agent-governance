@@ -61,6 +61,7 @@ const EMAIL_DEFAULT_TO = process.env.EMAIL_DEFAULT_TO || "";
 
 let _sheetsToken = null;
 let _sheetsTokenExpiry = 0;
+let _mailerTransport = null;
 
 async function getSheetsToken() {
   if (_sheetsToken && Date.now() < _sheetsTokenExpiry - 60_000) return _sheetsToken;
@@ -225,6 +226,19 @@ const runtimeGovernanceState = {
   lastPromptUpgradeLifecycleReport: null,
   lastPromptUpgradeLifecycleAt: null,
 };
+
+// ─── Circuit breaker (simple in-process state) ────────────────────────────────
+const _cb = { failures: 0, openUntil: 0, threshold: 5, cooldownMs: 30_000 };
+function cbSuccess() { _cb.failures = 0; }
+function cbRecord(err) {
+  _cb.failures++;
+  console.warn(`[cb] failure #${_cb.failures}: ${err?.message || err}`);
+  if (_cb.failures >= _cb.threshold) {
+    _cb.openUntil = Date.now() + _cb.cooldownMs;
+    console.warn(`[cb] circuit open for ${_cb.cooldownMs / 1000}s`);
+  }
+}
+function cbIsOpen() { return Date.now() < _cb.openUntil; }
 
 const BASE_COLUMNS = [
   "Guid", "CreatedAt", "UpdatedAt", "DeletedAt", "Emoji", "Colors",
@@ -1735,7 +1749,11 @@ function createMcpServer() {
         await client.query(`SET LOCAL statement_timeout = ${SELECT_STATEMENT_TIMEOUT_MS}`);
         await client.query(`SET LOCAL work_mem = '64MB'`);
         const r = await client.query(safeSql);
+        cbSuccess();
         return { content: [{ type: "text", text: JSON.stringify({ rowCount: r.rowCount, rows: r.rows }, null, 2) }] };
+      } catch (e) {
+        cbRecord(e);
+        throw e;
       } finally {
         client.release();
       }
@@ -2179,12 +2197,14 @@ function createMcpServer() {
     if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "SMTP not configured — set SMTP_HOST, SMTP_USER, SMTP_PASS" }) }] };
     const recipient = to || EMAIL_DEFAULT_TO;
     if (!recipient) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "No recipient — pass to param or set EMAIL_DEFAULT_TO" }) }] };
-    const nodemailer = (await import("nodemailer")).default;
-    const transporter = nodemailer.createTransport({
-      host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-    const info = await transporter.sendMail({
+    if (!_mailerTransport) {
+      const nodemailer = (await import("nodemailer")).default;
+      _mailerTransport = nodemailer.createTransport({
+        host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_PORT === 465,
+        auth: { user: SMTP_USER, pass: SMTP_PASS },
+      });
+    }
+    const info = await _mailerTransport.sendMail({
       from: SMTP_FROM || SMTP_USER, to: recipient, subject,
       ...(html ? { html: body } : { text: body }),
     });
@@ -2199,7 +2219,7 @@ function createMcpServer() {
     value_col:   z.number().optional().describe("0-based column index for the main value (default: 0)"),
     meta_cols:   z.array(z.string()).optional().describe("Column names for extra metadata columns (after value_col)"),
   }, async ({ agent_name, entity_type, rows, value_col = 0, meta_cols = [] }) => {
-    if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
+    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
     const dataRows = rows.slice(1); // skip header
     let inserted = 0, updated = 0, skipped = 0;
     for (const row of dataRows) {
@@ -2217,7 +2237,7 @@ function createMcpServer() {
       );
       if (res.rows[0].is_insert) inserted++; else updated++;
     }
-    return { ok: true, agent_name, entity_type, inserted, updated, skipped, total: dataRows.length };
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, agent_name, entity_type, inserted, updated, skipped, total: dataRows.length }, null, 2) }] };
   });
 
   wrapTool("get_agent_entities", "Read agent base entities from AgentMonitor DB. Fast — no Drive call needed after sync.", {
@@ -2225,7 +2245,7 @@ function createMcpServer() {
     entity_type: z.enum(["entity","name","url","error"]).describe("Type of entity"),
     active_only: z.boolean().optional().describe("Return only active=true rows (default: true)"),
   }, async ({ agent_name, entity_type, active_only = true }) => {
-    if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
+    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
     const res = await monPool.query(
       `SELECT id, value, metadata, active, created_at, updated_at
        FROM agent_entities
@@ -2233,7 +2253,7 @@ function createMcpServer() {
        ORDER BY id`,
       [agent_name, entity_type]
     );
-    return { ok: true, agent_name, entity_type, count: res.rowCount, rows: res.rows };
+    return { content: [{ type: "text", text: JSON.stringify({ ok: true, agent_name, entity_type, count: res.rowCount, rows: res.rows }, null, 2) }] };
   });
 
 

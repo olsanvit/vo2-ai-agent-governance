@@ -32,7 +32,12 @@ const NTFY_BASE_URL = process.env.NTFY_URL || "https://ntfy.vo2info.cz";
 const NTFY_USER = process.env.NTFY_USER || "";
 const NTFY_PASS = process.env.NTFY_PASS || "";
 
-const pool = new Pool({ connectionString: DATABASE_URL, max: 5 });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 5,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 8000,
+});
 
 const metrics = {
   startedAt: new Date().toISOString(),
@@ -74,10 +79,16 @@ async function saveBase64(base64Input, folder, guid) {
   return { fileName, sizeBytes: buffer.length };
 }
 
+const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml']);
+
 async function saveUrl(imageUrl, folder, guid) {
   const res = await fetch(imageUrl, { redirect: "follow" });
   if (!res.ok) throw new Error(`Download failed: ${res.status} ${res.statusText}`);
-  const ext = mimeToExt(res.headers.get("content-type") || "image/jpeg");
+  const rawMime = res.headers.get("content-type")?.split(";")[0]?.trim().toLowerCase() || "";
+  if (!ALLOWED_IMAGE_MIMES.has(rawMime)) {
+    throw new Error(`Nepodporovaný MIME type: ${rawMime}`);
+  }
+  const ext = mimeToExt(rawMime || "image/jpeg");
   const buffer = Buffer.from(await res.arrayBuffer());
   const fileName = `${guid}.${ext}`;
   await fs.writeFile(path.join(folder, fileName), buffer);
@@ -165,6 +176,16 @@ async function drivePatch(fileId, params) {
   return res.json();
 }
 
+// ─── Monitoring pool (AgentMonitor DB) ────────────────────────────────────────
+const AGENT_MONITOR_URL = process.env.AGENT_MONITOR_URL;
+const monPool = AGENT_MONITOR_URL ? new Pool({
+  connectionString: AGENT_MONITOR_URL,
+  max: 3,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000,
+}) : null;
+if (!AGENT_MONITOR_URL) console.warn("[monPool] AGENT_MONITOR_URL not set — monitoring tools disabled");
+
 // ── Agent Catalog Sheets Sync ──────────────────────────────────────────────────
 const SHEETS_SYNC_INTERVAL_MS = 4 * 60 * 60 * 1000;
 const LOCAL_SHEETS_DIR = path.join(UPLOAD_DIR, "sheets");
@@ -231,16 +252,6 @@ function startSheetsSyncLoop() {
     );
   }, 30_000);
 }
-
-// ─── Monitoring pool (AgentMonitor DB) ────────────────────────────────────────
-const AGENT_MONITOR_URL = process.env.AGENT_MONITOR_URL;
-const monPool = AGENT_MONITOR_URL ? new Pool({
-  connectionString: AGENT_MONITOR_URL,
-  max: 3,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-}) : null;
-if (!AGENT_MONITOR_URL) console.warn("[monPool] AGENT_MONITOR_URL not set — monitoring tools disabled");
 
 // ─── SMTP config ──────────────────────────────────────────────────────────────
 const SMTP_HOST = process.env.SMTP_HOST || "";
@@ -491,10 +502,10 @@ function createMcpServer() {
       status = res.status;
       responseText = await res.text();
     } catch (err) {
-      return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: err.message }) }] };
+      return { ok: false, error: err.message };
     }
     const ok = status >= 200 && status < 300;
-    return { content: [{ type: "text", text: JSON.stringify({ ok, status, topic, title, response: responseText }) }] };
+    return { ok, status, topic, title, response: responseText };
   });
 
   wrap("sheets_get_values", "Read all rows from a Google Sheet. Row 0 is the header.", {
@@ -692,7 +703,7 @@ function createMcpServer() {
     sheets:         z.string().optional().describe("Comma-separated sheet names to sync (default: Entities,Names,Urls,Errors)"),
     is_active:      z.boolean().optional().describe("Whether to include in automatic sync (default: true)"),
   }, async ({ name, spreadsheet_id, drive_folder, sheets, is_active = true }) => {
-    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
+    if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
     await monPool.query(`
       CREATE TABLE IF NOT EXISTS "AgentCatalog" (
         "Name" TEXT PRIMARY KEY,
@@ -714,26 +725,26 @@ function createMcpServer() {
          "IsActive"=$5, "UpdatedAt"=NOW()`,
       [name, spreadsheet_id ?? null, drive_folder ?? null, sheets ?? null, is_active]
     );
-    return { content: [{ type: "text", text: JSON.stringify({ ok: true, name, spreadsheetId: spreadsheet_id ?? null }) }] };
+    return { ok: true, name, spreadsheetId: spreadsheet_id ?? null };
   });
 
   wrap("get_agent_catalog", "List all agents in the catalog with their SpreadsheetId and last sync time.", {
     active_only: z.boolean().optional().describe("Return only active agents (default: false)"),
   }, async ({ active_only = false }) => {
-    if (!monPool) return { content: [{ type: "text", text: JSON.stringify({ ok: false, reason: "AGENT_MONITOR_URL not configured" }) }] };
+    if (!monPool) return { ok: false, reason: "AGENT_MONITOR_URL not configured" };
     try {
       const res = await monPool.query(
         `SELECT * FROM "AgentCatalog" ${active_only ? 'WHERE "IsActive" = TRUE' : ''} ORDER BY "Name"`
       );
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: res.rowCount, agents: res.rows }) }] };
+      return { ok: true, count: res.rowCount, agents: res.rows };
     } catch {
-      return { content: [{ type: "text", text: JSON.stringify({ ok: true, agents: [], note: "AgentCatalog table does not exist yet" }) }] };
+      return { ok: true, agents: [], note: "AgentCatalog table does not exist yet" };
     }
   });
 
   wrap("sync_sheets_now", "Manually trigger immediate sync of all agent catalog spreadsheets to local QNAP storage.", {}, async () => {
     await syncAgentCatalogSheets();
-    return { content: [{ type: "text", text: JSON.stringify({ ok: true, message: "Sync completed — check server logs for details" }) }] };
+    return { ok: true, message: "Sync completed — check server logs for details" };
   });
 
   return server;
@@ -779,9 +790,6 @@ app.post("/mcp", async (req, res) => {
   }
 });
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-await fs.mkdir(path.join(UPLOAD_DIR, "team-logos"),    { recursive: true });
-await fs.mkdir(path.join(UPLOAD_DIR, "player-photos"), { recursive: true });
 // ─── Init ─────────────────────────────────────────────────────────────────────
 await fs.mkdir(path.join(UPLOAD_DIR, "team-logos"),    { recursive: true });
 await fs.mkdir(path.join(UPLOAD_DIR, "player-photos"), { recursive: true });
