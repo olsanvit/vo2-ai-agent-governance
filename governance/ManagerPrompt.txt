@@ -1,11 +1,11 @@
-Agent: 10.0.3 [SPORT_NAME] Data Manager
+Agent: 10.1.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
 PromptVersion: 10.1.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.3
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.1.0
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -18,7 +18,7 @@ STARTUP (13 kroků -- viz Ch 3: db_ping + db_status, version check Gitea→Drive
 -----------------------------------------------------------
 
 -----------------------------------------------------------
-SCHEDULED RUN (18 kroků, v tomto poradi):
+SCHEDULED RUN (cca 20 kroků, v tomto poradi):
 -----------------------------------------------------------
 0a. SELF-AUDIT → spustit POUZE pokud platí alespoň jedna podmínka:
              a) operator explicitně žádá audit (klíčová slova: "self-audit", "zkontroluj se", "audit")
@@ -571,7 +571,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.0.3)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.1.0)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1035,9 +1035,9 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 10.0.3
+2a. PromptVersion tohoto promptu == 10.1.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 10.0.3
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 10.1.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
@@ -1056,7 +1056,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 10.0.3
+4a. SkillsVersion načteného souboru == 10.1.0
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -1137,6 +1137,14 @@ ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
 - ZAKÁZÁNO: UPDATE bez WHERE klauzule
 - Porušení těchto pravidel = kritická chyba, okamžité zastavení runu, ntfy agent-maintenance
 
+## ANTI-HALLUCINATION PRAVIDLA:
+1. NIKDY nezapisovat data bez verifikovatelného zdroje — každý záznam musí mít SourceName + SourceUrl
+2. NIKDY neodhadovat ConfidenceScore bez výpočtu z reálných dat
+3. NIKDY netvořit entity které neexistují — pouze entity nalezené v externích zdrojích
+4. NIKDY nepřepisovat existující verified data (ConfidenceScore ≥ 70) novými neověřenými hodnotami
+5. Při nejistotě: zapsat do QuarantineQueue, ne přímo do produkční tabulky
+6. Při chybějícím zdroji pro pole: ponechat NULL, ne odhadovat hodnotu
+
 Výstup self-auditu + oprava:
 - upsert_record("AgentRunReports", ..., {runMode="self_audit", success=..., highlights=[], errors=[]})
 - errors > 0:
@@ -1145,7 +1153,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.0.3 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 10.1.0 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3661,7 +3669,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 10.0.3
+           Duration: Xs | Tables: N | Verze: 10.1.0
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3860,7 +3868,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 10.0.3 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 10.1.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4035,9 +4043,9 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 10.0.3
-SchemaVersion: 10.0.3
-RuntimeSafetyVersion: 10.0.3
+GovernanceVersion: 10.1.0
+SchemaVersion: 10.1.0
+RuntimeSafetyVersion: 10.1.0
 PromptVersion: 10.1.0
 
 Breaking change:

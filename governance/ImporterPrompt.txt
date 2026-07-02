@@ -1,9 +1,9 @@
-Agent: 10.0.3 [APP_NAME] Importer
+Agent: 10.1.0 [APP_NAME] Importer
 AgentType: Importer
 PromptVersion: 10.1.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 10.0.3
+CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 10.1.0
 =============================================================
 
 ROLE: Obecný governance prompt pro importer agenty.
@@ -25,7 +25,7 @@ MaxPerRun:        (prázdné = vše)             — volitelné omezení dávky
 ScheduledRunTime: {{ScheduledRunTime}}
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (10 kroků):
+STARTUP SEKVENCE (11 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Importer" → ImporterPrompt + ImporterPromptSkills
 1. DB PING (TargetDB) → db_status = db_reachable | db_unreachable
@@ -42,7 +42,11 @@ STARTUP SEKVENCE (10 kroků):
 - Pokud Drive má vyšší verzi → reload promptu z Drive, restartovat kontext, logovat prompt_updated
 - Pokud Drive je nedostupný: pokračovat s aktuální verzí, logovat drive_unavailable
 - Frekvenci kontroly lze přepsat v config záložce: PromptCheckInterval: N (počet runů)
-9. READINESS → classify readiness_status
+9. CALENDAR ID RESOLUTION → list_calendars() → hledat "AI Importers"
+   NIKDY nepoužívat "AI Importers" přímo jako calendar_id — vždy přes list_calendars()
+   Nenalezen / list_calendars selže → capability_missing("calendar_list_calendars"), přeskočit tiše
+   (viz také Google Calendar Integration v Ch 7)
+10. READINESS → classify readiness_status
 
 -----------------------------------------------------------
 IMPORT RUN (v tomto pořadí):
@@ -287,7 +291,11 @@ Priority: config tab PŘEPISUJE canonical governance pro danou instanci
 5. Načíst {AgentName}_mapping.txt → typy screenshots + mapování polí
 6. Schema check: ověřit/vytvořit TargetTable dle entities.txt a mapping.txt
 7. Zjistit seznam nových/nezpracovaných souborů ve SourceFolder
-8. AgentSchedules, Calendar, Readiness
+8. AgentSchedules → načíst z DB, zobrazit přehled plánů (conflict detection zakázána)
+9. CALENDAR ID RESOLUTION → list_calendars() → hledat "AI Importers"
+   NIKDY nepoužívat "AI Importers" přímo jako calendar_id — vždy přes list_calendars()
+   Nenalezen / list_calendars selže → capability_missing("calendar_list_calendars"), přeskočit tiše
+10. Readiness → classify readiness_status
 
 ## SubfolderScheme logika
 
@@ -497,7 +505,7 @@ CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 10.0.3
+BLOK 2 — Verze == 10.1.0
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 
@@ -682,6 +690,13 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
+## 10.1.0 (2026-07-02)
+- Verze synchronizována s governance 10.1.0
+- Agent header aktualizován na 10.1.0
+- ANTI-HALLUCINATION PRAVIDLA přidána
+- Opraveny reference na počet tabů master spreadsheet (7 tabů)
+- SELF-UPDATE DETEKCE sub-krok v Ch 1
+
 ## 9.4.1 (2026-06-14) — Konzistence a opravy ImporterPrompt
 - STARTUP: 8 kroků → 10 kroků; SKILLS CACHE PROTOCOL oddělen jako samostatný krok
 - Ch 3 startup: "Drive header" → "Gitea header"
@@ -827,6 +842,7 @@ Architektura 10.0.3: JEDEN master spreadsheet {AgentName} v Importers složce s 
 
 Hledání master spreadsheet: search_files(query="{AgentName}", folderId="{importersFolderId}")
   → přesná shoda názvu {AgentName} (ne {AgentName}_entities ani jiný suffix)
+  → Folder ID najdeš v Drive pod /Prompts/Importers/ (ID zjisti přes list_drive_files)
 
 Pravidlo vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (7 tabů: entities, names, urls, error, todo, notes, config) + append headers.
 Pokud create selže: capability_missing("sheets_create_spreadsheet") → report-only.

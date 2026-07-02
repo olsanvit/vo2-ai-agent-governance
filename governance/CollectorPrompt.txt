@@ -1,9 +1,9 @@
-Agent: 10.0.3 [COLLECTION_NAME] Collector
+Agent: 10.1.0 [COLLECTION_NAME] Collector
 AgentType: Collector
 PromptVersion: 10.1.0
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.0.3
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.1.0
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -128,7 +128,7 @@ Canonical source rules:
 
 Drive soubory tohoto agenta (master spreadsheet architektura 10.0.3):
 - {AgentName}_config.txt            → /Prompts/Collectors/ (TargetDB, TargetTable, CollectionTypes, MaxPerRun)
-- master spreadsheet {AgentName}    → Collectors složka (tab 'entities', 'names', 'urls', 'error')
+- master spreadsheet {AgentName}    → Collectors složka (tab 'entities', 'names', 'urls', 'error', 'todo', 'notes', 'config')
 - {AgentName}_categories_{type}.txt → /Prompts/Collectors/ (category lists per CollectionType)
 
 =============================================================
@@ -418,7 +418,7 @@ Kořenová složka: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 - /Prompts/Collectors/ (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
   {AgentName}_config.txt
   {AgentName}_categories_{type}.txt (per CollectionType)
-  master spreadsheet {AgentName} (taby: entities, names, urls, error)
+  master spreadsheet {AgentName} (taby: entities, names, urls, error, todo, notes, config)
 - /Prompts/ root
   CollectorPrompt.txt
   CollectorPromptSkills.txt
@@ -459,7 +459,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 Spouštět: explicitní žádost | první run | každých 30 runů
 
 BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze: PromptVersion == 10.0.3 | MCP_VERSION >= 10.0.1 | SkillsVersion == 10.0.3
+BLOK 2 — Verze: PromptVersion == 10.1.0 | MCP_VERSION >= 10.0.1 | SkillsVersion == 10.1.0
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 
@@ -628,6 +628,13 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 10.1.0 (2026-07-02)
+- Verze synchronizována s governance 10.1.0
+- Agent header aktualizován na 10.1.0
+- ANTI-HALLUCINATION PRAVIDLA přidána
+- Opraveny reference na počet tabů master spreadsheet (7 tabů)
+- SELF-UPDATE DETEKCE sub-krok v Ch 1
 
 ## 9.4.1 (2026-06-14) — Konzistence a opravy CollectorPrompt
 - STARTUP: 8 kroků → 11 kroků; SKILLS CACHE PROTOCOL oddělen, CALENDAR ID RESOLUTION přidán do Ch 1
