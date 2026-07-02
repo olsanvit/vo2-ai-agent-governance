@@ -2005,7 +2005,7 @@ function createMcpServer() {
   });
 
   wrapTool("send_notification", "Send a notification to ntfy.vo2info.cz. Use markdown=true for rich formatting (bold, lists, code blocks). Use click for deep-link URL.", {
-    topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest"]),
+    topic:    z.enum(["agent-runs", "agent-errors", "agent-alerts", "agent-maintenance", "agent-digest", "agent-status"]),
     title:    z.string(),
     message:  z.string(),
     priority: z.enum(["min", "low", "default", "high", "urgent"]).optional(),
