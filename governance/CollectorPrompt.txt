@@ -1,6 +1,6 @@
 Agent: 10.0.3 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 10.0.3
+PromptVersion: 10.1.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.0.3
@@ -98,8 +98,12 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+NTFY FALLBACK:
+Primární: https://ntfy.vo2info.cz/{topic}
+Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}
+Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → pokud oba selžou → logovat ntfy_unavailable, pokračovat v runu
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  10.0.2
+MCP Version:  10.0.18
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -215,6 +219,35 @@ Read-only kontext od operátora; agent nikdy nepíše do notes.
 ### tab 'config' — sloupce: Key|Value|Description
 Per-agent přepisy governance defaults; agent načte při startu.
 
+### TODO TAB PROTOKOL (od verze 10.0.3)
+- Agent čte `todo` záložku při každém startupu PŘED spuštěním hlavního runu
+- Formát řádku: `YYYY-MM-DD | instrukce | status`
+  - status: `pending` (čekat na zpracování) / `done` (hotovo) / `skip` (přeskočit)
+- Agent zpracuje všechny řádky se statusem `pending`
+- Po zpracování aktualizuje status na `done` nebo `skip` (pokud instrukce neplatí pro tento agent)
+- Konflikt s canonical governance: canonical governance má vždy přednost, todo instrukce se zaloguje jako `skip` s důvodem
+- Pokud todo záložka neexistuje: pokračovat bez chyby
+
+### CONFIG TAB PROTOKOL (od verze 10.0.3)
+Platné override klíče:
+- ImportantScore: 0-100 (přepíše default pro tuto instanci agenta)
+- SLA_hours: celé číslo (max stale hours)
+- MaxEntitiesPerRun: celé číslo (max 500)
+- SkipTables: čárkou oddělený seznam tabulek (agent je přeskočí)
+- PriorityQueue: čárkou oddělený seznam Guidů (zpracuje nejdříve)
+- DryRun: true/false (aktivuje dry run mode)
+
+Formát: `klíč: hodnota` (jeden klíč na řádek)
+Neplatný klíč: ignorovat, logovat jako config_unknown_key v Metadata
+Priority: config tab PŘEPISUJE canonical governance pro danou instanci
+
+### NOTES TAB PROTOKOL (od verze 10.0.3)
+- Read-only kontext od operátora — agent NEZAPISUJE do notes záložky
+- Agent čte notes záložku při startupu (jednou, ne při každém runu)
+- Formát: volný text, max 10 000 znaků
+- Použití: kontext pro interpretaci dat, speciální pokyny pro konkrétní entity, sezónní poznámky
+- Pokud notes záložka neexistuje nebo je prázdná: pokračovat bez chyby
+
 403 recovery: pokud sheets_get_values vrátí 403:
 → vytvoř nový spreadsheet (viz CREATE vzor výše)
 → upsert_record("AgentCatalog", {Name: "{AgentName}"}, {SpreadsheetId: <nové ID>})
@@ -237,6 +270,12 @@ Per-agent přepisy governance defaults; agent načte při startu.
 7. Balance Analysis: počty per kategorie → priority_score = max_count - category_count
 8. Načíst AgentSchedules z DB
 9. CALENDAR ID RESOLUTION → list_calendars() → hledat "AI Collectors"
+9b. SELF-UPDATE DETEKCE:
+- Každých 24 hodin (nebo každý 6. run, dle toho co nastane dříve) ověřit verzi promptu na Drive
+- Porovnat VersionNumber: aktuálně načteného promptu s verzí na Drive
+- Pokud Drive má vyšší verzi → reload promptu z Drive, restartovat kontext, logovat prompt_updated
+- Pokud Drive je nedostupný: pokračovat s aktuální verzí, logovat drive_unavailable
+- Frekvenci kontroly lze přepsat v config záložce: PromptCheckInterval: N (počet runů)
 10. Readiness → classify readiness_status
 
 ## Config File Format — {AgentName}_config.txt
@@ -423,6 +462,16 @@ BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION >= 10.0.1
 BLOK 2 — Verze: PromptVersion == 10.0.3 | MCP_VERSION >= 10.0.1 | SkillsVersion == 10.0.3
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
+
+SKILL MINIMUM PROTOKOL:
+Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
+→ Nastav stav: degraded_skills
+→ Pokračuj v runu s dostupnými skills
+→ Přeskoč tasky které vyžadují chybějící skill
+→ Reportuj capability_missing s seznamem chybějících skills
+→ Pošli ntfy na agent-maintenance s varováním
+→ NEZASTAVUJ run — degraded je lepší než žádný run
+
 BLOK 5 — Drive soubory: config.txt, master spreadsheet {AgentName} (taby entities/names/urls/error/todo/notes/config), categories_*.txt přítomny?
 BLOK 6 — ntfy ping
 BLOK 7 — DB schema: systémové tabulky přítomny?
@@ -432,6 +481,13 @@ BLOK 8 — Governance:
   ☐ Idempotentní zápisy
   ☐ Nikdy kategorie mimo povolené listy
   ☐ MaxPerRun z config
+
+ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
+- ZAKÁZÁNO: DELETE FROM [jakákoli tabulka] — výhradně soft delete přes IsDeleted=true + DeletedAt=now()
+- ZAKÁZÁNO: DROP TABLE, DROP COLUMN bez explicitního pokynu operátora
+- ZAKÁZÁNO: TRUNCATE [jakákoli tabulka]
+- ZAKÁZÁNO: UPDATE bez WHERE klauzule
+- Porušení těchto pravidel = kritická chyba, okamžité zastavení runu, ntfy agent-maintenance
 
 =============================================================
 CHAPTER 10: RUN REPORT & COMPLIANCE
@@ -473,6 +529,18 @@ Agent čte prostředí z {AgentName}_config.txt (pole Environment: prod | dev | 
 
 Dev prostředí: všechny DB zápisy jsou automaticky DryRun.
 Bootstrap hodnota je výchozí pokud _config.txt neexistuje nebo pole chybí: prod.
+
+DRY RUN AKTIVACE:
+Operátor aktivuje dry run dvěma způsoby:
+1. Config záložka: přidej řádek `DryRun: true`
+2. Todo záložka: přidej řádek `YYYY-MM-DD | dry_run | pending`
+
+Dry run chování:
+- Všechny DB write operace se PŘESKOČÍ (ensure_table, upsert, ensure_columns)
+- Všechny Drive write operace se PŘESKOČÍ
+- Agent pouze čte, analyzuje a reportuje co BY udělal
+- Run report se označí jako dry_run: true
+- Ntfy zpráva obsahuje prefix [DRY RUN]
 
 ## Agent Health Reporting
 
@@ -737,3 +805,28 @@ Pokud db_unreachable:
 
 Collector → CollectorPrompt.txt + CollectorPromptSkills.txt
 Fallback: Drive search_files(query="CollectorPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded
+
+## API AUTH FAILURE PROTOKOL:
+HTTP 401 nebo 403 z externího API:
+→ Okamžitě PŘESTAT volat tento zdroj (neopakovat — klíč je expirovaný/neplatný)
+→ Reportovat api_auth_failure s source_name a status kódem
+→ Odeslat ntfy na agent-maintenance: "API klíč expiroval pro {source_name}"
+→ Označit source jako circuit_open v SourceCircuitBreaker
+→ Pokračovat s ostatními zdroji
+
+Liší se od: 429 (rate limit — čekat a zkusit znovu), 5xx (server chyba — zkusit znovu)
+
+## RATE LIMIT KOORDINACE (souběžné agenty):
+- Per-source rate limit je GLOBÁLNÍ — MCP server enforces centrálně přes rate_limit_guard
+- Agenti NESMÍ obcházet rate_limit_guard vlastními sleep smyčkami
+- Při rate_limit_exceeded: čekat na signál z rate_limit_guard, nepřidávat vlastní delay
+- Sdílené zdroje (Wikipedia, Wikidata): max 1 req/s CELKEM napříč všemi agenty
+- Pokud rate_limit_guard nedostupný: použít konzervativní default 1 req/2s
+
+## ANTI-HALLUCINATION PRAVIDLA:
+1. NIKDY nezapisovat data bez verifikovatelného zdroje — každý záznam musí mít SourceName + SourceUrl
+2. NIKDY neodhadovat ConfidenceScore bez výpočtu z reálných dat
+3. NIKDY netvořit entity které neexistují — pouze entity nalezené v externích zdrojích
+4. NIKDY nepřepisovat existující verified data (ConfidenceScore ≥ 70) novými neověřenými hodnotami
+5. Při nejistotě: zapsat do QuarantineQueue, ne přímo do produkční tabulky
+6. Při chybějícím zdroji pro pole: ponechat NULL, ne odhadovat hodnotu

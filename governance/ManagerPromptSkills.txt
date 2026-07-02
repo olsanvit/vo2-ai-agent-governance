@@ -1,5 +1,5 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Generated: 2026-06-17
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -9,6 +9,17 @@ Každý Manager agent musí mít aktivních ASPOŇ 11 skills.
 !! MAINTENANCE POZNÁMKA: Přibližně 60 skills existuje identicky v ManagerPromptSkills i
    CatalogPromptSkills. Při úpravě sdíleného skilu VŽDY aktualizuj OBA soubory.
    Viz CatalogPromptSkills.txt pro úplný seznam sdílených skills.
+
+SHARED SKILLS SYNC PROTOKOL:
+Sdílené skills (identické nebo téměř identické v obou souborech):
+[zachovat existující seznam — viz CatalogPromptSkills.txt]
+
+Postup synchronizace:
+1. Uprav skill v JEDNOM souboru
+2. Zkopíruj změnu do DRUHÉHO souboru
+3. Ověř diff: grep "## nazev-skilu" oba soubory a porovnej
+4. Aktualizuj SKILL_CHANGELOG v obou souborech
+5. Bump SkillsVersion v obou souborech současně
 
 =============================================================
 PRAVIDLA POUŽITÍ SKILLS
@@ -1189,6 +1200,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.4.7)
 
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

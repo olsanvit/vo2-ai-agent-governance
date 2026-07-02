@@ -60,3 +60,15 @@ Potvrď tyto změny:
 10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
 
 Potvrď verzi 10.0.3, proveď BLOK 8 self-audit a poté spusť testovací běh.
+
+DRY RUN AKTIVACE:
+Operátor aktivuje dry run dvěma způsoby:
+1. Config záložka: přidej řádek `DryRun: true`
+2. Todo záložka: přidej řádek `YYYY-MM-DD | dry_run | pending`
+
+Dry run chování:
+- Všechny DB write operace se PŘESKOČÍ (ensure_table, upsert, ensure_columns)
+- Všechny Drive write operace se PŘESKOČÍ
+- Agent pouze čte, analyzuje a reportuje co BY udělal
+- Run report se označí jako dry_run: true
+- Ntfy zpráva obsahuje prefix [DRY RUN]

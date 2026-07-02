@@ -2,7 +2,7 @@ Agent: 10.0.3 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 10.0.3
+PromptVersion: 10.1.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.0.3
@@ -18,7 +18,7 @@ STARTUP (13 kroků -- viz Ch 3: db_ping + db_status, version check Gitea→Drive
 -----------------------------------------------------------
 
 -----------------------------------------------------------
-SCHEDULED RUN (v tomto poradi):
+SCHEDULED RUN (18 kroků, v tomto poradi):
 -----------------------------------------------------------
 0a. SELF-AUDIT → spustit POUZE pokud platí alespoň jedna podmínka:
              a) operator explicitně žádá audit (klíčová slova: "self-audit", "zkontroluj se", "audit")
@@ -104,6 +104,12 @@ SCHEDULED RUN (v tomto poradi):
 
     L ntfy selže → log capability_missing("ntfy"), pokračovat — run report již uložen
 15. UNLOCK -> uvolnit advisory lock
+
+-----------------------------------------------------------
+Ntfy priority levels:
+- CRITICAL: priority 5, tag: rotating_light — fatální chyba, agent nemůže pokračovat
+- WARNING: priority 4, tag: warning — degraded stav, agent pokračuje s omezeními
+- INFO: priority 2, tag: white_check_mark — scheduled run summary, startup health
 
 -----------------------------------------------------------
 KLICOVE TABULKY (ImportantScore):
@@ -344,6 +350,35 @@ COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
 Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý tab — jen append.
 Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
+### TODO TAB PROTOKOL (od verze 10.0.3)
+- Agent čte `todo` záložku při každém startupu PŘED spuštěním hlavního runu
+- Formát řádku: `YYYY-MM-DD | instrukce | status`
+  - status: `pending` (čekat na zpracování) / `done` (hotovo) / `skip` (přeskočit)
+- Agent zpracuje všechny řádky se statusem `pending`
+- Po zpracování aktualizuje status na `done` nebo `skip` (pokud instrukce neplatí pro tento agent)
+- Konflikt s canonical governance: canonical governance má vždy přednost, todo instrukce se zaloguje jako `skip` s důvodem
+- Pokud todo záložka neexistuje: pokračovat bez chyby
+
+### CONFIG TAB PROTOKOL (od verze 10.0.3)
+Platné override klíče:
+- ImportantScore: 0-100 (přepíše default pro tuto instanci agenta)
+- SLA_hours: celé číslo (max stale hours)
+- MaxEntitiesPerRun: celé číslo (max 500)
+- SkipTables: čárkou oddělený seznam tabulek (agent je přeskočí)
+- PriorityQueue: čárkou oddělený seznam Guidů (zpracuje nejdříve)
+- DryRun: true/false (aktivuje dry run mode)
+
+Formát: `klíč: hodnota` (jeden klíč na řádek)
+Neplatný klíč: ignorovat, logovat jako config_unknown_key v Metadata
+Priority: config tab PŘEPISUJE canonical governance pro danou instanci
+
+### NOTES TAB PROTOKOL (od verze 10.0.3)
+- Read-only kontext od operátora — agent NEZAPISUJE do notes záložky
+- Agent čte notes záložku při startupu (jednou, ne při každém runu)
+- Formát: volný text, max 10 000 znaků
+- Použití: kontext pro interpretaci dat, speciální pokyny pro konkrétní entity, sezónní poznámky
+- Pokud notes záložka neexistuje nebo je prázdná: pokračovat bez chyby
+
 ## Readiness Stavy — 10.0.3
 
 - `ready` — vše OK, žádná varování
@@ -368,6 +403,14 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
      → readiness: NEZMĚNIT kvůli tomuto — není to degradace
      → NEPOSÍLAT ⚠️ ntfy alert jen kvůli root umístění
   c) Lifecycle souboru je stejný bez ohledu na umístění
+
+## DRIVE FOLDER ID FALLBACK:
+Pokud create_file s parentId selže s 404 (složka nenalezena):
+1. Zavolej search_files s query="název složky" a filtruj mimeType="application/vnd.google-apps.folder"
+2. Získej nové folder ID z výsledku
+3. Zopakuj create_file s novým parentId
+4. Reportuj drive_folder_id_changed v Metadata run reportu
+Pokud ani search_files nenajde složku: reportovat drive_folder_missing, ntfy agent-maintenance
 
 ## Simplified Startup Sequence 10.0.3
 
@@ -532,6 +575,13 @@ Povinné kroky v tomto pořadí:
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
+10b. SELF-UPDATE DETEKCE:
+- Každých 24 hodin (nebo každý 6. run, dle toho co nastane dříve) ověřit verzi promptu na Drive
+- Porovnat VersionNumber: aktuálně načteného promptu s verzí na Drive
+- Pokud Drive má vyšší verzi → reload promptu z Drive, restartovat kontext, logovat prompt_updated
+- Pokud Drive je nedostupný: pokračovat s aktuální verzí, logovat drive_unavailable
+- Frekvenci kontroly lze přepsat v config záložce: PromptCheckInterval: N (počet runů)
+
 11. Načíst AgentSchedules z DB: SELECT AgentName, ScheduledRunTime, NextRunAt FROM AgentSchedules WHERE IsActive=true
     → zobrazit přehled všech agentů a jejich plánovaného času
     → paralelní běh více agentů ve stejný čas je povolený
@@ -1013,6 +1063,15 @@ BLOK 4 -- Skills:
     ntfy-notification-sender | problem-report-writer | baseline-managers-file-manager
 L skills soubor nenačten → znovu načíst z Drive (viz krok 0); pokud stále nelze → capability_missing("skills_file_unavailable")
 
+SKILL MINIMUM PROTOKOL:
+Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
+→ Nastav stav: degraded_skills
+→ Pokračuj v runu s dostupnými skills
+→ Přeskoč tasky které vyžadují chybějící skill
+→ Reportuj capability_missing s seznamem chybějících skills
+→ Pošli ntfy na agent-maintenance s varováním
+→ NEZASTAVUJ run — degraded je lepší než žádný run
+
 BLOK 5 -- Google Sheets + Drive soubory + AgentMonitor sync:
 5. Master spreadsheet {AgentName} v /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
     [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → existuje?
@@ -1070,6 +1129,13 @@ BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Ikona agenta: při selfUpdate vygenerován návrh ikony dle jména/tématu agenta
 ☐ error tab: součástí master spreadsheet {AgentName}; append-only, nikdy mazat
 ☐ Kalendář: CALENDAR_ID pevně nastaven dle AgentType (NIKDY "AI Managers" jako parametr přímo)
+
+ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
+- ZAKÁZÁNO: DELETE FROM [jakákoli tabulka] — výhradně soft delete přes IsDeleted=true + DeletedAt=now()
+- ZAKÁZÁNO: DROP TABLE, DROP COLUMN bez explicitního pokynu operátora
+- ZAKÁZÁNO: TRUNCATE [jakákoli tabulka]
+- ZAKÁZÁNO: UPDATE bez WHERE klauzule
+- Porušení těchto pravidel = kritická chyba, okamžité zastavení runu, ntfy agent-maintenance
 
 Výstup self-auditu + oprava:
 - upsert_record("AgentRunReports", ..., {runMode="self_audit", success=..., highlights=[], errors=[]})
@@ -1149,6 +1215,10 @@ Kdy zapsat:
 - NEBO selhal ntfy (notification neodeslána)
 - NEBO selhal Calendar event (❌ event nevytvořen nebo nezaktualizován)
 - NEBO selhal upsert_record("AgentRunReports") — report neuložen do DB
+
+PGBOUNCER:
+Agenti se připojují přes pgbouncer (connection pooling) — nepoužívat přímé připojení na pg16.
+MCP server (VO2QNAPDB) řeší připojení interně — agenti nemusí konfigurovat connection string.
 
 MCP mapping (agent použije tu hodnotu, která odpovídá jeho runtime připojení):
 - AIData DB (mcp.vo2info.cz/AI)    → VO2QNAPDBAI
@@ -2788,6 +2858,30 @@ DŮLEŽITÉ:
 - Google Drive a Calendar: samostatné integrace (nejsou součástí VO2QNAPDB MCP)
 - MAX_BATCH_SIZE pro smart_upsert_batch zjisti VŽDY přes rate_limit_guard (ne hardcoded)
 
+API AUTH FAILURE PROTOKOL:
+HTTP 401 nebo 403 z externího API:
+→ Okamžitě PŘESTAT volat tento zdroj (neopakovat — klíč je expirovaný/neplatný)
+→ Reportovat api_auth_failure s source_name a status kódem
+→ Odeslat ntfy na agent-maintenance: "API klíč expiroval pro {source_name}"
+→ Označit source jako circuit_open v SourceCircuitBreaker
+→ Pokračovat s ostatními zdroji
+
+Liší se od: 429 (rate limit — čekat a zkusit znovu), 5xx (server chyba — zkusit znovu)
+
+PG_ADVISORY_LOCK PROTOKOL:
+- Před každým runem: pg_try_advisory_lock(agent_id) — pokud false → jiný instance běží, ukončit s duplicate_run_skipped
+- Lock se automaticky uvolní při odpojení session (crash-safe)
+- Pokud lock drží session déle než 6 hodin: Checker agent flaguje jako stuck_agent_lock
+- Manuální uvolnění: SELECT pg_advisory_unlock(agent_id) — pouze operátor
+- agent_id = hashtext(AgentName) pro konzistentní integer klíč
+
+RATE LIMIT KOORDINACE (souběžné agenty):
+- Per-source rate limit je GLOBÁLNÍ — MCP server enforces centrálně přes rate_limit_guard
+- Agenti NESMÍ obcházet rate_limit_guard vlastními sleep smyčkami
+- Při rate_limit_exceeded: čekat na signál z rate_limit_guard, nepřidávat vlastní delay
+- Sdílené zdroje (Wikipedia, Wikidata): max 1 req/s CELKEM napříč všemi agenty
+- Pokud rate_limit_guard nedostupný: použít konzervativní default 1 req/2s
+
 ## Database Architecture — Catalog vs Manager
 
 Aktuální architektura (doporučená):
@@ -3001,6 +3095,18 @@ Pravidla:
 - nezkoušet použít skill který není v tomto seznamu, i kdyby byl dostupný v Claude.ai
 
 ## DryRun Mode Governance -- 8.5.0
+
+DRY RUN AKTIVACE:
+Operátor aktivuje dry run dvěma způsoby:
+1. Config záložka: přidej řádek `DryRun: true`
+2. Todo záložka: přidej řádek `YYYY-MM-DD | dry_run | pending`
+
+Dry run chování:
+- Všechny DB write operace se PŘESKOČÍ (ensure_table, upsert, ensure_columns)
+- Všechny Drive write operace se PŘESKOČÍ
+- Agent pouze čte, analyzuje a reportuje co BY udělal
+- Run report se označí jako dry_run: true
+- Ntfy zpráva obsahuje prefix [DRY RUN]
 
 DryRun mod umoznuje testovaci beh bez jakychkoliv zapisovych operaci do DB.
 
@@ -3602,6 +3708,18 @@ Publish na topics VYŽADUJE auth — anonymous = jen čtení. Pokud 403: přidat
 Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
 Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 
+NTFY FALLBACK:
+Primární: https://ntfy.vo2info.cz/{topic}
+Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}
+Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → pokud oba selžou → logovat ntfy_unavailable, pokračovat v runu
+
+NTFY TOPIC MAPA:
+- agent-status: startup health report (všichni agenti)
+- agent-maintenance: chyby vyžadující zásah operátora (db_owner_mismatch, api_auth_failure, spreadsheet_tab_missing)
+- agent-digest: weekly digest, scheduled run summary
+- qnap-health: infrastruktura (kontejnery, disk, sítě)
+- qnap-monitor: QNAP health check reporty
+
 POVINNE notifikace:
 
 1. Konec scheduled runu — úspěch (topic: agent-runs)
@@ -3920,7 +4038,7 @@ Rules:
 GovernanceVersion: 10.0.3
 SchemaVersion: 10.0.3
 RuntimeSafetyVersion: 10.0.3
-PromptVersion: 10.0.3
+PromptVersion: 10.1.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4466,3 +4584,28 @@ Pokud db_unreachable:
 
 Manager → ManagerPrompt.txt + ManagerPromptSkills.txt
 Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded
+
+## PATCH 9.3.0 (2026-01-xx)
+- Přidán agent-schedule-manager update
+- Rozšíření self-audit bloků
+
+## PATCH 9.4.0 (2026-03-xx)
+- Verze 9.4.0: stabilizace pipeline
+
+## PATCH 10.0.0 (2026-06-xx)
+- Velká aktualizace: PromptVersion systém, nové reporting standardy
+
+## PATCH 10.0.1 (2026-06-29)
+- ntfy přepnut na network_mode: host, port 8225
+- send_notification nový JSON formát s markdown, click, topic agent-digest
+
+## PATCH 10.0.2 (2026-06-30)
+- GAP 1+4: selfUpdate zapisuje prompt zpět na Drive
+- GAP 2: DB ping retry 3× 60s místo 5× 3s
+- GAP 3: Drive 403 → automatická obnova spreadsheeetu
+- MCP_VERSION decoupling: >= 10.0.1 místo == 10.0.1
+
+## PATCH 10.0.3 (2026-06-30)
+- Nové 3 taby ve všech master spreadsheetech: todo, notes, config (celkem 7)
+- DUPLICATE-GUARD a 403 recovery rozšířeny na 7 tabů
+- ManualSelfUpdate.txt aktualizováno

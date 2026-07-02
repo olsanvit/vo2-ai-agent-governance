@@ -1,10 +1,10 @@
 SkillsFor: ImporterPrompt
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
 Každý Importer agent musí mít aktivních ASPOŇ 10 skills.
-Povinné: top-eleven-screenshot-parser, top-eleven-db-importer.
+Povinné skills jsou domain-specifické — viz poznámky u skupin A a B níže.
 
 !! MAINTENANCE: Při úpravě zkontrolovat konzistenci s CatalogPrompt/ManagerPrompt skills.
 
@@ -22,11 +22,12 @@ PRAVIDLA POUŽITÍ SKILLS
 SKILL DIRECTORY (20 skills)
 =============================================================
 
--- A. PARSING (4 — top-eleven-screenshot-parser POVINNÝ) ------
+-- A. PARSING (4) ----------------------------------------------
+POZNÁMKA: Top Eleven specifické skills jsou ukázkovým vzorem — každý Importer agent musí mít vlastní domain-specific skills nebo adaptovat tyto.
 
 ## top-eleven-screenshot-parser
 Task types: klasifikace screenshotu, OCR vytěžení, normalizace dat
-Description: Hlavní parsing skill. Klasifikuje screenshot (player_profile,
+Description: Domain-specifický skill (Top Eleven). Pro jiné domény vytvořit ekvivalentní parser. Hlavní parsing skill. Klasifikuje screenshot (player_profile,
   team_season_overview, team_league, team_cup, elite/golden/ultimate, competition_stats).
   Vytěží strukturovaná data z jednoho nebo více obrázků. Vrátí normalizovaný
   datový objekt s jistotou per pole a seznam polí kde hodnota nebyla čitelná.
@@ -63,11 +64,12 @@ Inputs: jméno hráče, citizenship/nationality (pokud dostupná)
 Outputs: correct_forename (string nebo null), correct_surname (string nebo null), confidence
 Limitations: nízká jistota → null; riskantní odhad je horší než prázdné pole
 
--- B. IMPORT (4 — top-eleven-db-importer POVINNÝ) -------------
+-- B. IMPORT (4) -----------------------------------------------
+POZNÁMKA: Top Eleven specifické skills jsou ukázkovým vzorem — každý Importer agent musí mít vlastní domain-specific skills nebo adaptovat tyto.
 
 ## top-eleven-db-importer
 Task types: validace dat, upsert do TopEleven, auditní záznam
-Description: Hlavní import skill. Validuje vytěžená data (typy, povinná pole, sezóna).
+Description: Domain-specifický skill (Top Eleven). Pro jiné domény vytvořit ekvivalentní importer. Hlavní import skill. Validuje vytěžená data (typy, povinná pole, sezóna).
   Provede bezpečný upsert do tabulky TopEleven. Uloží auditní záznam per soubor
   (zdrojový soubor, sezóna, typ, status, saved_fields[], skipped_fields[], důvod).
   Rozhodne, zda lze soubor přesunout do cílové složky.
@@ -252,6 +254,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
