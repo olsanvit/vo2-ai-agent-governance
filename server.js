@@ -71,11 +71,17 @@ async function getSheetsToken() {
   return _sheetsToken;
 }
 
-async function sheetsGet(path) {
+async function sheetsGet(path, timeoutMs = 30_000) {
   const token = await getSheetsToken();
-  const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, { headers: { Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`);
-  return res.json();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`https://sheets.googleapis.com/v4/${path}`, { headers: { Authorization: `Bearer ${token}` }, signal: controller.signal });
+    if (!res.ok) throw new Error(`Sheets API ${res.status}: ${await res.text()}`);
+    return res.json();
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function sheetsPost(path, body) {
@@ -2278,6 +2284,10 @@ app.use("/mcp", (req, res, next) => {
   }
   const origJson = res.json.bind(res);
   res.json = (body) => {
+    if (idempotencyCache.size >= 500) {
+      const keys = Array.from(idempotencyCache.keys()).slice(0, 100);
+      keys.forEach(k => idempotencyCache.delete(k));
+    }
     idempotencyCache.set(key, { statusCode: res.statusCode || 200, body, timestamp: Date.now() });
     return origJson(body);
   };
@@ -2331,6 +2341,11 @@ app.get("/health", async (req, res) => {
 });
 
 app.get("/metrics", (req, res) => {
+  const auth = req.headers['authorization'] || '';
+  if (auth !== `Bearer ${AUTH_TOKEN}`) {
+    res.status(401).json({ error: 'Unauthorized' });
+    return;
+  }
   res.json({
     ...metrics,
     uptime: process.uptime(),
