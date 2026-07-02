@@ -1,5 +1,5 @@
 SkillsFor: GeneratorPrompt
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -25,58 +25,58 @@ SKILL DIRECTORY (18 skills)
 
 ## bot-coverage-analyzer
 Task types: coverage check, bot entity statistics, image coverage %
-Description: Analyzuje pokrytí obrázků pro bot entity v USM.
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Analyzuje pokrytí obrázků pro bot entity v USM.
   Spočítá: celkový počet bot týmů, počet bez loga, coverage %.
   Totéž pro bot hráče. Vrátí porovnání a doporučení priority.
 Inputs: DB připojení, název tabulek (Teams, Players nebo ekvivalenty)
 Outputs: teamsCoverage %, playersCoverage %, priority doporučení
-Limitations: pracuje pouze s IsBot = true entitami
+Limitations: pracuje pouze s IsBot = true entitami. Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 ## bot-entity-verifier
 Task types: verify IsBot, image missing check, pre-generate validation
-Description: Před každým generováním znovu ověří, že entita splňuje scope:
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Před každým generováním znovu ověří, že entita splňuje scope:
   IsBot = true a obrázek skutečně stále chybí (NULL nebo prázdný).
   Chrání před zápisem na nesprávnou entitu.
 Inputs: EntityGuid nebo jiný identifikátor, tabulka
 Outputs: verified/skip flag, skip reason pokud odmítnut
-Limitations: přímý DB dotaz; nepoužívat cached data ze startup fáze
+Limitations: přímý DB dotaz; nepoužívat cached data ze startup fáze. Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 ## missing-image-batch-loader
 Task types: načtení dávky entit bez obrázku, max 10
-Description: Načte seznam max 10 bot entit bez obrázku (LogoUrl nebo PhotoUrl NULL/prázdný).
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Načte seznam max 10 bot entit bez obrázku (LogoUrl nebo PhotoUrl NULL/prázdný).
   Řadí dle data vytvoření (nejstarší první).
   Respektuje scope: IsBot = true only.
 Inputs: tabulka, sloupec s URL obrázku, max batch size (default 10)
 Outputs: seznam entit s jejich Guid a dostupnými atributy
-Limitations: max 10 entit per volání; neřadí dle priority scoringu
+Limitations: max 10 entit per volání; neřadí dle priority scoringu. Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 -- B. PROMPT BUILDING (4) --------------------------------------
 
 ## team-logo-prompt-builder
 Task types: sestavení promptu pro týmové logo, BotProfile logic
-Description: Sestaví image prompt pro týmové logo dle specifikace GeneratorPrompt Ch 5.
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Sestaví image prompt pro týmové logo dle specifikace GeneratorPrompt Ch 5.
   Doplní Name, Code3, Stadium, BotProfile. Přidá sport-specific instrukce
   a BotProfile barvy. Zajistí "No text, no letters" instrukci.
 Inputs: detail týmu (Name, Code3, Stadium, BotProfile, sport context)
 Outputs: hotový prompt string pro create_image
-Limitations: pokud chybí Name → odmítnout; ostatní atributy jsou volitelné
+Limitations: pokud chybí Name → odmítnout; ostatní atributy jsou volitelné. Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 ## player-photo-prompt-builder
 Task types: sestavení promptu pro fotku hráče, sport context
-Description: Sestaví image prompt pro hráčský portrét dle specifikace GeneratorPrompt Ch 5.
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Sestaví image prompt pro hráčský portrét dle specifikace GeneratorPrompt Ch 5.
   Doplní FullName, Position, BotArchetype. Přidá sport-specific instrukce.
   Zajistí "chest-up, one person, realistic" instrukci.
 Inputs: detail hráče (FullName, Position, BotArchetype, sport context)
 Outputs: hotový prompt string pro create_image
-Limitations: pokud chybí FullName → odmítnout; ostatní atributy jsou volitelné
+Limitations: pokud chybí FullName → odmítnout; ostatní atributy jsou volitelné. Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 ## sport-context-resolver
 Task types: detekce sportu z Position nebo BotArchetype
-Description: Rozpozná sport entity z dostupných atributů (Position, BotArchetype, TeamName).
+Description: Domain-specifický skill (USM). Přizpůsobit pro jiné domény dle config. Rozpozná sport entity z dostupných atributů (Position, BotArchetype, TeamName).
   Mapuje na sport-specific prompt rozšíření dle tabulky v Ch 5 GeneratorPrompt.
 Inputs: Position (string), BotArchetype (string, volitelně), TeamName (string, volitelně)
 Outputs: detekovaný sport, prompt extension string, confidence (high/medium/low)
-Limitations: nejistá detekce → confidence=low, použít generic "sport background"
+Limitations: nejistá detekce → confidence=low, použít generic "sport background". Hardcoded pro USM bot entities — pro jiné domény vyžaduje adaptaci.
 
 ## prompt-refinement-handler
 Task types: upřesnění promptu po quality check fail, retry
@@ -94,6 +94,7 @@ Limitations: max 1 refinement per entita; při druhém selhání → skip
 Task types: create_image, square format, 1024×1024
 Description: Orchestruje volání create_image. Zajistí vždy čtvercový formát 1:1,
   cílově 1024×1024. Předá prompt, zkontroluje že výsledek byl vrácen.
+  [ChatGPT native — Claude agenti nemají tento nástroj. Na Claude platformě použít alternativní image generation MCP nebo reportovat capability_missing.]
 Inputs: prompt string, entity type (logo/photo)
 Outputs: vygenerovaný obrázek (base64 nebo URL), success/fail
 Limitations: závisí na dostupnosti create_image nástroje; bez něj STOP
@@ -234,6 +235,6 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.

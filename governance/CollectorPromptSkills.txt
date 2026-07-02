@@ -1,5 +1,5 @@
 SkillsFor: CollectorPrompt
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
 Generated: 2026-06-09
 
 Skills jsou konfigurovány per agent v Claude.ai.
@@ -286,7 +286,7 @@ Description: Čte a aktualizuje tab 'entities' v master spreadsheet {AgentName} 
     1. SELECT tablename, COUNT(*) FROM pg_tables WHERE schemaname='public' GROUP BY tablename
     2. Každá tabulka dostane ImportantScore=50 (default), RowCount z COUNT(*), LastPopulated=now()
     3. sheets_create_spreadsheet(title="{AgentName}", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U")
-    4. batch_update_spreadsheet → 4 taby (entities, names, urls, error) + append headers
+    4. batch_update_spreadsheet → 7 tabů (entities, names, urls, error, todo, notes, config) + append headers
     5. Pokud create selže → capability_missing("sheets_create_spreadsheet"), pokračovat degraded (ne blocked)
 Inputs: AgentName, seznam tabulek s aktuálním RowCount
 Outputs: přečtený katalog (startup), aktualizovaný tab 'entities' na Drive (end of run)
@@ -322,7 +322,7 @@ analogickou s Catalog a Manager agenty:
 - search_files(query="{AgentName}", folderId="1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U") → master spreadsheet lookup
 - SELECT pg_tables → seed entities s ImportantScore=50 defaultem
 - sheets_create_spreadsheet selhání → capability_missing + degraded (ne blocked)
-- master spreadsheet vytváří 4 taby: entities, names, urls, error
+- master spreadsheet vytváří 7 tabů: entities, names, urls, error, todo, notes, config
 
 =============================================================
 PATCH 9.2.0 — SKILLS GOVERNANCE UPDATE
@@ -341,7 +341,7 @@ Reportovat schedule_drift_detected pokud DB plán ≠ Hermes plán.
 
 Canonical: tab 'entities' v master spreadsheet {AgentName} (VÝHRADNĚ, NIKDY samostatný soubor)
 Canonical formát: ImportantScore | TableName | Description | RowCount | LastPopulated | Status
-Vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (4 taby) + sheets_append_rows (headers)
+Vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (7 tabů: entities, names, urls, error, todo, notes, config) + sheets_append_rows (headers)
 Pokud create selže: capability_missing("sheets_create_spreadsheet"), pokračovat degraded.
 Povinné reportování stavu: exact_spreadsheet_found | created | creation_failed | used_source | reason
 
@@ -374,4 +374,4 @@ Limitations: výhradně při 502 selhání smart_upsert_batch; bez read-back →
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 10.0.3
+SkillsVersion: 10.1.0
