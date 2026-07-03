@@ -592,8 +592,21 @@ async function ensureSystemTables() {
   await ensureColumnsInternal("EntityImages", { EntityTable: "", EntityGuid: uuid(), ImagePath: "", ImageUrl: "", OriginalFileName: "", MimeType: "", SizeBytes: 0, Sha256: "", Width: 0, Height: 0 });
 }
 
+// Per-table mutex: serializes concurrent ensureTable calls within this process.
+// Prevents N connections racing to CREATE INDEX on the same table simultaneously,
+// which causes lock pile-up when one connection holds an uncommitted transaction.
+const _ensureTableQueue = new Map();
+
 async function ensureTable(table) {
   const t = normalizeIdentifierName(table);
+  const prev = _ensureTableQueue.get(t) ?? Promise.resolve();
+  const next = prev.then(() => _ensureTableDDL(t));
+  // Store a no-reject sentinel so future callers don't skip on prior error.
+  _ensureTableQueue.set(t, next.then(() => {}, () => {}));
+  return next;
+}
+
+async function _ensureTableDDL(t) {
   await pool.query(`CREATE TABLE IF NOT EXISTS "${t}" (${baseColumnsSql()})`);
   invalidateSchema(t);
   await ensureBaseStructure(t);
