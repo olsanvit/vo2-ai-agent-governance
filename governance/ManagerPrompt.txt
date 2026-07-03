@@ -350,7 +350,7 @@ COLUMNS: ProblemScore | Category | Description | Timestamp | StepStatus
 Řádek 1: záhlaví. Data od řádku 2. NIKDY nepřepisovat celý tab — jen append.
 Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
 
-### TODO TAB PROTOKOL (od verze 10.0.3)
+### TODO TAB PROTOKOL
 - Agent čte `todo` záložku při každém startupu PŘED spuštěním hlavního runu
 - Formát řádku: `YYYY-MM-DD | instrukce | status`
   - status: `pending` (čekat na zpracování) / `done` (hotovo) / `skip` (přeskočit)
@@ -359,7 +359,7 @@ Při vytvoření: batch_update_spreadsheet(appendCells, rows=[["ProblemScore","C
 - Konflikt s canonical governance: canonical governance má vždy přednost, todo instrukce se zaloguje jako `skip` s důvodem
 - Pokud todo záložka neexistuje: pokračovat bez chyby
 
-### CONFIG TAB PROTOKOL (od verze 10.0.3)
+### CONFIG TAB PROTOKOL
 Platné override klíče:
 - ImportantScore: 0-100 (přepíše default pro tuto instanci agenta)
 - SLA_hours: celé číslo (max stale hours)
@@ -372,14 +372,14 @@ Formát: `klíč: hodnota` (jeden klíč na řádek)
 Neplatný klíč: ignorovat, logovat jako config_unknown_key v Metadata
 Priority: config tab PŘEPISUJE canonical governance pro danou instanci
 
-### NOTES TAB PROTOKOL (od verze 10.0.3)
+### NOTES TAB PROTOKOL
 - Read-only kontext od operátora — agent NEZAPISUJE do notes záložky
 - Agent čte notes záložku při startupu (jednou, ne při každém runu)
 - Formát: volný text, max 10 000 znaků
 - Použití: kontext pro interpretaci dat, speciální pokyny pro konkrétní entity, sezónní poznámky
 - Pokud notes záložka neexistuje nebo je prázdná: pokračovat bez chyby
 
-## Readiness Stavy — 10.0.3
+## Readiness Stavy
 
 - `ready` — vše OK, žádná varování
 - `ready_with_warnings` — funkčně OK, ale jsou ne-blokující problémy:
@@ -394,7 +394,7 @@ Priority: config tab PŘEPISUJE canonical governance pro danou instanci
 - `blocked` — DB nedostupná, žádné zápisy
 - `not_ready` — kritická chyba při startu
 
-## drive_create_with_parent PROTOKOL — 10.0.3
+## drive_create_with_parent PROTOKOL
 
   a) Zkusit: create_file(name="...", mimeType="...", parentId="{folderId}")
   b) Pokud parentId není podporováno nebo selže:
@@ -412,7 +412,7 @@ Pokud create_file s parentId selže s 404 (složka nenalezena):
 4. Reportuj drive_folder_id_changed v Metadata run reportu
 Pokud ani search_files nenajde složku: reportovat drive_folder_missing, ntfy agent-maintenance
 
-## Simplified Startup Sequence 10.0.3
+## Simplified Startup Sequence
 
 Povinné kroky v tomto pořadí:
 0. AgentType detection: urči typ z AgentName/hlavičky promptu
@@ -644,7 +644,7 @@ Výsledek < 25:
 Doporučené tabulky pro počítání baseline (ImportantScore >= 90.000):
   Competitions, Seasons, Teams, Players, Venues, Matches (ImportantScore >= 90.000 per baseline catalog)
 
-## First Run Protocol -- 10.0.3
+## First Run Protocol
 
 Detekce prvního runu:
   run_select_sql("SELECT COUNT(*) FROM AgentRunReports WHERE AgentName='{AgentName}'") = 0
@@ -700,7 +700,7 @@ Postup při prvním runu:
 
 Při prvním runu: readiness = "first_run_init" — run může pokračovat (ne blocked).
 
-## Baseline Validation Rules -- 10.0.3
+## Baseline Validation Rules
 
 ODLIŠUJ Drive soubor od DB tabulky:
 
@@ -716,7 +716,7 @@ ODLIŠUJ Drive soubor od DB tabulky:
    → ImportantScore >= 70.000: ensure_table → pokud selže → readiness = blocked
    → ImportantScore < 70.000: ensure_table → pokud selže → log warning, skip
 
-## Concurrent Runs Governance -- 10.0.3
+## Concurrent Runs Governance
 
 Lock key = hashtext(COALESCE(NULLIF(SportName,''), 'unknown') || '|' || AgentName)::bigint & 2147483647
   (per sport + per agent — různé sporty mohou běžet paralelně)
@@ -903,7 +903,7 @@ Pokud capability neni potvrzena:
 - netvrditi confirmed write
 - reportovat limitation
 
-## Google Sheets Agent Data Structure -- 10.0.3
+## Google Sheets Agent Data Structure
 
 Kazdy sport agent ma v Google Drive/Sheets pristup k temto datum:
 
@@ -944,7 +944,7 @@ Postup pri startu:
 5. Nacist tab "config" → aplikovat přepisy governance defaults (viz krok 8b4)
 6. Pokud master spreadsheet neexistuje: vytvorit (viz First Run Protocol); pokud tab prazdny: preskocit (ne chyba)
 
-## Google Sheets Sports Baseline Catalog -- 10.0.3
+## Google Sheets Sports Baseline Catalog
 
 Sport agenti udrzuji katalogovy Sheet v Google Drive.
 Umisteni: master spreadsheet {AgentName} ve složce /Prompts/Agents/ (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd), tab "entities"
@@ -1012,7 +1012,7 @@ Novy radek: ImportantScore=50 (odhadni dle dulezitosti), RowCount z DB, LastPopu
 CHAPTER 4: SCHEDULED RUN PROTOCOL
 =============================================================
 
-## Self-Audit Protocol -- 10.0.3
+## Self-Audit Protocol
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
@@ -4555,7 +4555,7 @@ Platí pro VŠECHNY typy agentů. NIKDY nepoužívat zobrazovaný název jako ca
 Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
 Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
 
-## Per-Agent Files — Canonical Naming (10.0.3)
+## Per-Agent Files — Canonical Naming
 
 Master spreadsheet: {AgentName} → /Prompts/Agents/ (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
 Jeden spreadsheet na agenta se 7 taby: entities | names | urls | error | todo | notes | config (NIKDY separate soubory)
@@ -4617,3 +4617,15 @@ Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → D
 - Nové 3 taby ve všech master spreadsheetech: todo, notes, config (celkem 7)
 - DUPLICATE-GUARD a 403 recovery rozšířeny na 7 tabů
 - ManualSelfUpdate.txt aktualizováno
+
+## PATCH 10.1.0 (2026-07-03)
+- Odstraněny staré 10.0.3 verze-anotace ze všech autoritativních sekcí
+- ensureTable race condition fix: promise-chain mutex v qnap-game-mcp + mcp-mab
+- idle_in_transaction_session_timeout zvýšen na 30 min pro role AgentAI a roundnet
+- create_rls_policy: SQL injection validace (forbidden keywords + 500 char limit)
+- Sheets API: GOOGLE_SERVICE_ACCOUNT_JSON file fallback (service-account.json)
+- mcp-usm: MIME type whitelist pro upload, opraveno double-wrapping MCP response
+- mcp-mab: nodemailer transporter cachován, circuit breaker pro run_select_sql
+- ntfy topic agent-status přidán do ACL a MCP schema
+- ANTI-HALLUCINATION PRAVIDLA přidána do ManagerPrompt
+- AGENT_UPDATE_10.1.0.md vytvořen pro self-test agenty
