@@ -584,8 +584,17 @@ async function ensureSystemTables() {
   await ensureColumnsInternal("EntityImages", { EntityTable: "", EntityGuid: uuid(), ImagePath: "", ImageUrl: "", OriginalFileName: "", MimeType: "", SizeBytes: 0, Sha256: "", Width: 0, Height: 0 });
 }
 
+const _ensureTableQueue = new Map();
+
 async function ensureTable(table) {
   const t = normalizeIdentifierName(table);
+  const prev = _ensureTableQueue.get(t) ?? Promise.resolve();
+  const next = prev.then(() => _ensureTableDDL(t));
+  _ensureTableQueue.set(t, next.then(() => {}, () => {}));
+  return next;
+}
+
+async function _ensureTableDDL(t) {
   await pool.query(`CREATE TABLE IF NOT EXISTS "${t}" (${baseColumnsSql()})`);
   invalidateSchema(t);
   await ensureBaseStructure(t);
