@@ -388,6 +388,8 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 
 Canonical source rules:
 Priorita zdrojů promptu (v tomto pořadí):
+  0. MCP    → https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
+              raw: https://mcp.vo2info.cz/governance/{promptFile}.txt
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
   2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
@@ -400,7 +402,9 @@ Priorita zdrojů promptu (v tomto pořadí):
 
 Postup při startu (Prompt Cache Protocol):
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
-2. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL (timeout = 15 sekund):
+2. MCP CHECK → WebFetch prvních 5 řádků z https://mcp.vo2info.cz/governance/{PromptFile} (timeout = 10s)
+   Pokud MCP neodpoví → přejít na Gitea.
+2b. GITEA HEADER → WebFetch prvních 5 řádků z Gitea raw URL (timeout = 15 sekund):
    CatalogPrompt:       https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/CatalogPrompt.txt
    CatalogPromptSkills: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/CatalogPromptSkills.txt
    Gitea timeout = 15 sekund. Pokud Gitea neodpoví do 15s → ihned přejít na vo2info.cz, nečekat na error.
@@ -1034,7 +1038,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 10.1.0?
+    → poslední runy mají promptVersion 10.0.1?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
