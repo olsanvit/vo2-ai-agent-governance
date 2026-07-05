@@ -256,8 +256,8 @@ Calendar failure = reporting degradation, ne datový blocker.
 
 ## mcp-version-validator
 Task types: MCP version check, startup, minimum version, mcp_version_mismatch
-Description: Ověřuje MCP_VERSION >= 10.0.18 při startupu. Pokud verze je nižší → hlásí mcp_version_mismatch v AgentRunReport, přeskočí všechny mutační operace (upsert, ensure_table, ensure_columns), pokračuje pouze v read-only módu.
-Inputs: current MCP_VERSION (string), minimum required version (default "10.0.18")
+Description: Ověřuje MCP_VERSION >= 10.0.1 při startupu. Pokud verze je nižší → hlásí mcp_version_mismatch v AgentRunReport, přeskočí všechny mutační operace (upsert, ensure_table, ensure_columns), pokračuje pouze v read-only módu.
+Inputs: current MCP_VERSION (string), minimum required version (default "10.0.1")
 Outputs: pass/fail, action_taken (proceed/skip_mutations), version_delta
 Limitations: porovnává semver major.minor.patch; pre-release tagy ignoruje
 
@@ -301,7 +301,7 @@ Task types: sync_agent_entities, get_agent_entities, cross-agent entity sharing
 Description: Orchestruje synchronizaci entit mezi agenty přes MCP nástroje sync_agent_entities a get_agent_entities. Volat po úspěšném upsert nové entity aby ji ostatní agenti mohli využít. Conflict resolution: vyšší ConfidenceScore wins.
 Inputs: EntityType, Guid seznam, source_agent_name, target_agents (seznam nebo ALL)
 Outputs: sync_result (synced/conflict/skipped per entita), conflict_report
-Limitations: max 100 entit na sync operaci; nefunguje pokud MCP_VERSION < 10.0.18
+Limitations: max 100 entit na sync operaci; nefunguje pokud MCP_VERSION < 10.0.1
 
 ## column-deprecation-manager
 Task types: odebrání sloupce, deprecate_column, schema cleanup

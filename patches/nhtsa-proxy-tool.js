@@ -5,7 +5,9 @@
  * JAK APLIKOVAT:
  * 1. Najít v server.js: wrapTool("send_notification", ...)
  * 2. Před tuto funkci vložit tento kód
- * 3. docker compose up --build -d
+ * 3. TAKÉ: změnit MCP_VERSION v server.js na "10.0.18":
+ *    const MCP_VERSION = "10.0.18";
+ * 4. docker compose up --build -d
  */
 
 const NHTSA_BASE = "https://vpic.nhtsa.dot.gov/api/vehicles";
