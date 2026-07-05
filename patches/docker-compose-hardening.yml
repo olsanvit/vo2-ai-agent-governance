@@ -1,0 +1,40 @@
+# docker-compose.yml patch pro /share/Container/mcp-qnap/docker-compose.yml
+# Přidat: resource limits + healthcheck → Docker sám restartuje zmrazený kontejner
+#
+# JAK APLIKOVAT:
+#   ssh admin@qnap "cd /share/Container/mcp-qnap && nano docker-compose.yml"
+#   nebo: cat patch | ssh admin@qnap "cat > /share/Container/mcp-qnap/docker-compose.yml"
+
+version: '3.9'
+services:
+  mcp:
+    build: .
+    container_name: qnap-game-mcp
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      DATABASE_URL: postgresql://AgentAI:Runeterra575Padel@192.168.60.221:5433/AIData
+      AUTH_TOKEN: Roundnet575Padel
+      UPLOAD_DIR: /app/uploads
+      PUBLIC_UPLOAD_BASE_URL: https://mcp.vo2info.cz/uploads
+      GOOGLE_SERVICE_ACCOUNT_JSON_FILE: /app/service-account.json
+      GOVERNANCE_DIR: /app/governance
+      GITEA_TOKEN: 2cd29d25ae3b48bd7b966f8d27fd98bd0feb46a0
+      PG_POOL_MAX: 5
+      MCP_CONCURRENCY: "15"        # max souběžných requestů
+      MCP_REQUEST_TIMEOUT: "30000" # ms před timeout
+    volumes:
+      - /share/Container/mcp-qnap/uploads:/app/uploads
+      - /share/Container/mcp-qnap/service-account.json:/app/service-account.json:ro
+      - /share/Container/mcp-qnap:/app/governance:ro
+    # Resource limits — kontejner nemůže zablokovat celý QNAP OS
+    mem_limit: 512m
+    mem_reservation: 128m
+    cpus: "2.0"
+    # Healthcheck — Docker restartuje kontejner pokud /health nereaguje 3× po sobě
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "--timeout=5", "http://localhost:3000/health"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
