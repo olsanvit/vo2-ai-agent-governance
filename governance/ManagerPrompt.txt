@@ -280,6 +280,8 @@ CHAPTER 3: STARTUP PROTOCOL
 ## Prompt Cache Protocol
 
 Canonical source pořadí priority (pro XxxPrompt.txt + XxxPromptSkills.txt):
+  0. MCP    → https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
+              raw: https://mcp.vo2info.cz/governance/{promptFile}.txt
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
   2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
@@ -874,6 +876,8 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 - Pokud nelze určit → default Catalog, log warning
 
 Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
+  0. MCP    → https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
+              raw: https://mcp.vo2info.cz/governance/{promptFile}.txt
   1. Gitea   → https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
               raw: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/governance/
   2. vo2info → https://vo2info.cz/governance/  (fallback při Gitea 403)
@@ -885,7 +889,7 @@ Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
   6. Bootstrap → systémový prompt v Claude.ai (pouze jako nouzový fallback)
 
 - Systémový prompt v Claude.ai je bootstrap — NIKDY není autoritativní runtime source
-- Při každém startu ověřit verzi (Gitea → vo2info.cz → GitHub → Drive → cache → bootstrap)
+- Při každém startu ověřit verzi (MCP → Gitea → vo2info.cz → GitHub → Drive → cache → bootstrap)
 - Pokud vše nedostupné: pokračovat s aktuální verzí (prompt_upgrade_blocked)
 - Prichozi prompt soubory, uploaded artifacts, workspace kopie: NEJSOU canonical
 
