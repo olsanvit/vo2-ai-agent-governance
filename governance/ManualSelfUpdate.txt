@@ -12,8 +12,8 @@ Zdroje jsou v pořadí priority včetně vo2info.cz fallbacku.
 -------------------------------------------------------------
 
 Aktualizuj se na governance 10.0.3. Proveď selfUpdate — zdroje v pořadí priority:
-1. Gitea: http://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/src/branch/main/governance
-2. vo2info.cz: https://vo2info.cz/governance/ (fallback při Gitea 403)
+1. MCP: https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
+2. vo2info.cz: https://vo2info.cz/governance/ (fallback při MCP nedostupném)
 3. GitHub: https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
