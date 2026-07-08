@@ -1,7 +1,7 @@
-Agent: 10.1.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 10.1.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 10.1.0
+PromptVersion: 10.1.1
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.1.0
@@ -224,6 +224,8 @@ SCHEDULED RUN (v tomto poradi):
 13. RUN REPORT -> upsert_record("AgentRunReports", ...) (vždy, i při selhání)
              L DB down → zaznamenat selhání v textu odpovědi, pokračovat
 13a.SCHEDULE UPDATE -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun — NON-BLOCKING
+    + DYNAMIC FREQUENCY ADJUSTMENT: pokud AllowAutoAdjust=true a IsManualOverride=false
+      → vyhodnotit objem dat → upravit IntervalHours (rozsah: 24h–168h, max změna ±50%) → ntfy agent-maintenance
              L selže → log warning, pokračovat
 13b.DIGEST CHECK -> každých 7 runů/pondělí = weekly; každých 30 dní = monthly
 14. CALENDAR EVENT -> next scheduled run + maintenance
@@ -939,6 +941,60 @@ Co agent reportuje v každém runu:
 Pokud AgentSchedules neexistuje nebo je prázdná:
 → použít {{ScheduledRunTime}} z promptu jako výchozí hodnotu
 → vytvořit záznam v AgentSchedules při prvním runu
+
+## Dynamic Frequency Adjustment -- 10.1.1
+
+Agent smí autonomně upravit svůj interval běhu na základě objemu dat v posledním runu.
+Úprava se provádí v kroku 13a (SCHEDULE UPDATE) — pouze pokud AgentSchedules.AllowAutoAdjust = true.
+
+### Povolený rozsah intervalu
+
+| Limit | Hodnota |
+|-------|---------|
+| Minimum (nejčastěji) | 24 hodin (1× denně) |
+| Maximum (nejméně) | 168 hodin (1× týdně) |
+| Maximální změna za jeden run | ±50 % aktuálního intervalu |
+
+### Podmínky pro zkrácení intervalu (běžet častěji)
+
+Splnění ALESPOŇ JEDNÉ podmínky → zkrátit interval × 0.75, min 24h:
+- Nových entit insertováno > 100 v tomto runu
+- Nových položek přidáno do DiscoveryQueue > 20
+- Počet nových zdrojů (URLs) > 15
+
+### Podmínky pro prodloužení intervalu (běžet méně často)
+
+Splnění ALESPOŇ JEDNÉ podmínky → prodloužit interval × 1.5, max 168h:
+- Nových entit = 0 ve 3 po sobě jdoucích runech (ConsecutiveEmptyRuns >= 3)
+- Celkový počet nových entit < 5 v tomto runu
+- Všechny katalogové tabulky jsou exhausted (žádné pending discovery items)
+
+### Priorita pravidel
+
+1. IsManualOverride = true v AgentSchedules → VŽDY zachovat operátorem nastavený interval, žádná úprava
+2. AllowAutoAdjust = false → žádná úprava (default)
+3. DryRun = true → vypočítat nový interval, ale NEULOŽIT do DB
+4. Oba pravidla (zkrátit + prodloužit) platí → použít zkrácení (priorita na více dat)
+
+### Postup při úpravě (krok 13a)
+
+1. Načíst aktuální IntervalHours z AgentSchedules
+2. Vyhodnotit podmínky na základě run statistik
+3. Vypočítat newInterval = clamp(vypočítaný, 24, 168)
+4. Pokud newInterval != currentInterval:
+   a) upsert_record("AgentSchedules", {AgentName}, {IntervalHours: newInterval, LastAdjustedAt: now(), AdjustmentReason: "<důvod>"})
+   b) Logovat do highlights[]: "📅 Interval upraven: {currentInterval}h → {newInterval}h | Důvod: {důvod}"
+   c) send_notification(topic="agent-maintenance", title="📅 {AgentName} — interval upraven", message="{currentInterval}h → {newInterval}h | {důvod}", priority="min", tags=["calendar"])
+5. Pokud newInterval == currentInterval: žádná akce, žádná notifikace
+
+### AgentSchedules sloupce pro auto-adjustment
+
+| Sloupec | Typ | Popis |
+|---------|-----|-------|
+| AllowAutoAdjust | boolean | Povolení auto-úpravy (default false) |
+| IsManualOverride | boolean | Ochrana před auto-úpravou (operátor nastavil ručně) |
+| LastAdjustedAt | timestamptz | Čas poslední auto-úpravy |
+| AdjustmentReason | text | Důvod poslední změny intervalu |
 
 =============================================================
 CHAPTER 4: SCHEDULED RUN PROTOCOL
