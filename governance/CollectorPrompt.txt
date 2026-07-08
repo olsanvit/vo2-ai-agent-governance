@@ -1,6 +1,6 @@
-Agent: 10.1.1 [COLLECTION_NAME] Collector
+Agent: 10.1.2 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 10.1.1
+PromptVersion: 10.1.2
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.1.0
@@ -26,7 +26,7 @@ STARTUP SEKVENCE (11 kroků):
 -----------------------------------------------------------
 0.  AgentType detection: název obsahuje "Collector" → CollectorPrompt + CollectorPromptSkills
 1.  DB PING (TargetDB) → db_status = db_reachable | db_unreachable
-2.  PROMPT CACHE PROTOCOL (Gitea → Drive → DB cache → bootstrap)
+2.  PROMPT CACHE PROTOCOL (MCP → vo2info.cz → GitHub → Drive → DB cache → bootstrap)
 3.  SKILLS CACHE PROTOCOL → načíst CollectorPromptSkills
 4.  CONFIG → načíst {AgentName}_config.txt z Drive /Prompts/Collectors/
 5.  CATEGORY LISTS → načíst {AgentName}_categories_{type}.txt per CollectionType
@@ -123,8 +123,8 @@ AgentType detection (PRVNÍ krok — před čímkoliv jiným):
 - Pokud nelze určit → default Catalog, log warning
 
 Canonical source rules:
-- Priorita canonical zdroje: Gitea → vo2info.cz → GitHub → Drive → DB cache → bootstrap
-- Gitea raw URL: https://gitea.vo2info.cz/olsanvit/vo2-ai-agent-governance/raw/branch/main/
+- Priorita canonical zdroje: MCP → vo2info.cz → GitHub → Drive → DB cache → bootstrap
+- MCP governance URL: https://mcp.vo2info.cz/governance/
 - Systémový prompt v Claude.ai je bootstrap — NIKDY není runtime source of truth
 - Při každém startu načíst prompt dle Prompt Cache Protocol (viz Ch 3)
 
@@ -145,21 +145,20 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
 
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
-2a. MCP CHECK → GET https://mcp.vo2info.cz/governance/{PromptFile} (timeout=10s, fallback na Gitea)
-/olsanvit/vo2-ai-agent-governance/raw/branch/main/{PromptFile}
+2a. MCP CHECK → GET https://mcp.vo2info.cz/governance/{PromptFile} (timeout=10s)
                   (načíst jen první 3 řádky — pouze hlavičku)
 3. ROZHODNUTÍ:
-   a. cache_version == gitea_version  → použít Content z DB cache; stažení přeskočit
-   b. cache_version != gitea_version (nebo cache neexistuje)
-      → stáhnout plný obsah z Gitea
+   a. cache_version == mcp_version  → použít Content z DB cache; stažení přeskočit
+   b. cache_version != mcp_version (nebo cache neexistuje)
+      → stáhnout plný obsah z MCP: GET https://mcp.vo2info.cz/governance/{PromptFile}
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → write-back Drive: update_file_content({PromptFile}, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ", obsah nové verze)
         — pokud Drive write selže: logovat warning, run NEBLOKOVAT (write-back je best-effort)
       → použít nový obsah
       → send_notification(topic="agent-runs", title="🔄 {AgentName} — prompt upgradován", message="{PromptFile}: {old_version} → {new_version}", priority="low")
-   c. Gitea nedostupný → FALLBACK vo2info.cz:
-      GET https://mcp.vo2info.cz/governance/{PromptFile}
-      fallback 3: 
+   c. MCP nedostupný → FALLBACK vo2info.cz:
+      GET https://vo2info.cz/governance/{PromptFile}
+      fallback 3:
    c2. vo2info.cz nedostupná → FALLBACK GitHub raw:
       GET https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
    d. GitHub nedostupný → zkusit Drive: read_file_content({PromptFile}, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
@@ -263,8 +262,8 @@ Priority: config tab PŘEPISUJE canonical governance pro danou instanci
 1. db_ping → db_status
    - db_unreachable → retry max 3× s 60s prodlevou (QNAP/server restart může trvat 2–3 min)
    - Po 3. neúspěchu → STOP, send_notification(topic="agent-errors", title="🚨 {AgentName} — DB nedostupná", ...)
-2. PROMPT CACHE PROTOCOL: ověřit verzi CollectorPrompt v DB cache vs Gitea header
-   → stáhnout z Gitea jen pokud verze neodpovídá nebo cache chybí
+2. PROMPT CACHE PROTOCOL: ověřit verzi CollectorPrompt v DB cache vs MCP header
+   → stáhnout z MCP jen pokud verze neodpovídá nebo cache chybí
 3. SKILLS CACHE PROTOCOL: stejné pro CollectorPromptSkills.txt
 4. Načíst {AgentName}_config.txt z Drive → TargetDB, TargetTable, CollectionTypes, MaxPerRun
    - Pokud config chybí → pokračovat s hodnotami z bootstrap promptu; log warning
@@ -632,6 +631,11 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
+- PROMPT CACHE PROTOCOL: `gitea_version` → `mcp_version`, download z MCP místo Gitea
+- Fallback: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
+- Canonical source rules: Gitea URL nahrazena MCP governance URL
 
 ## 10.1.0 (2026-07-02)
 - Verze synchronizována s governance 10.1.0
