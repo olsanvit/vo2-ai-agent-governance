@@ -1,6 +1,6 @@
-Agent: 10.1.0 [COLLECTION_NAME] Collector
+Agent: 10.1.1 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 10.1.0
+PromptVersion: 10.1.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.1.0
@@ -52,6 +52,8 @@ SCHEDULED RUN (v tomto pořadí):
 7.  UPDATE CATEGORY LISTS → aktualizovat counts v Drive
 8.  RUN REPORT → upsert do AgentRunReports (vždy, i při selhání)
 8a. SCHEDULE UPDATE → AgentSchedules upsert
+    + DYNAMIC FREQUENCY ADJUSTMENT: pokud AllowAutoAdjust=true a IsManualOverride=false
+      → vyhodnotit objem dat → upravit IntervalHours (rozsah: 24h–168h, max změna ±50%) → ntfy agent-maintenance
 9.  CALENDAR EVENT → next scheduled run
 10. NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
              Vyber topic dle výsledku:
@@ -702,6 +704,60 @@ Reportovat jeden z těchto stavů v run reportu:
   ntfy: failed_unconfirmed
 Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
 pokud DB zápisy a validace proběhly bezpečně.
+
+## Dynamic Frequency Adjustment -- 10.1.1
+
+Agent smí autonomně upravit svůj interval běhu na základě objemu dat v posledním runu.
+Úprava se provádí v kroku 8a (SCHEDULE UPDATE) — pouze pokud AgentSchedules.AllowAutoAdjust = true.
+
+### Povolený rozsah intervalu
+
+| Limit | Hodnota |
+|-------|---------|
+| Minimum (nejčastěji) | 24 hodin (1× denně) |
+| Maximum (nejméně) | 168 hodin (1× týdně) |
+| Maximální změna za jeden run | ±50 % aktuálního intervalu |
+
+### Podmínky pro zkrácení intervalu (běžet častěji)
+
+Splnění ALESPOŇ JEDNÉ podmínky → zkrátit interval × 0.75, min 24h:
+- Nových záznamů insertováno > 200 v tomto runu
+- Nových URLs přidáno do fronty > 30
+- Počet aktivních zdrojů s novými daty > 10
+
+### Podmínky pro prodloužení intervalu (běžet méně často)
+
+Splnění ALESPOŇ JEDNÉ podmínky → prodloužit interval × 1.5, max 168h:
+- Nových záznamů = 0 ve 3 po sobě jdoucích runech (ConsecutiveEmptyRuns >= 3)
+- Celkový počet nových záznamů < 10 v tomto runu
+- Všechny aktivní zdroje vrátily 304 Not Modified nebo prázdnou odpověď
+
+### Priorita pravidel
+
+1. IsManualOverride = true v AgentSchedules → VŽDY zachovat operátorem nastavený interval, žádná úprava
+2. AllowAutoAdjust = false → žádná úprava (default)
+3. DryRun = true → vypočítat nový interval, ale NEULOŽIT do DB
+4. Oba pravidla (zkrátit + prodloužit) platí → použít zkrácení (priorita na více dat)
+
+### Postup při úpravě (krok 8a)
+
+1. Načíst aktuální IntervalHours z AgentSchedules
+2. Vyhodnotit podmínky na základě run statistik
+3. Vypočítat newInterval = clamp(vypočítaný, 24, 168)
+4. Pokud newInterval != currentInterval:
+   a) upsert_record("AgentSchedules", {AgentName}, {IntervalHours: newInterval, LastAdjustedAt: now(), AdjustmentReason: "<důvod>"})
+   b) Logovat do highlights[]: "📅 Interval upraven: {currentInterval}h → {newInterval}h | Důvod: {důvod}"
+   c) send_notification(topic="agent-maintenance", title="📅 {AgentName} — interval upraven", message="{currentInterval}h → {newInterval}h | {důvod}", priority="min", tags=["calendar"])
+5. Pokud newInterval == currentInterval: žádná akce, žádná notifikace
+
+### AgentSchedules sloupce pro auto-adjustment
+
+| Sloupec | Typ | Popis |
+|---------|-----|-------|
+| AllowAutoAdjust | boolean | Povolení auto-úpravy (default false) |
+| IsManualOverride | boolean | Ochrana před auto-úpravou (operátor nastavil ručně) |
+| LastAdjustedAt | timestamptz | Čas poslední auto-úpravy |
+| AdjustmentReason | text | Důvod poslední změny intervalu |
 
 ## AgentSchedules Conflict — 9.3.0 Canonical
 
