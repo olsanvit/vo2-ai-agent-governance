@@ -1021,7 +1021,7 @@ BLOK 1 — DB & MCP konektivita:
 BLOK 2 — Verze:
 2a. PromptVersion tohoto promptu == 11.0.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného PromptSkills souboru == 10.1.0
+2c. SkillsVersion z načteného PromptSkills souboru == 11.0.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
@@ -1040,7 +1040,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 10.1.0
+4a. SkillsVersion načteného souboru == 11.0.0
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
