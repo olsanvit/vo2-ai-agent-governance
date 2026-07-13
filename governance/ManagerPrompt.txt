@@ -455,7 +455,7 @@ Povinné kroky v tomto pořadí:
    [ChatGPT]    DRIVE: search(query="{skillsFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
    - agent musi mit aktivnich ASPON 11 skills
    - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
-   - pokud ukol neni pokryt: navrhnout novy skill (Drive/Gitea dle workflow operátora)
+   - pokud ukol neni pokryt: navrhnout novy skill (Drive/MCP dle workflow operátora)
 8. Nacist master spreadsheet {AgentName} z /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) — tab "entities"
    [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → <spreadsheetId>
                 sheets_get_values(spreadsheetId=<spreadsheetId>, range="entities") → seznam vlastnich DB tabulek agenta
@@ -1068,8 +1068,8 @@ CHAPTER 4: SCHEDULED RUN PROTOCOL
 
 Spouštět dle podmínek z kroku 0a. runMode = "self_audit". Výsledky zaznamenat v run reportu.
 
-KROK 0 -- Načtení promptu z Gitea/vo2info/Drive (před auditem):
-Priorita: Gitea → vo2info.cz → GitHub → Drive → DB cache → bootstrap (viz Prompt Cache Protocol)
+KROK 0 -- Načtení promptu přes MCP/vo2info/GitHub/Drive (před auditem):
+Priorita: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (viz Prompt Cache Protocol)
 Pokud AgentName obsahuje "Catalog":   načti CatalogPrompt + CatalogPromptSkills
 Pokud AgentName obsahuje "Manager":   načti ManagerPrompt + ManagerPromptSkills
 Pokud AgentName obsahuje "Collector": načti CollectorPrompt + CollectorPromptSkills
@@ -3763,7 +3763,7 @@ Pravidla:
 
 MCP tool: send_notification
 Server: https://ntfy.vo2info.cz
-Auth: Authorization: Basic YWRtaW46Um91bmRuZXQ1NzVQYWRlbA==   (admin:Roundnet575Padel)
+Auth: Authorization: Basic {NTFY_AUTH_BASE64}   (base64 admin:password — nastaveno v env agenta, nikoli v promptu)
 Publish na topics VYŽADUJE auth — anonymous = jen čtení. Pokud 403: přidat Authorization hlavičku.
 Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
 Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
@@ -4449,11 +4449,16 @@ ImportantScore priority: 20.000-30.000 (collect opportunistically)
 CHANGELOG
 =============================================================
 
-## 11.0.0 (2026-07-13) — verze sync
+## 11.0.0 (2026-07-13) — Gitea cleanup, bezpečnost, verze sync
+- Self-Audit KROK 0: Gitea/vo2info/Drive → MCP/vo2info/GitHub/Drive (nadpis + priorita)
+- Body text: "Drive/Gitea" → "Drive/MCP" (skill návrh)
+- Memory Non-Canonical Rule: Gitea → MCP primární (pořadí zdrojů opraveno)
+- Changelog 10.1.2: smíšený popis priorit opraven na čitelný formát
+- ntfy Auth credentials: přesunuto do reference {NTFY_AUTH_BASE64}
 - Bump na 11.0.0 — sync s ostatními prompt typy
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
-- Priorita zdrojů změněna: Gitea → Drive → cache → MCP → vo2info.cz → GitHub → Drive → cache
+- Priorita zdrojů změněna z [Gitea → Drive → cache] na [MCP → vo2info.cz → GitHub → Drive → cache]
 - PROMPT CACHE PROTOCOL: krok 2b (GITEA HEADER) odstraněn, nahrazen přímým fallbackem na vo2info.cz
 - Všechny `gitea_version` proměnné přejmenovány na `mcp_version`
 - Fallback při výpadku MCP: vo2info.cz → GitHub → Drive → cache (žádná závislost na Gitea)
@@ -4546,7 +4551,7 @@ Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
 Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
 - Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
 - Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
-- Canonical zdroje mají vždy přednost: Gitea → Drive → DB cache → bootstrap (v tomto pořadí)
+- Canonical zdroje mají vždy přednost: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (v tomto pořadí)
 
 ## Ntfy Runtime Rules
 
