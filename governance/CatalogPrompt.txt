@@ -4,7 +4,7 @@ PromptScope: Catalog agents only — Manager agents use ManagerPrompt
 PromptVersion: 11.0.0
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.1.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.0.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -353,7 +353,7 @@ MCP TE:       https://mcp.vo2info.cz/TE/   (DB: topEleven)      → VO2QNAPDBTE
 MCP MAB:      https://mcp.vo2info.cz/MAB/  (DB: MercsAndBeasts) → VO2QNAPDBMAB
 MCP USM:      https://mcp.vo2info.cz/USM/  (DB: UniSportManager) → VO2QNAPDBUSM
 ntfy:         https://ntfy.vo2info.cz
-  Auth: Authorization: Basic ***REMOVED***   (admin:***REMOVED***)
+  Auth: Authorization: Basic {NTFY_AUTH_BASE64}   (base64 admin:password — nastaveno v env agenta, nikoli v promptu)
   Publish na topics VYŽADUJE auth — anonymous = jen čtení.
   Pokud send_notification tool selže 403: log capability_missing("ntfy_auth"), informovat operátora — NIKDY nevolat ntfy přímo.
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
@@ -689,7 +689,7 @@ Krok 0 — DB ping: SELECT 1 AS db_ok. Pokud selže → db_unavailable, přesko�
     Podporované klíče: ImportantScore.{TableName} | SLA.hours | MaxEntitiesPerRun | SkipTables | PriorityQueue
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.1.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.0)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -1019,7 +1019,7 @@ BLOK 1 — DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 10.1.0
+2a. PromptVersion tohoto promptu == 11.0.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného PromptSkills souboru == 10.1.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -1125,7 +1125,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.1.0 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.0.0 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3456,7 +3456,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 10.1.0
+PromptVersion: 11.0.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -4277,12 +4277,12 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 10.1.0
-SchemaVersion: 10.1.0
-RuntimeSafetyVersion: 10.1.0
+GovernanceVersion: 11.0.0
+SchemaVersion: 11.0.0
+RuntimeSafetyVersion: 11.0.0
 ScoringVersion: 3.0
-ImageGovernanceVersion: 10.1.0
-ProviderGovernanceVersion: 10.1.0
+ImageGovernanceVersion: 11.0.0
+ProviderGovernanceVersion: 11.0.0
 AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
@@ -5381,10 +5381,19 @@ Klíčové změny oproti původnímu souboru:
 CHANGELOG
 =============================================================
 
-## 11.0.0 (2026-07-13) — Gitea cleanup, NOTIFICATION POVINNÉ, PromptSource aktualizace
+## 11.0.0 (2026-07-13) — Gitea cleanup, NOTIFICATION POVINNÉ, verze sync, bezpečnost
 - CatalogPrompt: odstraněny zbývající reference na Gitea jako zdroj promptů (Quick Reference Card krok 2, version_mismatch)
-- CatalogPrompt: PromptSource hodnoty aktualizovány: (mcp/vo2info/github/drive/cache/bootstrap) — gitea odstraněno
+- CatalogPrompt: PromptSource hodnoty aktualizovány: (mcp/vo2info/github/drive/cache/bootstrap)
+- CatalogPrompt: GovernanceVersion/SchemaVersion/RuntimeSafetyVersion bumped na 11.0.0
+- CatalogPrompt Ch 1 title aktualizován na 11.0.0
 - Checker/Collector/Generator/Importer: NOTIFICATION krok označen jako POVINNÉ (shodně s ManagerPrompt)
+- Checker/Collector/Generator/Importer: BLOK 2 verze a "Verze synchronizována" → 11.0.0
+- Checker/Collector/Generator/Importer: Memory Non-Canonical Rule → MCP primární (Gitea odstraněn)
+- CheckerPrompt: přidán krok 7c CALENDAR ID RESOLUTION do startup + krok 6b CALENDAR EVENT do audit run
+- GeneratorPrompt: ANTI-HALLUCINATION pravidlo 1 doplněno o výjimku pro AI-generované záznamy (SourceUrl = NULL)
+- ManagerPrompt: Self-Audit KROK 0 — Gitea → MCP, skill návrh text opraven
+- ManagerPrompt: Changelog 10.1.2 popis priorit opraven (byl smíšený formát)
+- Všechny typy: ntfy Auth credentials přesunuty do reference na env proměnnou {NTFY_AUTH_BASE64}
 - Všechny typy: bump na 11.0.0
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
@@ -5470,7 +5479,7 @@ Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
 Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
 - Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
 - Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
-- Canonical zdroje mají vždy přednost: Gitea → Drive → DB cache → bootstrap (v tomto pořadí)
+- Canonical zdroje mají vždy přednost: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (v tomto pořadí)
 
 ## Ntfy Runtime Rules
 

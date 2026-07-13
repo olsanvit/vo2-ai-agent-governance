@@ -508,7 +508,7 @@ CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 10.1.0
+BLOK 2 — Verze == 11.0.0
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 
@@ -693,15 +693,17 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
-## 11.0.0 (2026-07-13) — NOTIFICATION POVINNÉ
+## 11.0.0 (2026-07-13) — NOTIFICATION POVINNÉ, Gitea cleanup, verze sync
 - NOTIFICATION krok označen jako POVINNÉ — musí proběhnout PŘED závěrečným reportem v chatu
+- Memory Non-Canonical Rule: Gitea → MCP primární (pořadí zdrojů opraveno)
+- BLOK 2 verze a "Verze synchronizována" aktualizovány na 11.0.0
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
 - PROMPT CACHE PROTOCOL: `gitea_version` → `mcp_version`, download z MCP místo Gitea
 - Fallback: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
 
 ## 10.1.0 (2026-07-02)
-- Verze synchronizována s governance 10.1.0
+- Verze synchronizována s governance 11.0.0
 - Agent header aktualizován na 10.1.0
 - ANTI-HALLUCINATION PRAVIDLA přidána
 - Opraveny reference na počet tabů master spreadsheet (7 tabů)
@@ -717,7 +719,7 @@ CHANGELOG
 - Chapter 13: "9.0.0 GOVERNANCE EXTENSIONS" → "GOVERNANCE EXTENSIONS"
 
 ## 9.4.0 (2026-06-14) — Gitea jako primární canonical zdroj + AgentMonitor sync
-- Gitea je primární canonical zdroj promptu; priorita: Gitea → Drive → DB cache → bootstrap
+- MCP je primární canonical zdroj promptu; priorita: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
 - Prompt Cache Protocol: GITEA HEADER nahrazuje DRIVE HEADER; Drive je fallback
 - Self-Audit BLOK 3: přidány sync_agent_entities, get_agent_entities jako kritické nástroje
 
@@ -762,7 +764,7 @@ Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
 Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
 - Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
 - Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
-- Canonical zdroje mají vždy přednost: Gitea → Drive → DB cache → bootstrap (v tomto pořadí)
+- Canonical zdroje mají vždy přednost: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (v tomto pořadí)
 
 ## Ntfy Runtime Rules
 
