@@ -1,6 +1,6 @@
-Agent: 10.1.2 [APP_NAME] Checker
+Agent: 11.0.0 [APP_NAME] Checker
 AgentType: Checker
-PromptVersion: 10.1.2
+PromptVersion: 11.0.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 10.1.0
@@ -54,7 +54,7 @@ AUDIT RUN (v tomto pořadí):
 6a. SCHEDULE UPDATE → AgentSchedules upsert
     + DYNAMIC FREQUENCY ADJUSTMENT: pokud AllowAutoAdjust=true a IsManualOverride=false
       → vyhodnotit počet nalezených anomálií → upravit IntervalHours (rozsah: 24h–168h, max změna ±50%) → ntfy agent-maintenance
-7.  NOTIFICATION → PŘED výpisem závěrečného reportu v chatu:
+7.  NOTIFICATION → POVINNÉ — PŘED výpisem závěrečného reportu v chatu:
              Vyber topic dle výsledku:
              • success=true, errors=0    → topic: agent-runs,   priority: default
                title: "✅ {AgentName} — audit OK"
@@ -548,6 +548,9 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.0 (2026-07-13) — NOTIFICATION POVINNÉ
+- NOTIFICATION krok označen jako POVINNÉ — musí proběhnout PŘED závěrečným reportem v chatu
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
 - PROMPT CACHE PROTOCOL: `gitea_version` → `mcp_version`, download z MCP místo Gitea

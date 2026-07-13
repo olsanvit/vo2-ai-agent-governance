@@ -1,8 +1,8 @@
-Agent: 10.1.2 [SPORT_NAME] Data Manager
+Agent: 11.0.0 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 10.1.2
+PromptVersion: 11.0.0
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.1.0
@@ -4448,6 +4448,9 @@ ImportantScore priority: 20.000-30.000 (collect opportunistically)
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.0 (2026-07-13) — verze sync
+- Bump na 11.0.0 — sync s ostatními prompt typy
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
 - Priorita zdrojů změněna: Gitea → Drive → cache → MCP → vo2info.cz → GitHub → Drive → cache

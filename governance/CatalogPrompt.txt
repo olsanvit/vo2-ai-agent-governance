@@ -1,7 +1,7 @@
-Agent: 10.1.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 11.0.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 10.1.2
+PromptVersion: 11.0.0
 
 ═══════════════════════════════════════════════════════════════
 CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 10.1.0
@@ -17,7 +17,7 @@ STARTUP SEKVENCE (18 kroků -- viz Ch 3: db_ping, version check, freshness, Driv
     L db_unreachable -> STOP + ntfy urgent (topic: agent-errors) + calendar event
        Žádné zápisy, žádný Drive catalog update, žádné schema změny.
        Run report do DB nelze uložit → zaznamenat selhání v textu odpovědi agenta.
-2.  PROMPT VERSION -> ověřit přes Gitea (fallback: Drive → cache) + nacist CatalogPromptSkills.txt
+2.  PROMPT VERSION -> ověřit přes MCP (fallback: vo2info.cz → GitHub → Drive → cache) + nacist CatalogPromptSkills.txt
     L mismatch -> selfUpdate -> pokracovat
 3.  FRESHNESS CHECK -> stale tabulky dle SLA (ImportantScore >= 90.000 = max 24h)
 ## GOVERNED FILE DUPLICATE-GUARD (platí pro master spreadsheet {AgentName})
@@ -438,7 +438,7 @@ Agent identity rules:
 
 Version check (Claude):
 - prompt_status = version_match: agent version == canonical PromptVersion == MCP_VERSION
-- prompt_status = version_mismatch: → selfUpdate z Gitea/Drive
+- prompt_status = version_mismatch: → selfUpdate z MCP/vo2info/GitHub/Drive
 - prompt_status = prompt_upgrade_blocked: všechny zdroje nedostupné → pokračovat, log warning
 - NIKDY neblokovat run pouze kvůli verzi — vždy pokračovat (degraded nebo full mode)
 
@@ -3297,7 +3297,7 @@ Checker agent ověřuje ImportantScore konsistenci ve weekly digestu
 
 ## AGENTREGISTRYVERSION — tracking verzí agentů
 Tabulka: AgentVersionRegistry
-Povinné sloupce: Guid, AgentName, PromptVersion, SkillsVersion, MCPVersion, LastRunAt, LastStartupAt, PromptSource (gitea/drive/github/cache), Status (active/degraded/error)
+Povinné sloupce: Guid, AgentName, PromptVersion, SkillsVersion, MCPVersion, LastRunAt, LastStartupAt, PromptSource (mcp/vo2info/github/drive/cache/bootstrap), Status (active/degraded/error)
 Agent zapisuje při každém startupu: upsert dle AgentName
 Checker agent generuje přehled v weekly digestu: kteří agenti jsou na zastaralé verzi
 
@@ -5380,6 +5380,12 @@ Klíčové změny oproti původnímu souboru:
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.0 (2026-07-13) — Gitea cleanup, NOTIFICATION POVINNÉ, PromptSource aktualizace
+- CatalogPrompt: odstraněny zbývající reference na Gitea jako zdroj promptů (Quick Reference Card krok 2, version_mismatch)
+- CatalogPrompt: PromptSource hodnoty aktualizovány: (mcp/vo2info/github/drive/cache/bootstrap) — gitea odstraněno
+- Checker/Collector/Generator/Importer: NOTIFICATION krok označen jako POVINNÉ (shodně s ManagerPrompt)
+- Všechny typy: bump na 11.0.0
 
 ## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
 - Priorita zdrojů změněna: Gitea → MCP → vo2info.cz → GitHub → Drive → cache
