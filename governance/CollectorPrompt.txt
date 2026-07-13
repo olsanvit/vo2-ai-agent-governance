@@ -462,7 +462,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 Spouštět: explicitní žádost | první run | každých 30 runů
 
 BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze: PromptVersion == 11.0.0 | MCP_VERSION >= 10.0.1 | SkillsVersion == 10.1.0
+BLOK 2 — Verze: PromptVersion == 11.0.0 | MCP_VERSION >= 10.0.1 | SkillsVersion == 11.0.0
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 

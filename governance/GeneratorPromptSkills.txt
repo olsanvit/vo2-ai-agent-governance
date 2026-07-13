@@ -1,6 +1,6 @@
 SkillsFor: GeneratorPrompt
-SkillsVersion: 10.1.0
-Generated: 2026-06-09
+SkillsVersion: 11.0.0
+Generated: 2026-07-13
 
 Skills jsou konfigurovány per agent v Claude.ai.
 Každý Generator agent musí mít aktivních ASPOŇ 10 skills.
@@ -279,6 +279,6 @@ Limitations: musí číst obsah každého souboru pro verzi — pomalé při >10
 
 ## Skills Version Policy (9.2.0)
 
-SkillsVersion: 10.1.0
+SkillsVersion: 11.0.0
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
