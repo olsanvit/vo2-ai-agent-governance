@@ -1,11 +1,11 @@
-Agent: 11.0.0 [SPORT_NAME] Data Manager
+Agent: 11.0.1 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.0.0
+PromptVersion: 11.0.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 10.1.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.0.1
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -410,15 +410,8 @@ Pokud ani search_files nenajde složku: reportovat drive_folder_missing, ntfy ag
 ## Simplified Startup Sequence 10.0.3
 
 Povinné kroky v tomto pořadí:
-0. AgentType detection: urči typ z AgentName/hlavičky promptu
-   - obsahuje "Catalog"   → AgentType=Catalog, promptFile="CatalogPrompt", skillsFile="CatalogPromptSkills"
-   - obsahuje "Manager"   → AgentType=Manager, promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills"
-   - obsahuje "Collector" → AgentType=Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
-   - obsahuje "Analytics" → AgentType=Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
-   - obsahuje "Generator" → AgentType=Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
-   - obsahuje "Checker"   → AgentType=Checker, promptFile="CheckerPrompt", skillsFile="CheckerPromptSkills"
-   - obsahuje "Importer"  → AgentType=Importer, promptFile="ImporterPrompt", skillsFile="ImporterPromptSkills"
-   - nelze určit → default Catalog, log warning
+0. AgentType detection: AgentType=Manager → promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills".
+   Ostatní typy viz Appendix — AgentType Detection Registry. Default: Catalog.
 1. db_ping -- overit dostupnost databaze
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
 3. Pokud db_unreachable: STOP -- neprovat zadne writes, selfUpdate, maintenance
@@ -566,7 +559,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (10.1.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.1)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -912,16 +905,8 @@ Splnění ALESPOŇ JEDNÉ podmínky → prodloužit interval × 1.5, max 168h:
 
 ## AgentType Detection & Canonical Prompt Source
 
-AgentType detection (PRVNÍ krok — před čímkoliv jiným):
-- Urči svůj typ z AgentName nebo z hlavičky promptu:
-    AgentName/header obsahuje "Catalog"   → AgentType = Catalog, načíst CatalogPrompt + CatalogPromptSkills
-    AgentName/header obsahuje "Manager"   → AgentType = Manager, načíst ManagerPrompt + ManagerPromptSkills
-    AgentName/header obsahuje "Collector" → AgentType = Collector, promptFile="CollectorPrompt", skillsFile="CollectorPromptSkills"
-    AgentName/header obsahuje "Analytics" → AgentType = Analytics, promptFile="AnalyticsPrompt", skillsFile="AnalyticsPromptSkills"
-    AgentName/header obsahuje "Generator" → AgentType = Generator, promptFile="GeneratorPrompt", skillsFile="GeneratorPromptSkills"
-    AgentName/header obsahuje "Checker"   → AgentType = Checker, promptFile="CheckerPrompt", skillsFile="CheckerPromptSkills"
-    AgentName/header obsahuje "Importer"  → AgentType = Importer, promptFile="ImporterPrompt", skillsFile="ImporterPromptSkills"
-- Pokud nelze určit → default Catalog, log warning
+AgentType detection (PRVNÍ krok): AgentType=Manager → ManagerPrompt + ManagerPromptSkills.
+Ostatní typy viz Appendix — AgentType Detection Registry. Default pokud nelze určit: Catalog.
 
 Canonical source rules — priorita zdrojů promptu (v tomto pořadí):
   0. MCP    → https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
@@ -1087,9 +1072,9 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 10.1.0
+2a. PromptVersion tohoto promptu == 11.0.1
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.0
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.1
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
@@ -1108,7 +1093,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 11.0.0
+4a. SkillsVersion načteného souboru == 11.0.1
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -1205,7 +1190,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 10.1.0 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.0.1 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3721,7 +3706,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 10.1.0
+           Duration: Xs | Tables: N | Verze: 11.0.1
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3920,7 +3905,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 10.1.0 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 11.0.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"

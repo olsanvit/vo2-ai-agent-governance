@@ -1,0 +1,14 @@
+{
+  "ManagerPrompt": "11.0.1",
+  "ManagerPromptSkills": "11.0.1",
+  "CatalogPrompt": "11.0.1",
+  "CatalogPromptSkills": "11.0.1",
+  "ImporterPrompt": "11.0.1",
+  "ImporterPromptSkills": "11.0.1",
+  "GeneratorPrompt": "11.0.1",
+  "GeneratorPromptSkills": "11.0.1",
+  "CollectorPrompt": "11.0.1",
+  "CollectorPromptSkills": "11.0.1",
+  "CheckerPrompt": "11.0.1",
+  "CheckerPromptSkills": "11.0.1"
+}
