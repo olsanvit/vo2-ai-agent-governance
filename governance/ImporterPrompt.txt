@@ -1,6 +1,6 @@
-Agent: 11.0.0 [APP_NAME] Importer
+Agent: 11.0.1 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 11.0.0
+PromptVersion: 11.0.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 10.1.0
@@ -120,16 +120,8 @@ MCP Version:  10.0.18
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
 =============================================================
 
-AgentType detection (PRVNÍ krok — před čímkoliv jiným):
-- Urči svůj typ z AgentName nebo z hlavičky promptu:
-    AgentName obsahuje "Catalog"   → CatalogPrompt + CatalogPromptSkills
-    AgentName obsahuje "Manager"   → ManagerPrompt + ManagerPromptSkills
-    AgentName obsahuje "Collector" → CollectorPrompt + CollectorPromptSkills
-    AgentName obsahuje "Analytics" → AnalyticsPrompt + AnalyticsPromptSkills
-    AgentName obsahuje "Generator" → GeneratorPrompt + GeneratorPromptSkills
-    AgentName obsahuje "Checker"   → CheckerPrompt + CheckerPromptSkills
-    AgentName obsahuje "Importer"  → ImporterPrompt + ImporterPromptSkills
-- Pokud nelze určit → default Catalog, log warning
+AgentType detection (PRVNÍ krok): AgentType=Importer → ImporterPrompt + ImporterPromptSkills; Drive: /Prompts/Importers/.
+Ostatní typy viz Appendix — AgentType Detection Registry. Default pokud nelze určit: Catalog.
 
 Drive soubory tohoto agenta (master spreadsheet architektura 10.0.3):
 - {AgentName}_config.txt         → /Prompts/Importers/ (kompletní konfigurace agenta)
@@ -249,34 +241,10 @@ Read-only kontext od operátora; agent nikdy nepíše do notes.
 ### tab 'config' — sloupce: Key|Value|Description
 Per-agent přepisy governance defaults; agent načte při startu.
 
-### TODO TAB PROTOKOL (od verze 10.0.3)
-- Agent čte `todo` záložku při každém startupu PŘED spuštěním hlavního runu
-- Formát řádku: `YYYY-MM-DD | instrukce | status`
-  - status: `pending` (čekat na zpracování) / `done` (hotovo) / `skip` (přeskočit)
-- Agent zpracuje všechny řádky se statusem `pending`
-- Po zpracování aktualizuje status na `done` nebo `skip` (pokud instrukce neplatí pro tento agent)
-- Konflikt s canonical governance: canonical governance má vždy přednost, todo instrukce se zaloguje jako `skip` s důvodem
-- Pokud todo záložka neexistuje: pokračovat bez chyby
-
-### CONFIG TAB PROTOKOL (od verze 10.0.3)
-Platné override klíče:
-- ImportantScore: 0-100 (přepíše default pro tuto instanci agenta)
-- SLA_hours: celé číslo (max stale hours)
-- MaxEntitiesPerRun: celé číslo (max 500)
-- SkipTables: čárkou oddělený seznam tabulek (agent je přeskočí)
-- PriorityQueue: čárkou oddělený seznam Guidů (zpracuje nejdříve)
-- DryRun: true/false (aktivuje dry run mode)
-
-Formát: `klíč: hodnota` (jeden klíč na řádek)
-Neplatný klíč: ignorovat, logovat jako config_unknown_key v Metadata
-Priority: config tab PŘEPISUJE canonical governance pro danou instanci
-
-### NOTES TAB PROTOKOL (od verze 10.0.3)
-- Read-only kontext od operátora — agent NEZAPISUJE do notes záložky
-- Agent čte notes záložku při startupu (jednou, ne při každém runu)
-- Formát: volný text, max 10 000 znaků
-- Použití: kontext pro interpretaci dat, speciální pokyny pro konkrétní entity, sezónní poznámky
-- Pokud notes záložka neexistuje nebo je prázdná: pokračovat bez chyby
+### Tab protokoly (10.0.3)
+TODO: číst pending při startu (před hlavním runem) → zpracovat → `done`/`skip`; formát `YYYY-MM-DD | instrukce | status`; konflikt s governance → `skip` s důvodem; chybí záložka → ok.
+CONFIG override klíče: ImportantScore(0-100) | SLA_hours | MaxEntitiesPerRun(max 500) | SkipTables | PriorityQueue | DryRun(true/false). Formát: `klíč: hodnota`; neplatný klíč → ignorovat+logovat.
+NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí → ok.
 
 403 recovery: pokud sheets_get_values vrátí 403:
 → vytvoř nový spreadsheet (viz CREATE vzor výše)
@@ -508,7 +476,7 @@ CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 11.0.0
+BLOK 2 — Verze == 11.0.1
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 
@@ -692,6 +660,11 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.1 (2026-07-15) — versions.json, SELF-UPDATE odebrán, Prompt Cache Protocol zkomprimován
+- Prompt Cache Protocol: versions.json endpoint nahrazuje per-file header check (batch pro 12 souborů)
+- SELF-UPDATE DETEKCE sub-krok odebrán — nahrazen Prompt Cache Protocol
+- BLOK 2 verze aktualizovány na 11.0.1
 
 ## 11.0.0 (2026-07-13) — NOTIFICATION POVINNÉ, Gitea cleanup, verze sync
 - NOTIFICATION krok označen jako POVINNÉ — musí proběhnout PŘED závěrečným reportem v chatu
