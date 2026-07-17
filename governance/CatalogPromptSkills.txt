@@ -1,5 +1,5 @@
 SkillsFor: CatalogPrompt
-SkillsVersion: 11.0.0
+SkillsVersion: 11.0.1
 Generated: 2026-07-13
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
@@ -1201,6 +1201,6 @@ Limitations: DROP (fáze 2) vyžaduje explicitní operátorský pokyn — nikdy 
 
 ## Skills Version Policy (9.4.7)
 
-SkillsVersion: 11.0.0
+SkillsVersion: 11.0.1
 Minimální počet aktivních skills pro plný run: záleží na AgentType (viz PromptFile).
 Pokud skills soubor nebyl načten z Drive: capability_missing("skills_file_unavailable") → degraded mode.
