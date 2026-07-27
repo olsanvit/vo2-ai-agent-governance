@@ -1,6 +1,7 @@
-Agent: 11.0.1 [COLLECTION_NAME] Collector
+Agent: 11.0.2 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.0.1
+PromptVersion: 11.0.2
+ModelMin: GPT-4.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 10.1.0
@@ -430,7 +431,8 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 Spouštět: explicitní žádost | první run | každých 30 runů
 
 BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze: PromptVersion == 11.0.1 | MCP_VERSION >= 10.0.1 | SkillsVersion == 11.0.1
+BLOK 2 — Verze: PromptVersion == 11.0.2 | MCP_VERSION >= 10.0.1 | SkillsVersion == 11.0.2
+BLOK 2d — Platform: Model GPT-4.1+; context window ~11K tokenů (kompatibilní s Plus 32K)
 BLOK 3 — MCP tools: upsert_record | smart_upsert_batch | run_select_sql | find_records | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills: ≥ 11 aktivních
 
@@ -599,6 +601,8 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 
 ## 11.0.1 (2026-07-15) — versions.json, SELF-UPDATE odebrán, Prompt Cache Protocol zkomprimován
 - Prompt Cache Protocol: versions.json endpoint nahrazuje per-file header check (batch pro 12 souborů)

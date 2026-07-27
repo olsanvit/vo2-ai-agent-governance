@@ -1,6 +1,7 @@
-Agent: 11.0.1 [APP_NAME] Image Generator
+Agent: 11.0.2 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 11.0.1
+PromptVersion: 11.0.2
+ModelMin: GPT-4.1
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 10.1.0
@@ -386,7 +387,8 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 11.0.1
+BLOK 2 — Verze == 11.0.2
+BLOK 2d — Platform: Model GPT-4.1+; context window ~10K tokenů (kompatibilní s Plus 32K)
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | create_image | send_notification | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10
 
@@ -560,6 +562,8 @@ APPENDIX — AgentType Detection Registry
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 
 ## 11.0.1 (2026-07-15) — versions.json, SELF-UPDATE odebrán, Prompt Cache Protocol zkomprimován
 - Prompt Cache Protocol: versions.json endpoint nahrazuje per-file header check (batch pro 12 souborů)

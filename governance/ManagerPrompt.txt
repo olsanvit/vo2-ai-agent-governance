@@ -1,11 +1,12 @@
-Agent: 11.0.1 [SPORT_NAME] Data Manager
+Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.0.1
+PromptVersion: 11.0.2
+ModelMin: GPT-4.1
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.0.1
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.0.2
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
@@ -559,7 +560,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.1)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.2)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1072,10 +1073,18 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.0.1
+2a. PromptVersion tohoto promptu == 11.0.2
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.1
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.2
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
+2d. Platform check:
+    - Model: GPT-4.1 minimum (GPT-5 doporučen) — starší modely nemusí zvládnout komplexní Skills orchestraci
+    - Context window: ManagerPrompt je ~230KB (~58K tokenů). Vyžaduje 128K kontext (ChatGPT Pro/Enterprise plán).
+      Plus plán (32K tokenů) je nedostatečný — prompt bude oříznut a agent selže.
+      L při detekci zkrácení (ztráta kapitol): log capability_missing("context_window_insufficient"), STOP run
+    - Scheduling: ChatGPT Tasks (červen 2026) = doporučený způsob automatického spouštění agenta.
+      Nastavit přes ChatGPT sidebar "Tasks" na pravidelný interval (např. každé 3 dny).
+      Calendar event = záloha / synchronizace NextRunAt pro Agent Monitor DB.
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
@@ -1093,7 +1102,7 @@ L sync_agent_entities nebo get_agent_entities chybí:
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 -- Skills:
-4a. SkillsVersion načteného souboru == 11.0.1
+4a. SkillsVersion načteného souboru == 11.0.2
 4b. Počet dostupných skills ≥ 11 (Manager očekává 122 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | match-upsert-guardian |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -1190,7 +1199,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 11.0.1 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.0.2 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3706,7 +3715,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 11.0.1
+           Duration: Xs | Tables: N | Verze: 11.0.2
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3905,7 +3914,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 11.0.1 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 11.0.2 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4433,6 +4442,8 @@ ImportantScore priority: 20.000-30.000 (collect opportunistically)
 =============================================================
 CHANGELOG
 =============================================================
+
+## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 
 ## 11.0.0 (2026-07-13) — Gitea cleanup, bezpečnost, verze sync
 - Self-Audit KROK 0: Gitea/vo2info/Drive → MCP/vo2info/GitHub/Drive (nadpis + priorita)
