@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.0.1
-LastUpdated: 2026-07-17
+TemplateVersion: 11.0.3
+LastUpdated: 2026-07-27
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.0.1
+MANUAL SELFUPDATE TEMPLATE — governance 11.0.3
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,9 +11,9 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.0.1. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.0.3. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
-   Pokud tvůj PromptVersion a SkillsVersion == 11.0.1: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud tvůj PromptVersion a SkillsVersion == 11.0.3: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
 
 Zdroje promptu v pořadí priority:
@@ -64,7 +64,7 @@ Potvrď tyto změny:
 
 10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
 
-Potvrď verzi 10.0.3, proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi 11.0.3, proveď BLOK 8 self-audit a poté spusť testovací běh.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:
