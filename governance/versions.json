@@ -1,14 +1,14 @@
 {
-  "ManagerPrompt": "11.0.2",
-  "ManagerPromptSkills": "11.0.2",
-  "CatalogPrompt": "11.0.2",
-  "CatalogPromptSkills": "11.0.2",
-  "ImporterPrompt": "11.0.2",
-  "ImporterPromptSkills": "11.0.2",
-  "GeneratorPrompt": "11.0.2",
-  "GeneratorPromptSkills": "11.0.2",
-  "CollectorPrompt": "11.0.2",
-  "CollectorPromptSkills": "11.0.2",
-  "CheckerPrompt": "11.0.2",
-  "CheckerPromptSkills": "11.0.2"
+  "ManagerPrompt": "11.0.3",
+  "ManagerPromptSkills": "11.0.3",
+  "CatalogPrompt": "11.0.3",
+  "CatalogPromptSkills": "11.0.3",
+  "ImporterPrompt": "11.0.3",
+  "ImporterPromptSkills": "11.0.3",
+  "GeneratorPrompt": "11.0.3",
+  "GeneratorPromptSkills": "11.0.3",
+  "CollectorPrompt": "11.0.3",
+  "CollectorPromptSkills": "11.0.3",
+  "CheckerPrompt": "11.0.3",
+  "CheckerPromptSkills": "11.0.3"
 }

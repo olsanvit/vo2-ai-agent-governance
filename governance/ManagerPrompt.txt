@@ -2,7 +2,7 @@ Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.0.2
+PromptVersion: 11.0.3
 ModelMin: GPT-4.1
 
 =============================================================
@@ -1073,9 +1073,9 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.0.2
+2a. PromptVersion tohoto promptu == 11.0.3
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.2
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.3
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. Platform check:
     - Model: GPT-4.1 minimum (GPT-5 doporučen) — starší modely nemusí zvládnout komplexní Skills orchestraci
@@ -1085,6 +1085,8 @@ L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
     - Scheduling: ChatGPT Tasks (červen 2026) = doporučený způsob automatického spouštění agenta.
       Nastavit přes ChatGPT sidebar "Tasks" na pravidelný interval (např. každé 3 dny).
       Calendar event = záloha / synchronizace NextRunAt pro Agent Monitor DB.
+    Workspace Agents (duben 2026): alternativa pro Enterprise/Team plány — agent běží trvale
+      v pozadí bez přítomnosti uživatele. Vhodné pro agenty s frekvencí > 1x denně.
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
@@ -4089,10 +4091,10 @@ Rules:
 
 ## Compatibility Matrix -- 8.5.0
 
-GovernanceVersion: 10.1.0
-SchemaVersion: 10.1.0
-RuntimeSafetyVersion: 10.1.0
-PromptVersion: 10.1.0
+GovernanceVersion: 11.0.0
+SchemaVersion: 11.0.0
+RuntimeSafetyVersion: 11.0.0
+PromptVersion: 11.0.2
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4336,43 +4338,7 @@ Pravidla:
 9. UNIQUE indexy resi business duplicity.
 10. Legacy Id-only tabulky respektovat, ale nove tabulky = Guid uuid PRIMARY KEY.
 
-## Changelog
-
-- 9.0.0 (2026-06-04): Historical logos, 22 notifications, team history, data lineage, batch import.
-  Historical Logo & Name Governance: přejmenování, reformace, sloučení týmů; sezónní loga.
-  22 Notification Types: nové notifikace 14-22 (historical logo, integrity flag, transfer, coverage gap, batch upload, self-audit, cross-agent task, prompt upgrade).
-  Data Lineage Tracking: SourceName/SourceUrl/SourceDate/DataOrigin/EntitySources tabulka.
-  Batch Import Protocol: postup pro hromadný import dat z CSV/JSON/migrace.
-  DB Architecture — Catalog vs Manager: doporučení namespacing místo separace.
-
-- 8.6.0 (2026-06-02): Self-Audit Protocol + konzistenční opravy napříč 5 soubory.
-  Self-Audit Protocol (krok 0a): 8 bloků ověření před každým 30. runem, prvním runem
-    nebo na žádost operátora. Garance: úspěšný audit = žádné komplikace v běhu.
-  ImportantScore: přejmenován Score→ImportantScore v Managers souborech.
-  ProblemScore: přidán do Problems formátu (seřazeno sestupně).
-  ntfy topics: přidány agent-alerts a agent-digest; Tier3→agent-alerts, Tier4→agent-errors.
-  ntfy auth opravena v server.js (NTFY_USER/NTFY_PASS); MCP connector names: VO2QNAPDBxx.
-  MCP_VERSION sjednocen na 8.6.0; MAX_BATCH_SIZE default 100; upload URL generalizován.
-
-- 8.5.0 (2026-06-01): Opravy governance nesrovnalostí.
-  Startup sekvence: Managers soubor (krok 8) načten PŘED Baseline-25 check (krok 9).
-  Krok 6a: opraveno capability_missing("international_calendar") místo ("calendar").
-  Transfer detekce: explicitní mechanismus v Krok 5 (Lineups) post-match pipeline.
-  Historická data: přidán limit MaxHistoricalDaysBack (default 5 let) v Sports tabulce.
-  Digest trigger: přesný SQL dotaz pro počítání runů od posledního digests.
-  AgentSchedules konflikt: přidán návrh posunu v highlights[].
-  Lock formula: COALESCE + separator '|' zabraňuje prázdnému SportName a prefix collision.
-
-- 8.4.0 (2026-05-28): AgentSchedules tabulka — denní plánovaný čas agenta, conflict detection ±1 min.
-  agent-schedule-manager skill (120. skill). Startup krok 10: načtení AgentSchedules + conflict check.
-  Run protokol krok 17.a2: UPSERT do AgentSchedules. Emoji v reportech (povinné). Verze sjednocena na 8.4.0.
-- 8.0.0 (2026-05-27): Drive folder structure (Names, Urls, Manager). PlayerCareer tabulka kariery hrace. Match conditions (pocasi, stav hriste). Startup Sequence header opraven. (Names, Urls, Manager). Sport agent Names = tymy/souteze/hraci k dohledani. Urls = live score pages, league tables. Canonical Drive ID aktualizovan.
-- 7.3.0 (2026-05-27): Restrukturalizace -- 13 kapitol, odstraneny duplicity,
-  legacy sekce slouceny do Appendix. Match Collection Scope prominentne v Ch.1.
-  Zachovana plna funkcionalita.
-- 7.2.0: Konsolidace post-7.1.0 -- remove Slack, unify VO2QNAPDBAI identity,
-  align prompt/server handoff language.
-- 7.1.0 a starsi: viz archived versions v Drive.
+## Changelog (starší viz Drive /Prompts/Archive/)
 
 ## Jazykové pravidlo
 
@@ -4440,221 +4406,24 @@ StreamUrl, KickoffLocalTime, Notes, SourceName, CreatedAt
 ImportantScore priority: 20.000-30.000 (collect opportunistically)
 
 =============================================================
-CHANGELOG
+CHANGELOG (poslední 3 verze — starší viz Drive /Prompts/Archive/)
 =============================================================
 
+## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
 ## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
-
-## 11.0.0 (2026-07-13) — Gitea cleanup, bezpečnost, verze sync
-- Self-Audit KROK 0: Gitea/vo2info/Drive → MCP/vo2info/GitHub/Drive (nadpis + priorita)
-- Body text: "Drive/Gitea" → "Drive/MCP" (skill návrh)
-- Memory Non-Canonical Rule: Gitea → MCP primární (pořadí zdrojů opraveno)
-- Changelog 10.1.2: smíšený popis priorit opraven na čitelný formát
-- ntfy Auth credentials: přesunuto do reference {NTFY_AUTH_BASE64}
-- Bump na 11.0.0 — sync s ostatními prompt typy
-
-## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
-- Priorita zdrojů změněna z [Gitea → Drive → cache] na [MCP → vo2info.cz → GitHub → Drive → cache]
-- PROMPT CACHE PROTOCOL: krok 2b (GITEA HEADER) odstraněn, nahrazen přímým fallbackem na vo2info.cz
-- Všechny `gitea_version` proměnné přejmenovány na `mcp_version`
-- Fallback při výpadku MCP: vo2info.cz → GitHub → Drive → cache (žádná závislost na Gitea)
-- Changelog: historické reference na Gitea zachovány beze změny
-
-## 9.4.8 (2026-06-18)
-- Architektura: 4 oddělené Google Sheet soubory → 1 master spreadsheet {AgentName} s taby entities/names/urls/error/todo/notes/config
-- Všechny search_files/create operace přesměrovány na master spreadsheet v Agents složce (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-- Sheet1 range → specifické taby: "entities", "names", "urls", "error"
-- BLOK 5 self-auditu konsolidován: 5a/5b/5c/5e → jeden bod o master spreadsheet
-- Per-agent Files tabulka: 4 separate soubory → 7 tabů v master spreadsheet
-- Problem Report: Drive složka Problems/ → tab "error" v master spreadsheet
-- CREATE: 4× sheets_create_spreadsheet → 1× create + batch_update (7 tabů) + záhlaví
-- Folder IDs Names (1-3GkQT) a Urls (1kYViGZR) a Problems (1w91GG) nahrazeny Managers (1lEvffJ)
-
-## 9.4.1 (2026-06-14)
-- PromptVersion header bump: 9.4.0 → 9.4.1
-- Self-Audit BLOK 1a: MCP_VERSION kontrola 9.0.0 → 9.4.1
-- Self-Audit BLOK 2a/2b: PromptVersion+MCP_VERSION check aktualizovány na 9.4.8
-- Per-agent files tabulka: odstraněny řádky jiných AgentTypů (_categories_, _mapping, _prompts)
-- CHAPTER 13 duplikát (GOVERNANCE EXTENSIONS): přečíslován na CHAPTER 18
-
-## 9.0.0 (2026-06-04)
-- ImageType enum rozšířen: 60+ typů (kits, symbols, season logos, historical variants)
-- Historical Visual Asset Collection Protocol (from/to metadata, sportslogos.net, kitsdb.com)
-- Image License & Trademark Governance (LicenseType, IsTrademarked, TrademarkOwner)
-- SVG Sanitization Protocol
-- 22 typů ntfy notifikací (přidány: historical logo, přejmenování entity, integrity flag, transfer, coverage gap, image batch, self-audit, cross-agent, prompt upgrade)
-- Ntfy markdown=true jako default, structured message formatting
-- Sports bootstrap: agent vytvoří Sport v DB pokud neexistuje
-- Capability Missing opravy (Calendar fallback, Drive fallback)
-- Soubory přejmenovány: {AgentName}.txt → tab 'entities' v master spreadsheet {AgentName} (Managers/)
-                        {AgentName}.txt → {AgentName}_error (Problems/)
-- Entity Country/Region Disambiguation (FC Barcelona vs Barcelona SC)
-- Rankings, Ratings & ELO Systems (EntityRankings tabulka)
-- Sport-Specific Data Discovery (krok 11 catch-all + sport-specific příklady)
-- Pre-Match xG Predictions (MatchPredictions tabulka)
-- Odds pro upcoming zápasy (nejen finished)
-- Job Queue System
-- Skills: +5 nové image skills (historical-asset-collector, wikidata-image-harvester, kit-timeline-builder, season-logo-collector, image-quality-validator)
-- DB Architecture dokumentace
-- Data Lineage Tracking
-- Batch Import Protocol
-- Scheduled Run Configuration sekce
-
-## 8.6.0 (2026-06-02)
-- AgentType detection (Manager z AgentName)
-- Drive jako jediný canonical zdroj promptu
-- Self-audit KROK 0 + auto-oprava
-- send_notification: NTFY auth, agent-digest topic
-- Skills self-check (skillsNeeded/skillsAvailable/skillsMissing)
-- MCP Tools kompletní seznam (63 tools)
-- Ntfy topics přesná struktura + Action emoji
-
-## 8.5.0 (2026-05-20)
-- Self-Audit Protocol (8 bloků)
-- Post-Match Pipeline (Tier 1–4)
-- Error Escalation Tiers
-- Circuit Breaker governance
-- Transfer Window Emergency Protocol
-- Coverage Gap Report
-- Anti-Duplicate Match Detection
+## 11.0.1 (2026-07-15) — Tab protokoly komprimovány 28→4 řádky; AgentType detection table 10→2 řádky; PromptVersion bump
+## 11.0.0 (2026-07-13) — Gitea cleanup; MCP jako primární zdroj; ntfy Auth reference
 
 
 =============================================================
-PATCH 9.0.0 — RUNTIME GOVERNANCE ADDENDUM
+RUNTIME GOVERNANCE — kanonická pravidla (viz Ch 3, 13, 16)
 =============================================================
-(additive patch — nenahrazuje existující sekce)
-
-## Drive fileId Canonical Rule
-
-NIKDY neukládat Google Drive fileId jako canonical identifikátor promptu, skills nebo per-agent souborů.
-- Důvod: fileId se změní při re-upload → uložené ID → 404 v dalším runu
-- Při každém runu: search_files(query="{filename}", folderId="{canonicalFolderId}") → přesná shoda názvu
-- Pokud search vrátí více výsledků: použít POUZE přesnou shodu názvu + nejnovější bezpečně ověřený soubor
-- Nejasnost (více souborů se stejným názvem) → reportovat jako blocker nebo degraded dle kritičnosti
-- Pokud soubor nenalezen → NIKDY nepoužívat podobný název ani jinou složku
-
-## DB Write Read-Back Rule
-
-Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
-- Po každém upsert_record nebo smart_upsert_batch: ověřit úspěch z response (rowsAffected > 0)
-- Pokud write vrátí 502 nebo chybný response: neclaimovat partial success dokud read-back nepotvrdí
-  → run_select_sql("SELECT COUNT(*) FROM {Table} WHERE {criteria}") → ověřit vznik/změnu řádků
-- Pokud read-back potvrdí 0 řádků: reportovat no_partial_write_confirmed (ne partial_success)
-- Toto pravidlo platí i pro AgentRunReports, AuditLog a problem report soubory
-
-## Memory Non-Canonical Rule
-
-Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
-- Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
-- Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
-- Canonical zdroje mají vždy přednost: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (v tomto pořadí)
-
-## Ntfy Runtime Rules
-
-Ntfy posílat pouze přes MCP `send_notification` tool, pokud je skutečně dostupný jako callable tool.
-Reportovat jeden z těchto stavů v run reportu:
-  ntfy: sent
-  ntfy: skipped_capability_missing
-  ntfy: failed_403  (chybí NTFY_USER/NTFY_PASS v kontejneru — informovat operátora)
-  ntfy: failed_unconfirmed
-Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
-pokud DB zápisy a validace proběhly bezpečně.
-
-## AgentSchedules Conflict — 9.3.0 Canonical
-
-Conflict detection: zakázána. Paralelní běh více agentů je povolený.
-
-## Finální Run Report — Povinný formát 9.0.0
-
-Každý scheduled report psát česky, s emoji, s těmito povinným poli:
-
-📋 STARTUP:
-  readiness_status: ready | not_ready | blocked | first_run_init
-  prompt_status: version_match | version_mismatch | prompt_upgrade_applied | prompt_upgrade_blocked
-  PromptVersion: {verze}
-  SkillsVersion: {verze}
-  MCP_VERSION: {verze z db_ping}
-  db_ping: ok | failed | retry_{N}
-  skills_count: {počet}
-  capability_missing[]: [{tool1}, {tool2}, ...]
-
-📊 PRŮBĚH:
-  confirmed_writes: {N} záznamů (upsert potvrzen read-backem)
-  skipped_actions: [{krok}: {důvod}]
-  failed_actions: [{krok}: {důvod}]
-  inferred_findings: [{co bylo zjištěno ale nezapsáno}]
-
-📁 SOUBORY (master spreadsheet {AgentName}):
-  master_spreadsheet: exact_found | created | creation_failed | skipped (+ used_source)
-  tab_entities: loaded | empty_skipped | header_ok | header_mismatch
-  tab_names:    loaded | empty_skipped | not_found
-  tab_urls:     loaded | empty_skipped | not_found
-  tab_error:    written | skipped_no_failure | creation_failed
-
-📬 REPORTING:
-  ntfy: sent | skipped_capability_missing | failed_403 | failed_unconfirmed
-  calendar: event_created | skipped_capability_missing | skipped_no_calendar_id
-  db_report: saved | failed (+ fallback: ntfy_content / response_text)
-
-💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
-
-=============================================================
-PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
-=============================================================
-(additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
-
-## AgentSchedules Conflict — 9.3.0 Override
-(přepisuje všechny předchozí verze AgentSchedules Conflict sekce)
-
-Conflict detection: zakázána. Paralelní běh více agentů je povolený.
-Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
-Při absenci AgentSchedules záznamu pro aktuální AgentName:
-→ vložit/aktualizovat POUZE při potvrzené DB readiness (db_reachable).
-
-## Calendar Universal Rule — 9.2.0
-
-Platí pro VŠECHNY typy agentů. NIKDY nepoužívat zobrazovaný název jako calendar_id:
-  "AI Managers", "AI Catalogs" ani žádný jiný text — VŽDY list_calendars() → CALENDAR_ID proměnná.
-Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše.
-Calendar failure NIKDY neblokuje datový běh — uvést v reportu.
-
-## Per-Agent Files — Canonical Naming (10.0.3)
-
-Master spreadsheet: {AgentName} → /Prompts/Agents/ (folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-Jeden spreadsheet na agenta se 7 taby: entities | names | urls | error | todo | notes | config (NIKDY separate soubory)
-
-Canonical tab formats:
-  tab "entities": ImportantScore | TableName | Description | RowCount | LastPopulated
-  tab "names":    EntityName | coverage | tables | lastProcessed
-  tab "urls":     URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
-  tab "error":    ProblemScore | Category | Description | Timestamp | StepStatus
-
-Pravidlo vytvoření: sheets_create_spreadsheet + batch_update_spreadsheet (7 tabů) + záhlaví každého tabu.
-Pokud Drive create selže: capability_missing("drive_spreadsheet_create") → report-only.
-NEVYTVÁŘET samostatné soubory pro names/urls/error — vždy taby v master spreadsheet.
-
-## Problem Report — Drive Write Rule (9.2.0)
-
-Problem report do tabu 'error' v master spreadsheet {AgentName} (/Prompts/Agents/, ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) — append pomocí sheets_append_rows.
-Pokud Drive write není potvrzen: neclaimovat uložení.
-Pokud DB funguje: uložit problém do AgentRunReports.Metadata (i při Drive selhání).
-Fallback: záloha do AgentRunReports.Metadata — NIKDY samostatný soubor mimo master spreadsheet.
-
-## Readiness Gating — Fallback Mode (9.2.0)
-
-V fallback/degraded režimu VŽDY rozlišit:
-  confirmed_actions | skipped_actions | failed_actions | inferred_findings (označit jako unconfirmed)
-
-## DB Failure — Startup Stop Rules (9.2.0)
-
-Pokud db_unreachable:
-  ZASTAVIT: DB writes, schema changes, AgentPromptCache, AgentSchedules, AgentRunReports
-  POVOLENO: Drive read-only, textový run report, ntfy bez DB
-
-## Canonical Prompt Lookup (9.2.0)
-
-Manager → ManagerPrompt.txt + ManagerPromptSkills.txt
-Fallback: Drive search_files(folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") → DB cache (version-aligned) → degraded
+Drive fileId: NIKDY neukládat — vždy search_files() znovu.
+DB write: ověřit read-backem (rowsAffected > 0) před claimem success.
+Memory: není canonical source — MCP → vo2info → GitHub → Drive → cache → bootstrap.
+Ntfy: pouze send_notification MCP tool; selhání = reporting degradation, ne blocker.
+AgentSchedules: conflict detection zakázána. Paralelní běh povolen.
+Calendar: NIKDY použít název přímo — vždy list_calendars() → CALENDAR_ID.
 
 ## PATCH 9.3.0 (2026-01-xx)
 - Přidán agent-schedule-manager update
