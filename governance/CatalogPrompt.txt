@@ -1,7 +1,7 @@
 Agent: 11.0.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.0.2
+PromptVersion: 11.0.3
 ModelMin: GPT-4.1
 
 ═══════════════════════════════════════════════════════════════
@@ -1005,9 +1005,9 @@ BLOK 1 — DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 11.0.2
+2a. PromptVersion tohoto promptu == 11.0.3
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného PromptSkills souboru == 11.0.2
+2c. SkillsVersion z načteného PromptSkills souboru == 11.0.3
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. Platform check:
     - Model: GPT-4.1 minimum (GPT-5 doporučen) — Catalog orchestruje komplexní Skills pipeline
@@ -1016,6 +1016,8 @@ L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
       L při detekci zkrácení (ztráta kapitol): log capability_missing("context_window_insufficient"), STOP run
     - Scheduling: ChatGPT Tasks (červen 2026) = doporučený způsob automatického spouštění agenta.
       Nastavit přes ChatGPT sidebar "Tasks". Calendar event = záloha / synchronizace NextRunAt.
+    Workspace Agents (duben 2026): alternativa pro Enterprise/Team plány — agent běží trvale
+      v pozadí bez přítomnosti uživatele. Vhodné pro agenty s frekvencí > 1x denně.
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
@@ -4280,7 +4282,7 @@ AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 10.1.0 je governance dokument pro Catalog agenty.
+CatalogPrompt 11.0.2 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -4675,7 +4677,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 10.1.0
+- canonical document body exposes PromptVersion == 11.0.2
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -4994,7 +4996,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 10.1.0
+- PromptVersion: 11.0.2
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5053,7 +5055,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 10.1.0) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 11.0.2) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -5063,7 +5065,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 10.1.0
+PromptVersion: 11.0.2
 Generated: 2026-06-09
 
 
@@ -5374,6 +5376,7 @@ Klíčové změny oproti původnímu souboru:
 CHANGELOG
 =============================================================
 
+## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
 ## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 
 ## 11.0.0 (2026-07-13) — Gitea cleanup, NOTIFICATION POVINNÉ, verze sync, bezpečnost
@@ -5447,200 +5450,14 @@ CHANGELOG
 
 
 =============================================================
-PATCH 9.0.0 — RUNTIME GOVERNANCE ADDENDUM
+RUNTIME GOVERNANCE — kanonická pravidla (viz Ch 3, 8, 10)
 =============================================================
-(additive patch — nenahrazuje existující sekce)
-
-## Drive fileId Canonical Rule
-
-NIKDY neukládat Google Drive fileId jako canonical identifikátor promptu, skills nebo per-agent souborů.
-- Důvod: fileId se změní při re-upload → uložené ID → 404 v dalším runu
-- Při každém runu: search_files(query="{filename}", folderId="{canonicalFolderId}") → přesná shoda názvu
-- Pokud search vrátí více výsledků: použít POUZE přesnou shodu názvu + nejnovější bezpečně ověřený soubor
-- Nejasnost (více souborů se stejným názvem) → reportovat jako blocker nebo degraded dle kritičnosti
-- Pokud soubor nenalezen → NIKDY nepoužívat podobný název ani jinou složku
-
-## DB Write Read-Back Rule
-
-Agent nikdy nesmí tvrdit DB zápis bez potvrzeného read-backu.
-- Po každém upsert_record nebo smart_upsert_batch: ověřit úspěch z response (rowsAffected > 0)
-- Pokud write vrátí 502 nebo chybný response: neclaimovat partial success dokud read-back nepotvrdí
-  → run_select_sql("SELECT COUNT(*) FROM {Table} WHERE {criteria}") → ověřit vznik/změnu řádků
-- Pokud read-back potvrdí 0 řádků: reportovat no_partial_write_confirmed (ne partial_success)
-- Toto pravidlo platí i pro AgentRunReports, AuditLog a problem report soubory
-
-## Memory Non-Canonical Rule
-
-Memory (Claude conversation memory nebo user memory feature) nesmí být canonical source.
-- Neukládat canonical prompt, baseline, skills ani provozní stav jako zdroj pravdy do Memory
-- Pokud agent uloží Memory poznámku: reportovat ji jako pomocnou kontextovou poznámku, ne jako canonical stav
-- Canonical zdroje mají vždy přednost: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap (v tomto pořadí)
-
-## Ntfy Runtime Rules
-
-Ntfy posílat pouze přes MCP `send_notification` tool, pokud je skutečně dostupný jako callable tool.
-Reportovat jeden z těchto stavů v run reportu:
-  ntfy: sent
-  ntfy: skipped_capability_missing
-  ntfy: failed_403  (chybí NTFY_USER/NTFY_PASS v kontejneru — informovat operátora)
-  ntfy: failed_unconfirmed
-Ntfy failure je reporting degradation, ne automatický blocker datového běhu,
-pokud DB zápisy a validace proběhly bezpečně.
-
-## AgentSchedules Conflict — 9.3.0 Canonical
-
-Conflict detection: zakázána. Paralelní běh více agentů je povolený.
-
-## Finální Run Report — Povinný formát 9.0.0
-
-Každý scheduled report psát česky, s emoji, s těmito povinným poli:
-
-📋 STARTUP:
-  readiness_status: ready | not_ready | blocked | first_run_init
-  prompt_status: version_match | version_mismatch | prompt_upgrade_applied | prompt_upgrade_blocked
-  PromptVersion: {verze}
-  SkillsVersion: {verze}
-  MCP_VERSION: {verze z db_ping}
-  db_ping: ok | failed | retry_{N}
-  skills_count: {počet}
-  capability_missing[]: [{tool1}, {tool2}, ...]
-
-📊 PRŮBĚH:
-  confirmed_writes: {N} záznamů (upsert potvrzen read-backem)
-  skipped_actions: [{krok}: {důvod}]
-  failed_actions: [{krok}: {důvod}]
-  inferred_findings: [{co bylo zjištěno ale nezapsáno}]
-
-📁 MASTER SPREADSHEET:
-  tab entities: exact_found | created | creation_failed | skipped (+ used_source)
-  tab names:    exact_found | not_found_skipped
-  tab urls:     exact_found | not_found_skipped
-  tab error:    written | skipped_no_failure | creation_failed
-
-📬 REPORTING:
-  ntfy: sent | skipped_capability_missing | failed_403 | failed_unconfirmed
-  calendar: event_created | skipped_capability_missing | skipped_no_calendar_id
-  db_report: saved | failed (+ fallback: ntfy_content / response_text)
-
-💡 DOPORUČENÝ DALŠÍ KROK: {konkrétní akce pro operátora}
-
-=============================================================
-PATCH 9.2.0 — RUNTIME GOVERNANCE SJEDNOCENÍ
-=============================================================
-(additive patch — nenahrazuje PATCH 9.0.0 sekce; opravuje a rozšiřuje níže uvedená pravidla)
-
-## AgentSchedules Conflict — 9.3.0 Canonical Override
-(přepisuje PATCH 9.2.0 sekci AgentSchedules Conflict)
-
-Paralelní běh více agentů ve stejný čas je plně povolený — conflict detection se neprovádí.
-Pokud zjištěn schedule drift mezi DB a Hermes plánem: reportovat v highlights[] jako schedule_drift_detected.
-Při absenci přesného AgentSchedules záznamu pro aktuální AgentName:
-→ vložit nebo aktualizovat POUZE při potvrzené DB readiness (db_reachable).
-
-## Calendar Universal Rule — 9.2.0
-
-Platí pro VŠECHNY typy agentů (Catalog, Manager, Collector, Generator, Checker, Importer).
-
-NIKDY nepoužívat žádný zobrazovaný název jako calendar_id přímo, včetně:
-  "AI Catalogs", "AI Managers", "AI Collectors", "AI Generators", "AI Checkers", "AI Importers"
-
-Povinný postup VŽDY:
-1. list_calendars() → najít kalendář s odpovídajícím názvem pro AgentType
-2. Uložit reálné calendar_id jako CALENDAR_ID proměnnou pro celý run
-3. Pokud list_calendars() chybí: capability_missing("calendar_list_calendars") → přeskočit tiše
-4. Calendar failure NIKDY automaticky neblokuje datový běh — uvést v reportu.
-
-## Per-Agent Files — Canonical Naming a Folder Assignment (10.0.3)
-
-Master spreadsheet (jeden soubor se 7 taby):
-  {AgentName}  → master spreadsheet se 7 taby: entities, names, urls, error, todo, notes, config
-    tab entities → přehled spravovaných tabulek/entit
-    tab names    → priority entity queue (operátor plní)
-    tab urls     → URL queue pro scraping
-    tab error    → problémový report
-
-Canonical folder assignment dle AgentType (master spreadsheet):
-    Catalog   → /Prompts/Agents/   (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-    Manager   → /Prompts/Agents/   (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-    Importer  → /Prompts/Importers/  (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-    Generator → /Prompts/Generators/ (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-    Collector → /Prompts/Collectors/ (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-    Checker   → /Prompts/Checkers/   (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
-
-Pravidlo vytvoření souboru (9.2.0):
-- Vytvořit POUZE pokud Drive tool umí text/plain s přesným parent folderem a read-back ověřením
-- Pokud Drive create neumí parent folder nebo text/plain:
-  → reportovat capability_missing("drive_text_create_with_parent")
-  → pokračovat report-only/degraded
-  → NEVYTVÁŘET Google Doc jako náhradu za governed plain-text soubor
-- Po vytvoření ověřit read-back; pokud selže → reportovat creation_failed (ne created)
-
-Povinné reportování stavu každého souboru:
-  exact_file_found | created | creation_failed | used_source | reason
-
-## Canonical File Formats (10.0.3)
-
-Master spreadsheet {AgentName}, tab "entities":
-  ImportantScore | TableName | Description | RowCount | LastPopulated
-
-Master spreadsheet {AgentName}, tab "names":
-  EntityName | coverage | tables | lastProcessed
-
-Master spreadsheet {AgentName}, tab "urls":
-  URL | SourceTier | ReliabilityScore | EntityType | LastChecked | Status
-
-Master spreadsheet {AgentName}, tab "error":
-  ProblemScore | Category | Description | Timestamp | StepStatus
-
-## Problem Report — Sheets Write Rule (10.0.3)
-
-Problem report ukládat do tabu 'error' v master spreadsheet {AgentName}:
-- sheets_append_rows(range="error") nebo batch_update_spreadsheet(appendCells, sheetId=3)
-- Pokud Sheets write selže: uložit problém do AgentRunReports.Metadata (i při Sheets selhání)
-- Pokud DB funguje: uložit problém vždy do AgentRunReports.Metadata (i při Sheets selhání)
-
-## Readiness Gating — Fallback Mode (9.2.0)
-
-Pokud chybí master spreadsheet (tabumy entities/names/urls) NEBO doménové tabulky:
-→ NESPOUŠTĚT entity upserts, deduplication, enrichment, backfill, confidence decay, view refresh
-
-V fallback/degraded režimu VŽDY explicitně rozlišit:
-  confirmed_actions:  [{co bylo skutečně zapsáno s read-back potvrzením}]
-  skipped_actions:    [{co bylo přeskočeno a proč}]
-  failed_actions:     [{co selhalo a jaká je příčina}]
-  inferred_findings:  [{co bylo zjištěno ale nezapsáno — označit jako unconfirmed}]
-
-## DB Failure — Startup Stop Rules (9.2.0)
-
-Pokud db_ping selže (db_status = db_unreachable):
-  ZASTAVIT — NEPROVÁDĚT:
-    ✗ DB write fáze (entity upserts, backfill, views)
-    ✗ schema changes (ensure_table, ALTER TABLE)
-    ✗ AgentPromptCache upsert nebo cleanup
-    ✗ AgentSchedules update
-    ✗ AgentRunReports upsert (DB nedostupná)
-    ✗ katalogové writes
-  POVOLENO (bez DB):
-    ✓ Drive canonical prompt — pokud byl načten: reportovat jako confirmed_read
-    ✓ Drive soubory read-only
-    ✓ Sestavení textového run reportu v odpovědi agenta
-    ✓ ntfy pokud send_notification dostupný bez DB
-
-## Canonical Prompt Lookup Per AgentType (9.2.0)
-
-Každý agent MUSÍ použít správný soubor dle svého AgentType:
-  Catalog   → CatalogPrompt.txt   + CatalogPromptSkills.txt
-  Manager   → ManagerPrompt.txt   + ManagerPromptSkills.txt
-  Importer  → ImporterPrompt.txt  + ImporterPromptSkills.txt
-  Generator → GeneratorPrompt.txt + GeneratorPromptSkills.txt
-  Collector → CollectorPrompt.txt + CollectorPromptSkills.txt
-  Checker   → CheckerPrompt.txt   + CheckerPromptSkills.txt
-
-Fallback pořadí (MCP nedostupný):
-  1. Google Drive search_files(query="{PromptFile}.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
-  2. AgentPromptCache v DB — POUZE pokud: aktivní, full-content, netruncated, version-aligned
-  3. Cache není bezpečná → pokračovat bootstrap/degraded/report-only
-  NIKDY nepoužívat soubor jiného AgentType jako fallback.
+Drive fileId: NIKDY neukládat — vždy search_files() znovu.
+DB write: ověřit read-backem (rowsAffected > 0) před claimem success.
+Memory: není canonical source — MCP → vo2info → GitHub → Drive → cache → bootstrap.
+Ntfy: pouze send_notification MCP tool; selhání = reporting degradation, ne blocker.
+AgentSchedules: conflict detection zakázána. Paralelní běh povolen.
+Calendar: NIKDY použít název přímo — vždy list_calendars() → CALENDAR_ID.
 
 =============================================================
 TROUBLESHOOTING GUIDE — NEJČASTĚJŠÍ CHYBY
