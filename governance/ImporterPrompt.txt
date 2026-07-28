@@ -1,7 +1,8 @@
 Agent: 11.0.2 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 11.0.3
+PromptVersion: 11.0.4
 ModelMin: GPT-4.1
+ModelRecommended: GPT-5+
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 11.0.2
@@ -477,8 +478,13 @@ CHAPTER 11: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 11.0.3
-BLOK 2d — Platform: Model GPT-4.1+; context window ~11K tokenů (kompatibilní s Plus 32K)
+BLOK 2 — Verze == 11.0.4
+BLOK 2d — Platform:
+  Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 dostupný od 9. 7. 2026
+  Context window: ~11K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
+  Spouštění: MANUÁLNÍ (Plus/Pro); ChatGPT Tasks Custom GPTs nepodporuje
+  MCP: Plus/Pro = Actions proxy; Business/Enterprise = Developer Mode (native MCP, beta)
+  Workspace Agents: automatický schedule jen pro Business/Enterprise (duben 2026)
 BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | send_notification | read_file_content | sync_agent_entities | get_agent_entities
 BLOK 4 — Skills ≥ 10; povinně image-content-parser + db-importer
 
@@ -663,6 +669,7 @@ APPENDIX — AgentType Detection Registry
 CHANGELOG
 =============================================================
 
+## 11.0.4 (2026-07-27) — Scheduling fix: ChatGPT Tasks Custom GPTs nepodporuje; MCP dle plánu; ModelRecommended GPT-5+; memory supplement; context window tabulka
 ## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
 ## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 
