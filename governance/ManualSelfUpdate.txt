@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.0.5
+TemplateVersion: 11.1.0
 LastUpdated: 2026-07-28
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.0.4
+MANUAL SELFUPDATE TEMPLATE — governance 11.1.0
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,9 +11,9 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.0.5 (Manager) / 11.0.4 (ostatní). Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.1.0. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
-   Pokud tvůj PromptVersion a SkillsVersion == 11.0.4: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud tvůj PromptVersion == 11.1.0: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
 
 Zdroje promptu v pořadí priority:
@@ -22,7 +22,15 @@ Zdroje promptu v pořadí priority:
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
-Co je nového v 11.0.5 (jen Manager):
+Co je nového v 11.1.0 (všechny agenty):
+- SILENT MODE — povinný výstupní režim pro minimalizaci output tokenů:
+  → Tool výsledky (DB rows, JSON): NEZAPISOVAT do chatu, zpracovat tiše
+  → Každý krok: max 1 řádek (emoji + stav)
+  → Chat reply po runu: max 10 řádků (counts + highlights + chyby)
+  → Veškerý detail → ntfy zpráva + DB run report
+  → Výjimka: operátor žádá detail ("ukaž", "vypiš", "debug")
+
+Co je nového v 11.0.5 (jen Manager — pokud ještě nemáš):
 - Tab 'processing' (8. tab) v master spreadsheetu pro session manifest
   Sloupce: SessionId|TargetDate|MatchGuid|MatchInfo|Tier1|Tier2|Tier3|RunCount|StartedAt|CompletedAt|Notes
   → na začátku každého runu načíst manifest, aktivní zápasy (CompletedAt prázdné) = pracovní fronta
@@ -73,7 +81,7 @@ Potvrď tyto změny:
 
 10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
 
-Potvrď verzi (Manager: 11.0.5 | ostatní: 11.0.4), proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi 11.1.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:
