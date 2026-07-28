@@ -1,0 +1,16 @@
+{
+  "name": "mcp-sportreal",
+  "version": "1.0.0",
+  "description": "Read-only MCP connector for SportReal database (SimulateReal project)",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "express": "^4.18.0",
+    "pg": "^8.11.0",
+    "zod": "^3.22.0"
+  }
+}
