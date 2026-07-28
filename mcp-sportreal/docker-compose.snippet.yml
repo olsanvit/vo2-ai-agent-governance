@@ -1,0 +1,25 @@
+# Přidat do /share/Container/docker-compose.yml na QNAP
+# Port 3002 — VO2QNAPDBSR (SportReal read-only MCP)
+
+  mcp-sportreal:
+    build:
+      context: ./mcp-sportreal
+      dockerfile: Dockerfile
+    container_name: mcp-sportreal
+    restart: unless-stopped
+    ports:
+      - "3002:3002"
+    environment:
+      DATABASE_URL: "Host=postgres16;Port=5432;Database=SportReal;Username=sportreal_usr;Password=${SPORTREAL_DB_PASSWORD}"
+      AUTH_TOKEN: ${MCP_SPORTREAL_AUTH_TOKEN}
+      PORT: 3002
+      MAX_SELECT_ROWS: 500
+      SELECT_TIMEOUT_MS: 30000
+    depends_on:
+      - postgres16
+    networks:
+      - mcp-network
+
+# Proměnné do .env:
+# SPORTREAL_DB_PASSWORD=<sportreal_usr heslo>
+# MCP_SPORTREAL_AUTH_TOKEN=<nový token pro tento konektor>
