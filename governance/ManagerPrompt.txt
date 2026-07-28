@@ -2,8 +2,9 @@ Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.0.3
+PromptVersion: 11.0.4
 ModelMin: GPT-4.1
+ModelRecommended: GPT-5+
 
 =============================================================
 CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.0.2
@@ -1073,20 +1074,32 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.0.3
+2a. PromptVersion tohoto promptu == 11.0.4
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.3
+2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.4
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. Platform check:
-    - Model: GPT-4.1 minimum (GPT-5 doporučen) — starší modely nemusí zvládnout komplexní Skills orchestraci
-    - Context window: ManagerPrompt je ~230KB (~58K tokenů). Vyžaduje 128K kontext (ChatGPT Pro/Enterprise plán).
-      Plus plán (32K tokenů) je nedostatečný — prompt bude oříznut a agent selže.
-      L při detekci zkrácení (ztráta kapitol): log capability_missing("context_window_insufficient"), STOP run
-    - Scheduling: ChatGPT Tasks (červen 2026) = doporučený způsob automatického spouštění agenta.
-      Nastavit přes ChatGPT sidebar "Tasks" na pravidelný interval (např. každé 3 dny).
-      Calendar event = záloha / synchronizace NextRunAt pro Agent Monitor DB.
-    Workspace Agents (duben 2026): alternativa pro Enterprise/Team plány — agent běží trvale
-      v pozadí bez přítomnosti uživatele. Vhodné pro agenty s frekvencí > 1x denně.
+    - Model: GPT-4.1 minimum | GPT-5+ doporučen — potřebný pro komplexní Skills orchestraci
+      GPT-5.6 (Sol/Terra/Luna) dostupný od 9. 7. 2026; přes API až 1M+ tokenů kontextu
+    - Context window v ChatGPT UI (ne API):
+        Free 8K | Go 16K | Plus 32K | Pro 128K | Business/Enterprise 128K+
+      ManagerPrompt ~58K tokenů → NUTNÝ Pro/Enterprise plán (128K)
+      L ztráta kapitol při detekci: log capability_missing("context_window_insufficient"), STOP run
+    - Spouštění Custom GPT agenta:
+        Plus/Pro:            MANUÁLNÍ — operátor otevře ChatGPT a spustí agenta ručně
+                             Calendar event = připomínka pro operátora, ne automatický trigger
+                             ChatGPT Tasks Custom GPTs NEPODPORUJE — nepoužívat pro scheduling
+        Business/Enterprise: Workspace Agents = automatický schedule bez uživatele (duben 2026)
+                             Agent běží v pozadí, denní/týdenní/vlastní interval; credit-based od 7. 2026
+    - MCP integrace dle plánu:
+        Plus/Pro:            Actions (OpenAPI schema) → HTTP proxy → MCP server (standardní způsob)
+        Business/Enterprise: Developer Mode = nativní MCP URL bez proxy (beta, červen 2026)
+    - Memory (supplement k DB/Sheets — ne primární stav):
+        Saved Memories       = explicitní seznam factů, auditovatelný, editovatelný
+        Chat History Ref.    = implicitní recall z minulých chatů (od dubna 2025)
+        Dreaming             = background memory curation (červen 2026)
+        → Agent může instruovat ChatGPT k zapamatování klíčových runtime faktů (last run, počty)
+          jako lehká záloha; primární stav vždy v DB + Google Sheets
 
 BLOK 3 -- MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
@@ -4409,6 +4422,7 @@ ImportantScore priority: 20.000-30.000 (collect opportunistically)
 CHANGELOG (poslední 3 verze — starší viz Drive /Prompts/Archive/)
 =============================================================
 
+## 11.0.4 (2026-07-27) — Scheduling fix: ChatGPT Tasks Custom GPTs nepodporuje; MCP dle plánu; ModelRecommended GPT-5+; memory supplement; context window tabulka
 ## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
 ## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
 ## 11.0.1 (2026-07-15) — Tab protokoly komprimovány 28→4 řádky; AgentType detection table 10→2 řádky; PromptVersion bump
