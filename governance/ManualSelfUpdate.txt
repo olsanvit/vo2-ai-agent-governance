@@ -1,6 +1,6 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.0.4
-LastUpdated: 2026-07-27
+TemplateVersion: 11.0.5
+LastUpdated: 2026-07-28
 
 =============================================================
 MANUAL SELFUPDATE TEMPLATE — governance 11.0.4
@@ -11,7 +11,7 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.0.4. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.0.5 (Manager) / 11.0.4 (ostatní). Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
    Pokud tvůj PromptVersion a SkillsVersion == 11.0.4: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
@@ -21,6 +21,14 @@ Zdroje promptu v pořadí priority:
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při MCP nedostupném)
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Co je nového v 11.0.5 (jen Manager):
+- Tab 'processing' (8. tab) v master spreadsheetu pro session manifest
+  Sloupce: SessionId|TargetDate|MatchGuid|MatchInfo|Tier1|Tier2|Tier3|RunCount|StartedAt|CompletedAt|Notes
+  → na začátku každého runu načíst manifest, aktivní zápasy (CompletedAt prázdné) = pracovní fronta
+  → po každém tieru aktualizovat status, po dokončení nastavit CompletedAt
+  → přetrvává přes runy: history = hotové, active = rozpracované
+- Pokud master spreadsheet má 7 tabů: přidat 'processing' tab (sheets nebo batch_update_spreadsheet)
 
 Potvrď tyto změny:
 1. Vždy odpovídej česky — chat, highlights, errors i ntfy zprávy
@@ -32,18 +40,19 @@ Potvrď tyto změny:
      - Catalog/Manager → Agents složka (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd)
      - Collector → Collectors složka (ID: 1kYViGZR02wNjr1X0PEqJzBQYmjxobm5U)
      - Checker/Generator/Importer → příslušná složka dle AgentType
-   • Spreadsheet musí mít 7 tabů: entities | names | urls | error | todo | notes | config
+   • Spreadsheet musí mít 7 tabů (Manager: 8 tabů): entities | names | urls | error | todo | notes | config | processing (jen Manager)
    • CREATE vzor:
      sheets_create_spreadsheet(title="{AgentName}", folderId="{agentTypeFolderId}")
-     batch_update_spreadsheet(7 tabů: entities, names, urls, error, todo, notes, config)
+     batch_update_spreadsheet(7/8 tabů: entities, names, urls, error, todo, notes, config [, processing])
      sheets_append_rows — headers pro každý tab:
-       entities → ["Guid","Name","NormalizedName","SearchText","Emoji","ConfidenceScore","IsDeleted","CreatedAt","UpdatedAt"]
-       names    → ["Name","Status","Source","CreatedAt"]
-       urls     → ["Url","Status","Source","CreatedAt"]
-       error    → ["Timestamp","AgentName","ErrorType","Message","Table","Guid","Resolved"]
-       todo     → ["Status","Priority","Created","Category","Text","Result"]
-       notes    → ["Topic","Note","CreatedAt"]
-       config   → ["Key","Value","Description"]
+       entities   → ["Guid","Name","NormalizedName","SearchText","Emoji","ConfidenceScore","IsDeleted","CreatedAt","UpdatedAt"]
+       names      → ["Name","Status","Source","CreatedAt"]
+       urls       → ["Url","Status","Source","CreatedAt"]
+       error      → ["Timestamp","AgentName","ErrorType","Message","Table","Guid","Resolved"]
+       todo       → ["Status","Priority","Created","Category","Text","Result"]
+       notes      → ["Topic","Note","CreatedAt"]
+       config     → ["Key","Value","Description"]
+       processing → ["SessionId","TargetDate","MatchGuid","MatchInfo","Tier1","Tier2","Tier3","RunCount","StartedAt","CompletedAt","Notes"] (jen Manager)
    • Hledání před vytvořením: search_files(query="{AgentName}", folderId="{agentTypeFolderId}")
    • Nikdy mazat; nikdy vytvářet oddělené soubory (stará architektura 9.4.7)
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
@@ -64,7 +73,7 @@ Potvrď tyto změny:
 
 10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
 
-Potvrď verzi 11.0.4, proveď BLOK 8 self-audit a poté spusť testovací běh.
+Potvrď verzi (Manager: 11.0.5 | ostatní: 11.0.4), proveď BLOK 8 self-audit a poté spusť testovací běh.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:
