@@ -1,0 +1,121 @@
+SkillsVersion: 1.0.0
+AgentType: Importer
+SkillsFor: SimulateRealImporterPrompt
+
+=============================================================
+SKILL DIRECTORY — SimulateReal Importer
+=============================================================
+
+## sr-sport-table-resolver
+
+Detekuje typ sportu a vrátí správné názvy tabulek v SportReal DB.
+
+Vstup: sportName (string) — např. "Football", "Cycling", "MMA"
+Výstup: { pattern, matchTable, teamTable, playerTable, leagueTable, isRace }
+
+Logika:
+  PATTERN B (závodní sporty — isRace=true):
+    Cycling      → { matchTable: "CyclingRaces", playerTable: "CyclingRacers", teamTable: "CyclingTeams", leagueTable: null }
+    HorseRacing  → { matchTable: "HorseRacingRaces", playerTable: "Horses", teamTable: null, leagueTable: null }
+    Motorsport   → { matchTable: "CircuitRaces", playerTable: "CircuitDrivers", teamTable: "CircuitTeams", leagueTable: null }
+    DistanceRace → { matchTable: "DistanceRaces", playerTable: "DistanceRacers", teamTable: "DistanceTeams", leagueTable: null }
+    AlpineSkiing → { matchTable: "AlpineSkiingRaces", playerTable: "AlpineSkiingRacers", teamTable: null, leagueTable: null }
+    Biathlon     → { matchTable: "BiathlonRaces", playerTable: "BiathlonRacers", teamTable: null, leagueTable: null }
+    CrossCountrySkiing → { matchTable: "CrossCountrySkiingRaces", playerTable: "CrossCountrySkiingRacers", teamTable: null, leagueTable: null }
+    SkiJumping   → { matchTable: "SkiJumpingRaces", playerTable: "SkiJumpingRacers", teamTable: null, leagueTable: null }
+
+  PATTERN A (týmové sporty — isRace=false, výchozí):
+    MMA → playerTable: "MmaFighters", teamPlayerTable: "MmaTeamFighters"
+    Ostatní → {SportName}Matches / {SportName}Teams / {SportName}Players / {SportName}TeamPlayers
+
+  Fallback: pokud sportName nerozpoznán → get_table_schema("{sportName}Matches") pro ověření existence
+
+---
+
+## sr-batch-importer
+
+Importuje záznamy ze SportReal do SR_ tabulky v VO2QNAPDBAI po stránkách.
+
+Vstup: { sourceConnector, targetConnector, sourceQuery, targetTable, keyColumns, batchSize=200, transform? }
+Postup:
+  1. Spustit sourceQuery s LIMIT batchSize OFFSET 0
+  2. Pro každý řádek aplikovat transform() pokud definován
+  3. targetConnector smart_upsert_batch(targetTable, rows, keyColumns)
+  4. offset += batchSize; opakovat dokud rowCount < batchSize
+  5. Vrátit: { totalImported, batches, errors }
+
+---
+
+## sr-race-match-adapter
+
+Převádí závodní Race záznamy do formátu SR_Matches (sjednocený pohled).
+
+Vstup: race row ze SportReal (závodní sport)
+Výstup: SR_Matches kompatibilní řádek
+
+Mapování:
+  Id         → Id
+  StartTime  → StartTime (nebo DateOnly → cast na timestamptz)
+  SportId    → SportId
+  SportName  → SportName
+  HomeTeamId → null (závodní sport)
+  AwayTeamId → null
+  ScoreHome  → null
+  ScoreAway  → null
+  LeagueId   → LeagueId nebo null
+  Season     → Season nebo SeasonLabel
+  Round      → Stage nebo Round nebo Etapa
+  Finished   → IsFinished nebo true pokud Race existuje
+  SyncedAt   → now()
+
+---
+
+## sr-delta-sync-calculator
+
+Spočítá od kdy importovat (LastSyncAt) pro daný sport.
+
+Vstup: { sportName, targetConnector }
+Postup:
+  1. targetConnector run_select_sql(
+       "SELECT MAX(\"CompletedAt\") FROM \"SR_ImporterRuns\"
+        WHERE \"SportName\" = '{sportName}' AND \"Success\" = true"
+     )
+  2. Pokud NULL (první run) → DateFrom = today - 90 days
+  3. Jinak → DateFrom = MAX(CompletedAt) - 1 day (buffer pro pozdní záznamy)
+  Výstup: { dateFrom, isFirstRun }
+
+---
+
+## sr-run-report-writer
+
+Uloží výsledek importu per sport do SR_ImporterRuns.
+
+Vstup: { agentName, sportName, matchCount, teamCount, playerCount, startedAt, success, notes? }
+Postup:
+  VO2QNAPDBAI upsert_record("SR_ImporterRuns",
+    { AgentName: agentName, SportName: sportName, StartedAt: startedAt },
+    { MatchCount: matchCount, TeamCount: teamCount, PlayerCount: playerCount,
+      CompletedAt: now(), Success: success, Notes: notes || "" }
+  )
+
+---
+
+## sr-ntfy-summary
+
+Sestaví a odešle ntfy zprávu po dokončení celého runu.
+
+Vstup: { results: [{sportName, matchCount, teamCount, playerCount, success}], elapsed, errors }
+Logika:
+  successCount = results kde success=true
+  totalMatches = sum matchCount
+  Pokud errors == 0:
+    title: "✅ SRImporter — run OK"
+    message: "Sporty: {successCount}/{total} | Zápasy: {totalMatches} | Doba: {elapsed}s"
+    topic: agent-runs | priority: default
+  Pokud errors > 0 && successCount > 0:
+    title: "⚠️ SRImporter — partial ({successCount}/{total})"
+    message: "Chyby: {errors} | Importováno: {totalMatches} zápasů"
+    topic: agent-alerts | priority: high
+  Pokud successCount == 0:
+    title: "🚨 SRImporter — run selhal"
+    topic: agent-errors | priority: urgent

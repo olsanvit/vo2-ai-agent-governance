@@ -1,0 +1,163 @@
+openapi: 3.1.0
+info:
+  title: VO2QNAPDBSR — SportReal Read-Only MCP
+  description: >
+    Read-only connector for SimulateReal SportReal database.
+    Provides sport data: matches, teams, players, leagues, seasons.
+    All operations are SELECT-only — no writes.
+  version: 1.0.0
+servers:
+  - url: https://mcp.vo2info.cz/sportreal
+    description: QNAP MCP proxy (via Caddy/nginx)
+
+security:
+  - bearerAuth: []
+
+paths:
+  /mcp:
+    post:
+      operationId: mcp_sportreal_call
+      summary: Call a SportReal MCP tool
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [method, params]
+              properties:
+                method:
+                  type: string
+                  enum:
+                    - db_ping
+                    - rate_limit_guard
+                    - list_tables
+                    - get_table_schema
+                    - sr_list_sports
+                    - sr_get_matches
+                    - sr_get_teams
+                    - sr_get_players
+                    - sr_get_leagues
+                    - sr_get_league_seasons
+                    - run_select_sql
+                params:
+                  type: object
+                  description: Tool-specific parameters (see schemas below)
+      responses:
+        "200":
+          description: Tool result
+          content:
+            application/json:
+              schema:
+                type: object
+        "401":
+          description: Unauthorized
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
+  schemas:
+    DbPingParams:
+      type: object
+      description: No parameters required
+
+    GetTableSchemaParams:
+      type: object
+      required: [table]
+      properties:
+        table:
+          type: string
+          description: Table name in SportReal DB
+
+    GetMatchesParams:
+      type: object
+      required: [matchTable]
+      properties:
+        matchTable:
+          type: string
+          description: "e.g. FootballMatches, BasketballMatches, CyclingRaces"
+        dateFrom:
+          type: string
+          format: date
+          description: "ISO date, e.g. 2025-01-01"
+        dateTo:
+          type: string
+          format: date
+        limit:
+          type: integer
+          default: 100
+          maximum: 500
+        offset:
+          type: integer
+          default: 0
+
+    GetTeamsParams:
+      type: object
+      required: [teamTable]
+      properties:
+        teamTable:
+          type: string
+          description: "e.g. FootballTeams, BasketballTeams"
+        leagueId:
+          type: integer
+        limit:
+          type: integer
+          default: 200
+        offset:
+          type: integer
+          default: 0
+
+    GetPlayersParams:
+      type: object
+      required: [playerTable]
+      properties:
+        playerTable:
+          type: string
+          description: "e.g. FootballPlayers, MmaFighters, CyclingRacers"
+        teamId:
+          type: integer
+        limit:
+          type: integer
+          default: 200
+        offset:
+          type: integer
+          default: 0
+
+    GetLeaguesParams:
+      type: object
+      required: [leagueTable]
+      properties:
+        leagueTable:
+          type: string
+          description: "e.g. FootballLeagues"
+        countryId:
+          type: integer
+        limit:
+          type: integer
+          default: 200
+
+    GetLeagueSeasonsParams:
+      type: object
+      properties:
+        leagueId:
+          type: integer
+        currentOnly:
+          type: boolean
+          default: false
+        limit:
+          type: integer
+          default: 100
+
+    RunSelectSqlParams:
+      type: object
+      required: [sql]
+      properties:
+        sql:
+          type: string
+          description: "SELECT only. Always include LIMIT. Never SELECT *."
+        limit:
+          type: integer
+          maximum: 500

@@ -142,22 +142,34 @@ L tabulka neexistuje (get_table_schema vrátí 0 sloupců) → přeskočit sport
 CHAPTER 5: SPORTY A TABULKY (reference)
 =============================================================
 
-Týmové sporty (tabulky existují jako {Sport}Matches / {Sport}Teams / {Sport}Players):
-  Football | Basketball | Hockey | FieldHockey | Handball | Volleyball | BeachVolleyball
-  WaterPolo | Rugby | Cricket | Baseball | AmericanFootball | AussieRules | BeachSoccer
-  Floorball | Futsal | Kabaddi | Netball | Bandy | Badminton | TableTennis | Esports
+## PATTERN A — Týmové sporty ({Sport}Matches / {Sport}Teams / {Sport}Players)
+  Použij: sr_get_matches, sr_get_teams, sr_get_players, sr_get_leagues
 
-Individuální:
-  Tennis | Boxing | MMA | Darts | Snooker | Golf
-  (MMA: Fighters místo Players; Matches mohou mít Fighter1Id/Fighter2Id místo HomeTeamId/AwayTeamId)
+  AmericanFootball | AussieRules | Badminton | Bandy | Baseball | Basketball
+  BeachSoccer | BeachVolleyball | Boxing | Cricket | Darts | Esports
+  FieldHockey | Floorball | Football | Futsal | Golf | Handball | Hockey
+  Kabaddi | Netball | Pesapallo | RugbyLeague | RugbyUnion | Snooker
+  TableTennis | Tennis | Volleyball | WaterPolo
 
-Závodní:
-  Cycling | HorseRacing | Motorsport | DistanceRace
-  WinterSports → AlpineSkiing | Biathlon | CrossCountrySkiing | SkiJumping
+  Odchylky:
+  - MMA: Players = MmaFighters, TeamPlayers = MmaTeamFighters
+  - AussieRules: tabulky jsou AussieRulesMatches (ne AussiesRules*)
 
-POZOR: Závodní sporty mají odlišnou strukturu (žádný HomeTeamId/AwayTeamId).
-  → pro závodní sporty použít run_select_sql místo sr_get_matches
-  → přizpůsobit import dle skutečného schématu (get_table_schema)
+## PATTERN B — Závodní sporty ({Sport}Races / {Sport}Racers)
+  Použij: run_select_sql + get_table_schema (struktura se liší od týmových sportů)
+
+  Cycling:          CyclingRaces | CyclingRaceRacers | CyclingRacers | CyclingTeams
+  HorseRacing:      HorseRacingRaces | HorseRacingRaceRacers | Horses | Jockeys | Trainers
+  Motorsport:       CircuitRaces | CircuitRaceRacers | CircuitDrivers | CircuitTeams
+  DistanceRace:     DistanceRaces | DistanceRaceRacers | DistanceRacers | DistanceTeams
+  AlpineSkiing:     AlpineSkiingRaces | AlpineSkiingRaceRacers | AlpineSkiingRacers
+  Biathlon:         BiathlonRaces | BiathlonRaceRacers | BiathlonRacers
+  CrossCountrySkiing: CrossCountrySkiingRaces | CrossCountrySkiingRaceRacers | CrossCountrySkiingRacers
+  SkiJumping:       SkiJumpingRaces | SkiJumpingRaceRacers | SkiJumpingRacers
+
+  POZOR: Závodní sporty nemají HomeTeamId/AwayTeamId — mají RacerId/Position/Time místo skóre.
+  → Vždy nejprve get_table_schema, pak přizpůsobit SQL dotaz skutečnému schématu
+  → SR_Matches pro závodní sporty: ScoreHome/ScoreAway = NULL, Round = stage/etapa číslo
 
 =============================================================
 CHAPTER 6: ERROR HANDLING

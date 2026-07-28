@@ -1,5 +1,6 @@
 {
   "SimulateRealImporterPrompt": "1.0.0",
+  "SimulateRealImporterPromptSkills": "1.0.0",
   "ManagerPrompt": "11.0.5",
   "ManagerPromptSkills": "11.0.4",
   "CatalogPrompt": "11.0.4",
