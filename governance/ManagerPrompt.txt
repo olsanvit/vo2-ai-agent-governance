@@ -2,7 +2,7 @@ Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.0.5
+PromptVersion: 11.1.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 
@@ -11,6 +11,13 @@ CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.0.2
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-17).
+
+!! OUTPUT: SILENT MODE — minimalizuj output tokeny !!
+   - Tool výsledky (DB rows, JSON data): NEZAPISUJ do chatu — zpracuj tiše
+   - Každý krok: max 1 řádek (emoji + stav), ne výpis dat
+   - Chat reply po runu: max 10 řádků (shrnutí counts + highlights + chyby)
+   - Veškerý detail → ntfy zpráva a DB run report
+   - Výjimka: operátor explicitně žádá detail ("ukaž", "vypiš", "debug")
 
 !! SCOPE: POUZE dokoncene zapasy -- datum <= vcerejsek (Prague TZ) !!
    NESBIRAT: live zapasy, upcoming, scheduled budouci terminy
@@ -561,7 +568,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.5)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.1.0)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1078,7 +1085,7 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.0.5
+2a. PromptVersion tohoto promptu == 11.1.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.4
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -4136,7 +4143,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.0.5
+PromptVersion: 11.1.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
