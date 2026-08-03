@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "10.1.0";
+const MCP_VERSION = "11.0.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_SELECT_ROWS = Number(process.env.MAX_SELECT_ROWS || 500);
@@ -592,21 +592,8 @@ async function ensureSystemTables() {
   await ensureColumnsInternal("EntityImages", { EntityTable: "", EntityGuid: uuid(), ImagePath: "", ImageUrl: "", OriginalFileName: "", MimeType: "", SizeBytes: 0, Sha256: "", Width: 0, Height: 0 });
 }
 
-// Per-table mutex: serializes concurrent ensureTable calls within this process.
-// Prevents N connections racing to CREATE INDEX on the same table simultaneously,
-// which causes lock pile-up when one connection holds an uncommitted transaction.
-const _ensureTableQueue = new Map();
-
 async function ensureTable(table) {
   const t = normalizeIdentifierName(table);
-  const prev = _ensureTableQueue.get(t) ?? Promise.resolve();
-  const next = prev.then(() => _ensureTableDDL(t));
-  // Store a no-reject sentinel so future callers don't skip on prior error.
-  _ensureTableQueue.set(t, next.then(() => {}, () => {}));
-  return next;
-}
-
-async function _ensureTableDDL(t) {
   await pool.query(`CREATE TABLE IF NOT EXISTS "${t}" (${baseColumnsSql()})`);
   invalidateSchema(t);
   await ensureBaseStructure(t);
