@@ -1,7 +1,7 @@
 Agent: 11.0.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.1.0
+PromptVersion: 11.2.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 
@@ -5392,84 +5392,6 @@ Klíčové změny oproti původnímu souboru:
 - Přesunuto: Changelog → APPENDIX (zkrácen na 50 řádků)
 - Zachováno: Quick Reference Card, všechny 8.0.0 protokoly, všechna povinná pravidla
 - Nová struktura: 12 kapitol + APPENDIX pro snadnou navigaci
-
-=============================================================
-CHANGELOG
-=============================================================
-
-## 11.0.4 (2026-07-27) — Scheduling fix: ChatGPT Tasks Custom GPTs nepodporuje; MCP dle plánu; ModelRecommended GPT-5+; memory supplement; context window tabulka
-## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
-## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
-
-## 11.0.0 (2026-07-13) — Gitea cleanup, NOTIFICATION POVINNÉ, verze sync, bezpečnost
-- CatalogPrompt: odstraněny zbývající reference na Gitea jako zdroj promptů (Quick Reference Card krok 2, version_mismatch)
-- CatalogPrompt: PromptSource hodnoty aktualizovány: (mcp/vo2info/github/drive/cache/bootstrap)
-- CatalogPrompt: GovernanceVersion/SchemaVersion/RuntimeSafetyVersion bumped na 11.0.0
-- CatalogPrompt Ch 1 title aktualizován na 11.0.0
-- Checker/Collector/Generator/Importer: NOTIFICATION krok označen jako POVINNÉ (shodně s ManagerPrompt)
-- Checker/Collector/Generator/Importer: BLOK 2 verze a "Verze synchronizována" → 11.0.0
-- Checker/Collector/Generator/Importer: Memory Non-Canonical Rule → MCP primární (Gitea odstraněn)
-- CheckerPrompt: přidán krok 7c CALENDAR ID RESOLUTION do startup + krok 6b CALENDAR EVENT do audit run
-- GeneratorPrompt: ANTI-HALLUCINATION pravidlo 1 doplněno o výjimku pro AI-generované záznamy (SourceUrl = NULL)
-- ManagerPrompt: Self-Audit KROK 0 — Gitea → MCP, skill návrh text opraven
-- ManagerPrompt: Changelog 10.1.2 popis priorit opraven (byl smíšený formát)
-- Všechny typy: ntfy Auth credentials přesunuty do reference na env proměnnou {NTFY_AUTH_BASE64}
-- Všechny typy: bump na 11.0.0
-
-## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
-- Priorita zdrojů změněna: Gitea → MCP → vo2info.cz → GitHub → Drive → cache
-- PROMPT CACHE PROTOCOL: GITEA HEADER krok nahrazen MCP CHECK, fallback na vo2info.cz
-- `gitea_version` → `mcp_version`, download ze Gitea → download z MCP
-- Fallback pořadí: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
-
-## 9.4.1 (2026-06-14)
-- PromptVersion header bump: 9.4.0 → 9.4.1
-- MCP Version v INFRASTRUKTURA: 9.3.0 → 9.4.1
-- Self-Audit BLOK 1a: MCP_VERSION kontrola 9.0.0 → 9.4.1
-- Self-Audit BLOK 2a/2b: PromptVersion+MCP_VERSION check aktualizovány na 9.4.7
-- Per-agent files tabulka: odstraněny řádky jiných AgentTypů (_categories_, _mapping, _prompts)
-- CHAPTER 13: odstraněn prefix verze "9.0.0" z názvu kapitoly
-
-## 9.0.0 (2026-06-04)
-- ImageType enum rozšířen: 60+ typů (kits, symbols, season logos, historical variants)
-- Historical Visual Asset Collection Protocol (from/to metadata, Wikidata P154/P18/P1419)
-- Image License & Trademark Governance (LicenseType, IsTrademarked, TrademarkOwner)
-- SVG Sanitization Protocol (zakázané elementy, sanitizovatelné elementy)
-- 22 typů ntfy notifikací (přidány: privacy/PII, licensing, self-audit, prompt upgrade)
-- Ntfy markdown=true jako default, structured message formatting
-- Capability Missing opravy (Calendar fallback, Drive fallback, ntfy logging)
-- Soubory přejmenovány: {AgentName}.txt → {AgentName}_entities.txt (Catalogs/)
-                        {AgentName}.txt → {AgentName}_error (Problems/)
-- Dynamic Table Discovery pravidla (sloupec vs. nová tabulka)
-- Entity Country/Region Disambiguation (CountryGuid jako povinný discriminator)
-- Rankings, Ratings & ELO Systems (EntityRankings tabulka)
-- Domain-Specific Data Discovery (catch-all pro nová data)
-- Job Queue System (enqueue/claim/complete/fail)
-- Skills: +4 nové image skills (historical-asset-collector, wikidata-image-harvester, image-quality-validator)
-- DB Architecture dokumentace (proč NEseparovat Catalog a Manager)
-- Data Lineage Tracking (SourceName, SourceUrl, DataOrigin)
-- Batch Import Protocol
-
-## 8.6.0 (2026-06-02)
-- AgentType detection (Catalog vs Manager z AgentName)
-- Drive jako jediný canonical zdroj promptu (bootstrap model)
-- Self-audit KROK 0 (Drive load před auditem) + auto-oprava při errors
-- send_notification: NTFY auth (NTFY_USER/NTFY_PASS), agent-digest topic
-- Scheduled Run Configuration sekce
-- Skills self-check (skillsNeeded/skillsAvailable/skillsMissing)
-- Dynamic Column Discovery governance
-- Names coverage metadata (agent aktualizuje %, operátor plní řádky)
-- MCP Tools kompletní seznam (63 tools)
-- Ntfy topics přesná struktura + Action emoji
-
-## 8.5.0 (2026-05-20)
-- Self-Audit Protocol (8 bloků)
-- Run Time Budget Governance
-- Error Escalation Tiers (Tier 1–4)
-- Circuit Breaker governance
-- Confidence Decay (-5/30 dní)
-- Baseline Catalog File Governance
-
 
 =============================================================
 RUNTIME GOVERNANCE — kanonická pravidla (viz Ch 3, 8, 10)

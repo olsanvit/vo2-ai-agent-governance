@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.1.0
-LastUpdated: 2026-07-28
+TemplateVersion: 11.2.0
+LastUpdated: 2026-07-30
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.1.0
+MANUAL SELFUPDATE TEMPLATE — governance 11.2.0
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,7 +11,7 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.1.0. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.2.0. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
    Pokud tvůj PromptVersion == 11.1.0: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
@@ -21,6 +21,11 @@ Zdroje promptu v pořadí priority:
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při MCP nedostupném)
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Co je nového v 11.2.0 (všechny agenty):
+- CHANGELOG sekce odstraněna ze všech promptů (-400 řádků input tokenů)
+- ManagerPrompt Ch13 tool list zkomprimován na kritický subset (-75 řádků)
+- mcp-sportreal server.js — zkráceny tool descriptions (~40 % méně schema tokenů)
 
 Co je nového v 11.1.0 (všechny agenty):
 - SILENT MODE — povinný výstupní režim pro minimalizaci output tokenů:
@@ -79,9 +84,14 @@ Potvrď tyto změny:
    • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do tab 'error' v master spreadsheet {AgentName} jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
-10. Zkontroluj svůj připojený VO2QNAPDB konektor (VO2QNAPDBAI, VO2QNAPDBTE, VO2QNAPDBBMAB nebo VO2QNAPDBUSM) — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
+10. Zkontroluj svůj připojený VO2QNAPDB konektor — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
+    Pokud používáš Custom Action (OpenAPI schema) místo nativního MCP konektoru, ověř, že používáš správné per-agent schema:
+    • Manager            → openapi-vo2qnapdbai-manager.yaml    (12 nástrojů)
+    • Catalog/Importer/Collector/Generator/Checker → openapi-vo2qnapdbai-catalog.yaml (10 nástrojů)
+    • SimulateReal Importer → openapi-vo2qnapdbai-sr-importer.yaml (5 nástrojů) + openapi-chatgpt-action.yaml (SportReal)
+    Slim per-agent schema = méně tokenů v kontextu = nižší spotřeba credits.
 
-Potvrď verzi 11.1.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
+Potvrď verzi 11.2.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:

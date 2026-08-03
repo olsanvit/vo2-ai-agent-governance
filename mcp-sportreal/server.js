@@ -71,17 +71,17 @@ function createMcpServer() {
   }
 
   // ── Connectivity ───────────────────────────────────────────────────────────
-  tool("db_ping", "Test SportReal DB connection.", {}, async () => {
+  tool("db_ping", "Test DB connection.", {}, async () => {
     const r = await pool.query("SELECT now() AS now, current_database() AS db");
     return ok({ ok: true, db: r.rows[0].db, now: r.rows[0].now, MCP_VERSION, readonly: true });
   });
 
-  tool("rate_limit_guard", "Check request rate. Returns maxBatchSize and current usage.", {}, async () => {
+  tool("rate_limit_guard", "Returns maxBatchSize. Call once at run start.", {}, async () => {
     return ok({ ok: true, maxBatchSize: 50, MAX_SELECT_ROWS, note: "read-only connector" });
   });
 
   // ── Schema discovery ───────────────────────────────────────────────────────
-  tool("list_tables", "List all tables in SportReal DB.", {}, async () => {
+  tool("list_tables", "List all public tables.", {}, async () => {
     const r = await pool.query(
       `SELECT table_name FROM information_schema.tables
        WHERE table_schema='public' ORDER BY table_name`
@@ -89,7 +89,7 @@ function createMcpServer() {
     return ok({ tables: r.rows.map(x => x.table_name), count: r.rowCount });
   });
 
-  tool("get_table_schema", "Get columns for a SportReal table.", { table: z.string() }, async ({ table }) => {
+  tool("get_table_schema", "Get columns for a table.", { table: z.string() }, async ({ table }) => {
     const t = normalizeId(table);
     const r = await pool.query(
       `SELECT column_name, data_type, is_nullable
@@ -102,7 +102,7 @@ function createMcpServer() {
   });
 
   // ── Sports ─────────────────────────────────────────────────────────────────
-  tool("sr_list_sports", "List all sports available in SportReal DB.", {}, async () => {
+  tool("sr_list_sports", "List active sports.", {}, async () => {
     const r = await pool.query(
       `SELECT "Id", "Name", "NormalizedName", "IsActive"
        FROM "Sports"
@@ -114,15 +114,13 @@ function createMcpServer() {
 
   // ── Matches ────────────────────────────────────────────────────────────────
   tool("sr_get_matches",
-    "Get finished matches for a given sport table (e.g. FootballMatches). " +
-    "Optionally filter by date range (ISO date strings). Returns Id, HomeTeamId, AwayTeamId, " +
-    "StartTime, Finished, Cancelled, ScoreHome, ScoreAway, LeagueId, Season, Round.",
+    "Finished matches from a sport table (e.g. FootballMatches, CyclingRaces). Filter by date range.",
     {
-      matchTable: z.string().describe("Table name, e.g. 'FootballMatches'"),
-      dateFrom: z.string().optional().describe("ISO date, e.g. '2025-01-01'"),
-      dateTo: z.string().optional().describe("ISO date, e.g. '2025-12-31'"),
-      limit: z.number().optional().describe("Max rows, default 100"),
-      offset: z.number().optional().describe("Pagination offset, default 0"),
+      matchTable: z.string(),
+      dateFrom: z.string().optional(),
+      dateTo: z.string().optional(),
+      limit: z.number().optional(),
+      offset: z.number().optional(),
     },
     async ({ matchTable, dateFrom, dateTo, limit = 100, offset = 0 }) => {
       const t = normalizeId(matchTable);
@@ -152,11 +150,10 @@ function createMcpServer() {
 
   // ── Teams ──────────────────────────────────────────────────────────────────
   tool("sr_get_teams",
-    "Get teams for a given sport team table (e.g. FootballTeams). " +
-    "Returns Id, Name, ShortName, FullName, LeagueId, Overall, Rating, Level, CountryId.",
+    "Teams from a sport table (e.g. FootballTeams). Optional leagueId filter.",
     {
-      teamTable: z.string().describe("Table name, e.g. 'FootballTeams'"),
-      leagueId: z.number().optional().describe("Filter by league ID"),
+      teamTable: z.string(),
+      leagueId: z.number().optional(),
       limit: z.number().optional(),
       offset: z.number().optional(),
     },
@@ -182,11 +179,10 @@ function createMcpServer() {
 
   // ── Players ────────────────────────────────────────────────────────────────
   tool("sr_get_players",
-    "Get players for a given sport player table (e.g. FootballPlayers). " +
-    "Returns Id, FirstName, LastName, PositionText, Rating, Nationality, BirthDate.",
+    "Players from a sport table (e.g. FootballPlayers, MmaFighters). Optional teamId filter via TeamPlayers join.",
     {
-      playerTable: z.string().describe("Table name, e.g. 'FootballPlayers'"),
-      teamId: z.number().optional().describe("Filter by team ID via TeamPlayers join table"),
+      playerTable: z.string(),
+      teamId: z.number().optional(),
       limit: z.number().optional(),
       offset: z.number().optional(),
     },
@@ -224,10 +220,9 @@ function createMcpServer() {
 
   // ── Leagues ────────────────────────────────────────────────────────────────
   tool("sr_get_leagues",
-    "Get leagues for a given sport league table (e.g. FootballLeagues). " +
-    "Returns Id, Name, CountryId, Confederation, NumberOfTeams, CurrentChampion.",
+    "Leagues from a sport table (e.g. FootballLeagues). Optional countryId filter.",
     {
-      leagueTable: z.string().describe("Table name, e.g. 'FootballLeagues'"),
+      leagueTable: z.string(),
       countryId: z.number().optional(),
       limit: z.number().optional(),
     },
@@ -248,10 +243,10 @@ function createMcpServer() {
 
   // ── League seasons ─────────────────────────────────────────────────────────
   tool("sr_get_league_seasons",
-    "Get league seasons from LeagueSeasons table. Returns active and recent seasons.",
+    "League seasons. Optional leagueId filter, currentOnly flag.",
     {
-      leagueId: z.number().optional().describe("Filter by league ID"),
-      currentOnly: z.boolean().optional().describe("Only IsCurrent=true seasons"),
+      leagueId: z.number().optional(),
+      currentOnly: z.boolean().optional(),
       limit: z.number().optional(),
     },
     async ({ leagueId, currentOnly = false, limit = 100 }) => {
@@ -273,7 +268,7 @@ function createMcpServer() {
 
   // ── Generic read-only SQL ──────────────────────────────────────────────────
   tool("run_select_sql",
-    `Run a read-only SELECT query on SportReal DB. Max ${MAX_SELECT_ROWS} rows. Always use LIMIT. Never SELECT *.`,
+    `SELECT only. Max ${MAX_SELECT_ROWS} rows. Always LIMIT. Never SELECT *.`,
     { sql: z.string(), limit: z.number().optional() },
     async ({ sql, limit }) => {
       assertSelectSql(sql);
