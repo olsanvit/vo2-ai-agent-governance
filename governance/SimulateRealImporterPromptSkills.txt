@@ -1,6 +1,7 @@
-SkillsVersion: 1.0.0
+SkillsVersion: 1.4.0
 AgentType: Importer
 SkillsFor: SimulateRealImporterPrompt
+Generated: 2026-07-30
 
 =============================================================
 SKILL DIRECTORY — SimulateReal Importer

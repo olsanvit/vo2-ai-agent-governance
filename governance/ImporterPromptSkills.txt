@@ -1,6 +1,6 @@
 SkillsFor: ImporterPrompt
-SkillsVersion: 11.0.4
-Generated: 2026-07-13
+SkillsVersion: 11.2.0
+Generated: 2026-07-30
 
 Skills jsou konfigurovány per agent v Claude.ai.
 Každý Importer agent musí mít aktivních ASPOŇ 10 skills.

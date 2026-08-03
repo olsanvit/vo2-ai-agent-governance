@@ -1,6 +1,6 @@
 Agent: 11.0.2 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.1.0
+PromptVersion: 11.2.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 
@@ -610,60 +610,6 @@ APPENDIX — AgentType Detection Registry
 | "Checker"           | Checker   | CheckerPrompt    | CheckerPromptSkills    | /Prompts/Checkers/    |
 | "Importer"          | Importer  | ImporterPrompt   | ImporterPromptSkills   | /Prompts/Importers/   |
 | (jiný)              | Catalog (default) | CatalogPrompt | CatalogPromptSkills | /Prompts/Catalogs/ |
-
-=============================================================
-CHANGELOG
-=============================================================
-
-## 11.0.4 (2026-07-27) — Scheduling fix: ChatGPT Tasks Custom GPTs nepodporuje; MCP dle plánu; ModelRecommended GPT-5+; memory supplement; context window tabulka
-## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
-## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
-
-## 11.0.1 (2026-07-15) — versions.json, SELF-UPDATE odebrán, Prompt Cache Protocol zkomprimován
-- Prompt Cache Protocol: versions.json endpoint nahrazuje per-file header check (batch pro 12 souborů)
-- SELF-UPDATE DETEKCE sub-krok odebrán — nahrazen Prompt Cache Protocol
-- BLOK 2 verze aktualizovány na 11.0.1
-
-## 11.0.0 (2026-07-13) — NOTIFICATION POVINNÉ, Gitea cleanup, verze sync
-- NOTIFICATION krok označen jako POVINNÉ — musí proběhnout PŘED závěrečným reportem v chatu
-- Memory Non-Canonical Rule: Gitea → MCP primární (pořadí zdrojů opraveno)
-- BLOK 2 verze a "Verze synchronizována" aktualizovány na 11.0.0
-
-## 10.1.2 (2026-07-08) — MCP jako primární zdroj promptů (nahrazuje Gitea)
-- PROMPT CACHE PROTOCOL: `gitea_version` → `mcp_version`, download z MCP místo Gitea
-- Fallback: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
-- Canonical source rules: Gitea URL nahrazena MCP governance URL
-
-## 10.1.0 (2026-07-02)
-- Verze synchronizována s governance 11.0.0
-- Agent header aktualizován na 10.1.0
-- ANTI-HALLUCINATION PRAVIDLA přidána
-- Opraveny reference na počet tabů master spreadsheet (7 tabů)
-- SELF-UPDATE DETEKCE sub-krok v Ch 1
-
-## 9.4.1 (2026-06-14) — Konzistence a opravy CollectorPrompt
-- STARTUP: 8 kroků → 11 kroků; SKILLS CACHE PROTOCOL oddělen, CALENDAR ID RESOLUTION přidán do Ch 1
-- Ch 3 startup: "Drive header" → "Gitea header"
-- Self-Audit BLOK 1+2: verze 9.4.0 → 9.4.1
-- Per-agent files tabulka: odstraněny soubory cizích agent typů (_names, _mapping, _prompts)
-- Chapter 13 → Chapter 11
-
-## 9.4.0 (2026-06-14) — Gitea jako primární canonical zdroj + AgentMonitor sync
-- MCP je primární canonical zdroj promptu; priorita: MCP → vo2info.cz → GitHub → Drive → cache → bootstrap
-- Prompt Cache Protocol: GITEA HEADER nahrazuje DRIVE HEADER; Drive je fallback
-- Ch.2 canonical source rule: Drive-only pravidlo nahrazeno Gitea-first
-- Self-Audit BLOK 3: přidány sync_agent_entities, get_agent_entities jako kritické nástroje
-
-## 9.0.0 (2026-06-04) — Generalizace
-- Odstraněny hardcoded DB, tabulka, zdroje (Unsplash apod.) a collection typy
-- Konfigurace přesunuta do bootstrap promptu a {AgentName}_config.txt
-- Přidán config file format (TargetDB, TargetTable, CollectionTypes, MaxPerRun)
-- Governance pravidla, workflow a quality filter zachovány beze změny
-
-## 8.7.0 (2026-06-04) — Initial release (Top Eleven / wallpaper reference impl.)
-
-Timezone: Europe/Prague
-Naplánovaný běh: {{ScheduledRunTime}}
 
 =============================================================
 RUNTIME GOVERNANCE — kanonická pravidla (viz Ch 3, 7, 9)

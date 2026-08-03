@@ -2,7 +2,7 @@ Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.1.0
+PromptVersion: 11.2.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 
@@ -2869,93 +2869,22 @@ Pro nizsi souteze: provest regionalni/lokalni kontrolu.
 CHAPTER 13: TOOLS & INTEGRATIONS
 =============================================================
 
-## MCP Tools Overview — kompletní seznam (65 tools)
+## MCP Tools — kritické nástroje
 
-── SCHEMA & DISCOVERY ─────────────────────────────────
-list_tables              → seznam tabulek v DB
-get_table_schema         → sloupce konkrétní tabulky
-describe_database        → kompletní popis (tabulky, indexy, FK)
-schema_report            → report chybějících BaseGuid/scoring sloupců
-ensure_table             → vytvoř tabulku pokud neexistuje ✅ kritický
-ensure_base_structure    → přidej chybějící BaseGuid + scoring sloupce
-ensure_columns           → přidej sloupce dle dat (Dynamic Column Discovery)
-infer_schema             → odvoď PostgreSQL typy z JSON vzorku
-invalidate_schema_cache  → vymaž schema cache po migraci
+Kritické (používej přednostně):
+  ensure_table / ensure_columns    → vytvoř/doplň tabulku
+  find_records / run_select_sql    → čtení dat
+  upsert_record                    → zápis jednoho záznamu
+  smart_upsert_batch               → hromadný zápis (VŽDY zjisti limit přes rate_limit_guard)
+  soft_delete_record               → soft delete
+  audit_log                        → audit event
+  sync_agent_entities              → upsert ze Sheet do AgentMonitor DB
+  get_agent_entities               → čti entity z AgentMonitor (bez Drive)
+  send_notification                → ntfy
+  rate_limit_guard                 → limity + maxBatchSize (volat na začátku runu)
+  refresh_materialized_view        → obnova views (krok 12 runu)
 
-── ČTENÍ DAT ──────────────────────────────────────────
-find_records             → hledej záznamy dle kritérií ✅ kritický
-search_records           → hledej dle SearchText/NormalizedName (entity lookup)
-run_select_sql           → libovolný SELECT + advisory lock/unlock ✅ kritický
-get_agent_historical_sample → 100 starších řádků přes entity tabulky
-table_stats              → rychlý odhad COUNT(*) + last update (monitoring)
-
-── ZÁPIS DAT ──────────────────────────────────────────
-upsert_record            → zápis jednoho záznamu ✅ kritický
-smart_upsert_batch       → hromadný zápis v transakci ✅ kritický
-soft_delete_record       → soft delete ✅ kritický
-preview_upsert_record    → simulace upsert BEZ zápisu (dry run test)
-validate_upsert_plan     → validace před zápisem (safe write)
-normalize_record         → normalizace klíčů záznamu (NormalizedName sync)
-validate_data            → validace rozsahů, formátů, scoring
-
-── INDEXY & FK ────────────────────────────────────────
-list_indexes             → seznam indexů tabulky
-create_index             → vytvoř index
-create_unique_index      → vytvoř UNIQUE index
-list_foreign_keys        → seznam FK
-create_foreign_key       → vytvoř FK
-
-── VIEWS ──────────────────────────────────────────────
-create_materialized_view → vytvoř materialized view (povinné 20 views)
-refresh_materialized_view → obnov view (krok 15 scheduled run)
-
-── MIGRACE ────────────────────────────────────────────
-record_migration         → spusť a zaznamenej migrační SQL
-validate_sql_safety      → ověř bezpečnost SQL bez spuštění
-reindex_table            → REINDEX TABLE (po masivních upserts)
-
-── DEDUPLICATION & SCORING ────────────────────────────
-deduplicate_table        → najdi skupiny duplikátů (Dedup Algorithm)
-score_breakdown_report   → vysvětli score pole + warnings per tabulka
-score_breakdown_by_guid  → score breakdown pro konkrétní Guid
-score_columns            → seznam všech 22 scoring sloupců
-report_score_visibility_audit → audit score visibility v reportu
-
-── AUDIT & MONITORING ─────────────────────────────────
-audit_log                → zapiš custom audit event do AuditLog ✅ kritický
-get_recent_changes       → poslední záznamy z AuditLog
-export_table             → export řádků jako JSON (backup/debug)
-
-── AGENT MONITOR ──────────────────────────────────────
-sync_agent_entities      → upsert řádků ze Sheet do AgentMonitor DB ✅ kritický
-get_agent_entities       → čti base entities agenta z AgentMonitor DB (rychlé, bez Drive) ✅ kritický
-
-── JOB QUEUE ──────────────────────────────────────────
-enqueue_job              → přidej job do fronty
-list_jobs                → přehled jobů dle stavu
-claim_next_job           → atomicky zaber další job (FOR UPDATE SKIP LOCKED)
-complete_job             → označ dokončený + výsledek
-fail_job                 → označ failed (retry až MaxRetries → DeadLetter)
-retry_job                → resetuj failed job zpět do queued
-move_job_to_dead_letter  → přesuň job do DeadLetterQueue
-list_dead_letters        → přehled dead-letter jobů
-
-── NOTIFIKACE ─────────────────────────────────────────
-send_notification        → ntfy notifikace ✅ kritický
-rate_limit_guard         → zobraz limity a pravidla ✅ kritický
-
-── OBRÁZKY ────────────────────────────────────────────
-save_image_url           → stáhni a ulož obrázek z URL
-save_image_base64        → ulož obrázek z base64
-list_entity_images       → seznam obrázků entity
-
-── POKROČILÉ ──────────────────────────────────────────
-create_partitioned_table → range-partitioned tabulka dle data (velké tabulky)
-create_date_partition    → vytvoř partition pro konkrétní datum
-shard_plan               → plán shardingu + metadata konvence
-enable_rls / disable_rls → Row Level Security
-create_rls_policy / drop_rls_policy / list_rls_status
-prompt_upgrade_lifecycle_report → audit prompt upgrade lifecycle
+Ostatní nástroje (schema, indexy, views, migrace, images, job queue, dedup) jsou dostupné přes MCP — použij je dle potřeby situace.
 
 DŮLEŽITÉ:
 - MCP konektor = stateless HTTP sessions
@@ -4143,7 +4072,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.1.0
+PromptVersion: 11.2.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4455,17 +4384,6 @@ StreamUrl, KickoffLocalTime, Notes, SourceName, CreatedAt
 ImportantScore priority: 20.000-30.000 (collect opportunistically)
 
 =============================================================
-CHANGELOG (poslední 3 verze — starší viz Drive /Prompts/Archive/)
-=============================================================
-
-## 11.0.4 (2026-07-27) — Scheduling fix: ChatGPT Tasks Custom GPTs nepodporuje; MCP dle plánu; ModelRecommended GPT-5+; memory supplement; context window tabulka
-## 11.0.3 (2026-07-27) — Version drift fix (Chapter 1 titles, Compatibility Matrix, CatalogPrompt fallback unlock); PATCH sekce komprimovány (-7500 tokenů); Workspace Agents BLOK 2d; Changelog zkrácen
-## 11.0.2 (2026-07-27) — Platform update: ModelMin GPT-4.1 přidán do headeru; BLOK 2d platform check (context window, Scheduled Tasks); ChatGPT Tasks červen 2026
-## 11.0.1 (2026-07-15) — Tab protokoly komprimovány 28→4 řádky; AgentType detection table 10→2 řádky; PromptVersion bump
-## 11.0.0 (2026-07-13) — Gitea cleanup; MCP jako primární zdroj; ntfy Auth reference
-
-
-=============================================================
 RUNTIME GOVERNANCE — kanonická pravidla (viz Ch 3, 13, 16)
 =============================================================
 Drive fileId: NIKDY neukládat — vždy search_files() znovu.
@@ -4475,27 +4393,3 @@ Ntfy: pouze send_notification MCP tool; selhání = reporting degradation, ne bl
 AgentSchedules: conflict detection zakázána. Paralelní běh povolen.
 Calendar: NIKDY použít název přímo — vždy list_calendars() → CALENDAR_ID.
 
-## PATCH 9.3.0 (2026-01-xx)
-- Přidán agent-schedule-manager update
-- Rozšíření self-audit bloků
-
-## PATCH 9.4.0 (2026-03-xx)
-- Verze 9.4.0: stabilizace pipeline
-
-## PATCH 10.0.0 (2026-06-xx)
-- Velká aktualizace: PromptVersion systém, nové reporting standardy
-
-## PATCH 10.0.1 (2026-06-29)
-- ntfy přepnut na network_mode: host, port 8225
-- send_notification nový JSON formát s markdown, click, topic agent-digest
-
-## PATCH 10.0.2 (2026-06-30)
-- GAP 1+4: selfUpdate zapisuje prompt zpět na Drive
-- GAP 2: DB ping retry 3× 60s místo 5× 3s
-- GAP 3: Drive 403 → automatická obnova spreadsheeetu
-- MCP_VERSION decoupling: >= 10.0.1 místo == 10.0.1
-
-## PATCH 10.0.3 (2026-06-30)
-- Nové 3 taby ve všech master spreadsheetech: todo, notes, config (celkem 7)
-- DUPLICATE-GUARD a 403 recovery rozšířeny na 7 tabů
-- ManualSelfUpdate.txt aktualizováno

@@ -7,8 +7,8 @@ info:
     All operations are SELECT-only — no writes.
   version: 1.0.0
 servers:
-  - url: https://mcp.vo2info.cz/sportreal
-    description: QNAP MCP proxy (via Caddy/nginx)
+  - url: https://mcp.vo2info.cz/SR
+    description: QNAP MCP proxy (via Caddy)
 
 security:
   - bearerAuth: []
