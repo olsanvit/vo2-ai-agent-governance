@@ -2,7 +2,7 @@ Agent: 11.0.2 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.2.1
+PromptVersion: 11.2.2
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 
@@ -572,7 +572,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.1.0)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.2)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1089,7 +1089,7 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.1.0
+2a. PromptVersion tohoto promptu == 11.2.2
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.0.4
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -4240,6 +4240,100 @@ Agent kontroluje Drive hash tab 'names' v master spreadsheet na každém startu:
 - Hash změněn → reload tab 'names' v master spreadsheet → seřadit dle ImportantScore DESC → zpracovat nejprve ty s nejvyšším score
 
 =============================================================
+CHAPTER 19: SPORT PROGRESS & SLOT ADVANCEMENT -- 11.2.2
+=============================================================
+
+Tento chapter řídí sběr historických zápasů přes SportProgress tabulku (7 datových slotů na sport).
+Platí pro všechny Manager agenty. Inline KROK 8 v CCR promptu implementuje tuto logiku.
+
+## SportProgress tabulka -- schéma
+
+```sql
+SportProgress: SportKey text, SlotIndex int (1-7), SlotDate date, EmptyCount int
+```
+
+Business key: (SportKey, SlotIndex) UNIQUE.
+Inicializace: 7 slotů počínaje earliest_reliable_date (viz Inicializační scan níže).
+
+## Inicializační scan -- first-run protocol
+
+Pokud SportProgress pro daný SportKey obsahuje 0 řádků (první run):
+1. Nepoužívat rok vzniku sportu — ten je příliš vzdálený a WebSearch vrátí 0 výsledků.
+2. Provést WebSearch: "{SportName} first official competitive match history results year"
+3. Určit earliest_reliable_year = nejstarší rok, pro který existují dohledatelné výsledky
+   (typicky: kdy vznikla federace nebo první mezinárodní soutěž s výsledky online).
+4. Inicializovat 7 slotů: SlotDate = (earliest_reliable_year-01-01 + i-1 dní) pro i=1..7
+5. Uložit do SportProgress a znovu načíst.
+L WebSearch selže nebo nepřinese rok → použít výchozí rok z inline promptu (bootstrap hodnota).
+
+## Dynamický algoritmus postupu slotu -- 11.2.2
+
+Nahrazuje starý fixní krok (7 dní / threshold 3). Krok závisí na vzdálenosti od dneška:
+
+| days_behind (CURRENT_DATE - SlotDate) | Krok při nalezení | Krok při prázdném (EmptyCount+1 >= threshold) | Threshold |
+|---------------------------------------|-------------------|----------------------------------------------|-----------|
+| > 365 dní (historický archiv)         | +30 dní           | current_max +1 den                           | 1         |
+| 90–365 dní (střední archiv)           | +7 dní            | current_max +1 den                           | 2         |
+| < 90 dní (aktuální sezóna)            | +1 den            | current_max +1 den                           | 3         |
+
+Postup pro každý slot:
+```
+days_behind = CURRENT_DATE - slot.SlotDate
+IF days_behind > 365:  step = 30d; threshold = 1
+ELIF days_behind > 90: step = 7d;  threshold = 2
+ELSE:                  step = 1d;  threshold = 3
+
+IF count > 0:
+  new_SlotDate = slot.SlotDate + step
+  new_EmptyCount = 0
+ELSE:
+  IF slot.EmptyCount + 1 >= threshold:
+    current_max = current_max + 1d
+    new_SlotDate = current_max
+    new_EmptyCount = 0
+  ELSE:
+    new_SlotDate = slot.SlotDate  (beze změny)
+    new_EmptyCount = slot.EmptyCount + 1
+```
+
+## Off-season detekce -- 11.2.2
+
+Pokud sport má definovanou sezónu (IsSeasonalSport=true v Sports tabulce nebo config):
+- Off-season měsíce: hledat pouze 1× za slot (threshold snížit na 1 pro všechna pásma)
+- Rychlejší postup přes off-season → méně prázdných Web vyhledávání
+- Při návratu do sezóny: automaticky obnovit standardní threshold
+
+Signál off-season: 3+ po sobě jdoucí sloty vrátí 0 zápasů z různých dotazů
+→ off_season_flag = true; uložit do Sports.Metadata nebo AgentRunReports.Metadata
+
+## Cross-slot deduplication -- 11.2.2
+
+Před zápisem každého zápasu do DB ověřit, zda zápas nebyl zpracován jiným slotem:
+```sql
+SELECT COUNT(*) FROM {SportName}Matches
+WHERE MatchDate = '{search_date}' AND HomeTeamGuid = '{homeGuid}' AND AwayTeamGuid = '{awayGuid}'
+```
+Pokud COUNT > 0 → zápas přeskočit (duplicita), nepočítat do total_found.
+Toto chrání před situací kdy dva sloty pokrývají stejné datum.
+
+## Source diversity threshold -- 11.2.2
+
+Při hledání zápasů pro jedno datum použít alespoň 2 různé zdroje (pokud dostupné):
+- Zdroj 1: federace/liga (official tier) nebo specifický sportovní web
+- Zdroj 2: obecný aggregator nebo zpravodajský web
+
+Pokud pouze 1 zdroj dostupný → přijmout výsledky, ale zaznamenat do highlights[]:
+"⚠️ Single-source pro {date}: {source_name}"
+
+Pokud 0 zdrojů → EmptyCount zvýšit (datum není exhausted — může být výpadek zdrojů).
+
+## Early exit na db_unreachable -- 11.2.2
+
+(Implementace viz KROK 1 v Postup scheduled runu — zde jen reference)
+Pokud db_unreachable při startu → žádné SportProgress operace, žádné zápisy.
+SportProgress stav se nezmění. Příští run pokračuje od stejného bodu.
+
+=============================================================
 APPENDIX: LEGACY METADATA (max 50 radku)
 =============================================================
 
@@ -4321,6 +4415,15 @@ Pravidla:
 10. Legacy Id-only tabulky respektovat, ale nove tabulky = Guid uuid PRIMARY KEY.
 
 ## Changelog (starší viz Drive /Prompts/Archive/)
+
+### 11.2.2 (2026-08-20)
+- CHAPTER 19: Sport Progress & Slot Advancement — nová kapitola pro historický sběr
+- Dynamický algoritmus: krok +30d/+7d/+1d dle vzdálenosti od dneška (>365d/>90d/<90d)
+- Inicializační scan: WebSearch pro earliest_reliable_year (ne rok vzniku sportu)
+- Off-season detekce: snížení threshold při 3+ prázdných slotech po sobě
+- Cross-slot deduplication: SELECT před každým zápisem (ochrana před duplicitami)
+- Source diversity threshold: ≥2 zdroje per datum, varování při single-source
+- PromptVersion reference aktualizovány (11.1.0 → 11.2.2)
 
 ## Jazykové pravidlo
 
