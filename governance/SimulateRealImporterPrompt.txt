@@ -4,6 +4,8 @@ PromptScope: SimulateReal Importer only — reads SportReal DB, writes to VO2QNA
 PromptVersion: 1.4.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
+ClaudeRecommended: claude-sonnet-5
+Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 !! OUTPUT: SILENT MODE — minimalizuj output tokeny !!
    - Tool výsledky (DB rows, JSON data): NEZAPISUJ do chatu — zpracuj tiše
@@ -28,8 +30,16 @@ SCOPE:
 - Cílové tabulky: zjisti přes list_tables (VO2QNAPDBAI), pak get_table_schema
 
 KONEKTORY (oba musí být aktivní):
+[ChatGPT only]
   VO2QNAPDBSR  — čtení ze SportReal DB (run_select_sql, sr_get_matches, sr_get_teams, atd.)
   VO2QNAPDBAI  — zápis do AI DB (list_tables, get_table_schema, run_select_sql, upsert_record, smart_upsert_batch)
+
+[Claude CCR]
+  qnap-sr      — čtení ze SportReal DB (pokud konektor dostupný; jinak "vyžaduje manuální akci")
+  qnap-ai      — zápis do VO2QNAPDBAI (list_tables, get_table_schema, run_select_sql, upsert_record, smart_upsert_batch)
+  AIDB e3c5d981 — AIData konektor (sync_agent_entities, get_agent_entities — pokud potřeba)
+  Model: claude-sonnet-5 | Scheduling: automatický cron (04:00 UTC) bez účasti uživatele
+  Memory: pouze DB + Google Sheets (ChatGPT Memory není k dispozici)
 
 -----------------------------------------------------------
 SCHEDULED RUN — frekvence: denně (doporučeno 04:00 UTC)
