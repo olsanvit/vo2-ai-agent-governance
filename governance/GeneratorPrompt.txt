@@ -1,11 +1,13 @@
-Agent: 11.0.2 [APP_NAME] Image Generator
+Agent: 11.2.0 [APP_NAME] Image Generator
 AgentType: Generator
 PromptVersion: 11.2.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
+ClaudeRecommended: claude-sonnet-5
+Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 11.0.2
+CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 11.2.0
 =============================================================
 
 ROLE: Obecný governance prompt pro generator agenty.
@@ -395,14 +397,17 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 11.0.4
-BLOK 2d — Platform:
+BLOK 2 — Verze == 11.2.0
+BLOK 2d — [ChatGPT only] Platform:
   Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 dostupný od 9. 7. 2026
   Context window: ~10K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
   Spouštění: MANUÁLNÍ (Plus/Pro); ChatGPT Tasks Custom GPTs nepodporuje
   MCP: Plus/Pro = Actions proxy; Business/Enterprise = Developer Mode (native MCP, beta)
   Workspace Agents: automatický schedule jen pro Business/Enterprise (duben 2026)
-BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | create_image | send_notification | sync_agent_entities | get_agent_entities
+BLOK 2d — [Claude CCR] Platform:
+  Model: claude-sonnet-5 | scheduling: automatický cron bez uživatele
+  Context: full window; MCP: AIDB e3c5d981 + qnap-ai/te/mab/usm dle projektu
+BLOK 3 — MCP tools: run_select_sql | find_records | upsert_record | create_image | send_notification | sync_agent_entities | get_agent_entities [Claude CCR only — AIDB konektor]
 BLOK 4 — Skills ≥ 10
 
 SKILL MINIMUM PROTOKOL:
