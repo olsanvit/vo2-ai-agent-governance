@@ -1,12 +1,14 @@
-Agent: 11.0.2 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 11.2.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
 PromptVersion: 11.2.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
+ClaudeRecommended: claude-sonnet-5
+Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.0.2
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.2.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -683,7 +685,7 @@ Krok 0 — DB ping: SELECT 1 AS db_ok. Pokud selže → db_unavailable, přesko�
     Podporované klíče: ImportantScore.{TableName} | SLA.hours | MaxEntitiesPerRun | SkipTables | PriorityQueue
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.0.2)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.0)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -1013,11 +1015,11 @@ BLOK 1 — DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 11.0.4
+2a. PromptVersion tohoto promptu == 11.2.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
-2c. SkillsVersion z načteného PromptSkills souboru == 11.0.4
+2c. SkillsVersion z načteného PromptSkills souboru == 11.2.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
-2d. Platform check:
+2d. [ChatGPT only] Platform check:
     - Model: GPT-4.1 minimum | GPT-5+ doporučen — Catalog orchestruje komplexní Skills pipeline
       GPT-5.6 (Sol/Terra/Luna) dostupný od 9. 7. 2026; přes API až 1M+ tokenů kontextu
     - Context window v ChatGPT UI (ne API):
@@ -1040,23 +1042,37 @@ L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
         → Agent může instruovat ChatGPT k zapamatování klíčových runtime faktů (last run, počty)
           jako lehká záloha; primární stav vždy v DB + Google Sheets
 
+    [Claude CCR] Platform check:
+    - Model: claude-sonnet-5 (default scheduled) | claude-opus-5 (doporučen pro heavy scraping)
+    - Context: není omezen UI plánem — CCR má vždy full context window; CatalogPrompt se načte celý
+    - Scheduling: automatický cron bez účasti uživatele; schedule spravuje KROK 1 inline prompt
+    - MCP konektory (připojeny při vytváření routiny):
+        AIDB (AIData):   UUID e3c5d981-af6b-491f-ae05-2cf0fe5c8198 — AgentRunReports, AgentMonitor
+        qnap-ai:         VO2QNAPDBAI — sport AI data (primární DB pro Catalog agenty)
+        qnap-te:         VO2QNAPDBTE — TopEleven DB
+        qnap-mab:        VO2QNAPDBMAB — MaB DB
+        qnap-usm:        VO2QNAPDBUSM — UniSportManager DB
+    - Memory: pouze DB + Google Sheets (ChatGPT Memory není k dispozici)
+
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
 ensure_table | find_records | send_notification | save_image_url | save_image_base64 |
 list_entity_images | rate_limit_guard | schema_report | score_breakdown_report |
-sync_agent_entities | get_agent_entities
+sync_agent_entities | get_agent_entities  [Claude CCR only — AIDB konektor]
 L send_notification chybí nebo vrací 403:
-  - 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
-  - tool neexistuje = server.js verze < 10.0.1 → server potřebuje update (governance/server.js)
+  - [ChatGPT] 403 = chybí env vars NTFY_URL/NTFY_USER/NTFY_PASS v kontejneru → informovat operátora
+  - [ChatGPT] tool neexistuje = server.js verze < 10.0.1 → server potřebuje update (governance/server.js)
+  - [Claude CCR] 403 = AIDB konektor nemá nastavenou ntfy auth → ověřit konektor config
   - log capability_missing("ntfy_auth"), pokračovat
 L sync_agent_entities nebo get_agent_entities chybí:
-  - AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
+  - [ChatGPT] AGENT_MONITOR_URL není nastavena v kontejneru → informovat operátora
+  - [Claude CCR] AIDB konektor není připojen nebo má starší verzi → ověřit UUID e3c5d981
   - Fallback: přeskočit sync, pokračovat bez AgentMonitor DB (degraded mode)
   - log capability_missing("agent_monitor_db"), pokračovat
 L jiný tool chybí → log capability_missing("{tool}"), pokračovat
 
 BLOK 4 — Skills:
-4a. SkillsVersion načteného souboru == 11.0.2
+4a. SkillsVersion načteného souboru == 11.2.0
 4b. Počet dostupných skills ≥ 11 (Catalog očekává 112 celkem)
 4c. Kritické skills přítomny: db-schema-guardian | upsert-conflict-resolver |
     archival-run-orchestrator | scheduled-run-report-formatter |
@@ -1106,7 +1122,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 10.0.1?
+    → poslední runy mají promptVersion 11.2.0?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -1117,7 +1133,8 @@ BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Tier3 chyby → agent-alerts (ne agent-errors)
 ☐ Tier4 kritické bloky → agent-errors priority urgent
 ☐ MAX_BATCH_SIZE čerpám z rate_limit_guard (ne hardcoded)
-☐ MCP connector: VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM — správný pro aktuální DB?
+☐ [ChatGPT] MCP connector: VO2QNAPDBAI | VO2QNAPDBTE | VO2QNAPDBMAB | VO2QNAPDBUSM — správný pro aktuální DB?
+☐ [Claude CCR] MCP konektory: qnap-ai (VO2QNAPDBAI) | qnap-te (VO2QNAPDBTE) | qnap-mab (VO2QNAPDBMAB) | qnap-usm (VO2QNAPDBUSM) | AIDB e3c5d981 — správný konektor připojen a reaguje?
 ☐ ImportantScore (ne Score) v Catalogs/Managers souborech
 ☐ ProblemScore | kategorie | popis (sestupně) v Problems souboru
 ☐ Jazyk odpovědí = česky (chat, highlights, errors, ntfy)
@@ -1141,7 +1158,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 11.0.2 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.2.0 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3472,7 +3489,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 11.0.2
+PromptVersion: 11.2.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -4303,7 +4320,7 @@ AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 11.0.2 je governance dokument pro Catalog agenty.
+CatalogPrompt 11.2.0 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -4698,7 +4715,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 11.0.2
+- canonical document body exposes PromptVersion == 11.2.0
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -5017,7 +5034,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 11.0.2
+- PromptVersion: 11.2.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5076,7 +5093,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 11.0.2) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 11.2.0) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -5086,7 +5103,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 11.0.2
+PromptVersion: 11.2.0
 Generated: 2026-06-09
 
 
