@@ -3724,7 +3724,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 11.0.2
+           Duration: Xs | Tables: N | Verze: 11.2.2
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3923,7 +3923,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 11.0.2 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 11.2.2 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4101,7 +4101,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.2.0
+PromptVersion: 11.2.2
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
