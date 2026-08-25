@@ -7,7 +7,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "1.0.0";
+const MCP_VERSION = "1.0.1";
 const MAX_SELECT_ROWS = Number(process.env.MAX_SELECT_ROWS || 500);
 const SELECT_TIMEOUT_MS = Number(process.env.SELECT_TIMEOUT_MS || 30000);
 const PORT = Number(process.env.PORT || 3002);
@@ -104,10 +104,10 @@ function createMcpServer() {
   // ── Sports ─────────────────────────────────────────────────────────────────
   tool("sr_list_sports", "List active sports.", {}, async () => {
     const r = await pool.query(
-      `SELECT "Id", "Name", "NormalizedName", "IsActive"
+      `SELECT "Guid" AS "Id", "SportName" AS "Name", lower("SportName") AS "NormalizedName", NOT "IsDeleted" AS "IsActive"
        FROM "Sports"
-       WHERE "IsActive" = true
-       ORDER BY "Name"`
+       WHERE "IsDeleted" = false
+       ORDER BY "SportName"`
     );
     return ok({ sports: r.rows, count: r.rowCount });
   });
