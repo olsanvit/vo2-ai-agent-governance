@@ -1,7 +1,7 @@
 /**
  * mcp-usm.js — UniSportManager Image Storage MCP
  * Receives a pre-generated image (base64 or URL) and assigns it to a USM entity.
- * Version: 1.0.0
+ * Version: 11.2.0
  * DB: sportManager
  * Port: 3006
  *
@@ -27,7 +27,7 @@ const AUTH_TOKEN = process.env.AUTH_TOKEN;
 const DATABASE_URL = process.env.DATABASE_URL;
 const UPLOAD_DIR = process.env.UPLOAD_DIR || "/app/uploads";
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || "";
-const MCP_VERSION = "10.1.0";
+const MCP_VERSION = "11.2.0";
 const NTFY_BASE_URL = process.env.NTFY_URL || "https://ntfy.vo2info.cz";
 const NTFY_USER = process.env.NTFY_USER || "";
 const NTFY_PASS = process.env.NTFY_PASS || "";
@@ -474,9 +474,29 @@ function createMcpServer() {
   });
 
   // DB ping as MCP tool
-  wrap("db_ping", "Verify database connectivity. Call before starting a batch to ensure DB is reachable.", {}, async () => {
-    const r = await pool.query("SELECT now() AS now");
-    return { ok: true, db: "UniSportManager", version: MCP_VERSION, now: r.rows[0].now, uptime: process.uptime() };
+  wrap("db_ping", "Verify database connectivity and required schema/config. Call before starting a batch to ensure DB is reachable.", {}, async () => {
+    const r = await pool.query(`
+      SELECT current_database() AS db,
+             now() AS now,
+             to_regclass('"Teams"')  AS teams_tbl,
+             to_regclass('"Players"') AS players_tbl,
+             to_regclass('"Sports"')  AS sports_tbl
+    `);
+    const row = r.rows[0];
+    const missingTables = ["Teams", "Players", "Sports"].filter(
+      (t) => row[`${t.toLowerCase()}_tbl`] === null
+    );
+    return {
+      ok: true,
+      db: row.db,
+      version: MCP_VERSION,
+      now: row.now,
+      uptime: process.uptime(),
+      schemaOk: missingTables.length === 0,
+      missingTables,
+      sheetsConfigured: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+      agentMonitorConfigured: !!monPool,
+    };
   });
 
   wrap("send_notification", "Send a notification to ntfy.vo2info.cz. Use markdown=true for rich formatting (bold, lists, code blocks). Use click for deep-link URL.", {
@@ -759,8 +779,27 @@ app.use(express.json({ limit: "25mb" }));
 
 app.get("/health", async (req, res) => {
   try {
-    const r = await pool.query("SELECT now() AS now");
-    res.json({ status: "ok", version: MCP_VERSION, db: "ok", now: r.rows[0].now, uptime: process.uptime(), metrics });
+    const r = await pool.query(`
+      SELECT current_database() AS db, now() AS now,
+             to_regclass('"Teams"') AS teams_tbl,
+             to_regclass('"Players"') AS players_tbl,
+             to_regclass('"Sports"') AS sports_tbl
+    `);
+    const row = r.rows[0];
+    const missingTables = ["Teams", "Players", "Sports"].filter(
+      (t) => row[`${t.toLowerCase()}_tbl`] === null
+    );
+    res.json({
+      status: missingTables.length ? "degraded" : "ok",
+      version: MCP_VERSION,
+      db: row.db,
+      schemaOk: missingTables.length === 0,
+      missingTables,
+      sheetsConfigured: !!process.env.GOOGLE_SERVICE_ACCOUNT_JSON,
+      now: row.now,
+      uptime: process.uptime(),
+      metrics,
+    });
   } catch (e) {
     if (res.headersSent) return;
     res.status(500).json({ status: "error", version: MCP_VERSION, db: "error", error: e.message });
