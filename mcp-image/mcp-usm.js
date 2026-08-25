@@ -469,7 +469,7 @@ function createMcpServer() {
 
   // List available sports (for filtering teams by sport)
   wrap("list_sports", "List all available sports in the database. Use SportId to filter teams by sport.", {}, async () => {
-    const r = await pool.query(`SELECT "Guid", "Name", "Discriminator" FROM "SmSports" ORDER BY "Name"`);
+    const r = await pool.query(`SELECT "Guid", "Name", "Code", "Emoji" FROM "SmSports" ORDER BY "Name"`);
     return { count: r.rowCount, sports: r.rows };
   });
 
