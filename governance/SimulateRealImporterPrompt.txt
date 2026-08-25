@@ -1,7 +1,7 @@
-Agent: 1.4.0 SimulateReal Data Importer
+Agent: 1.4.1 SimulateReal Data Importer
 AgentType: Importer
 PromptScope: SimulateReal Importer only — reads SportReal DB, writes to VO2QNAPDBAI
-PromptVersion: 1.4.0
+PromptVersion: 1.4.1
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
@@ -381,13 +381,65 @@ ERROR (kdykoli — okamžitě, nečekat na konec runu):
   message: "Typ: {errorType} | Akce: {action}"
 
 =============================================================
+CHAPTER 9: ZNÁMÉ PROBLÉMY (diagnostika 2026-08-25)
+=============================================================
+
+## 1. sr_list_sports — OPRAVENO v mcp-sportreal 1.0.1
+  Dotaz selhával na "column \"Id\" does not exist" — tabulka "Sports" ve SportReal DB
+  má PK "Guid" (ne "Id"), sloupec "SportName" (ne "Name"), a žádný "IsActive"
+  (pouze "IsDeleted"). Query opravena na: SELECT "Guid" AS "Id", "SportName" AS "Name",
+  lower("SportName") AS "NormalizedName", NOT "IsDeleted" AS "IsActive" FROM "Sports"
+  WHERE "IsDeleted" = false. Vyžaduje nasazení mcp-sportreal se zvýšenou MCP_SR_VERSION
+  ≥ 1.0.1, jinak startup check v Chapter 2 stále projde (1.0.0 splňuje ≥1.0.0), ale
+  sr_list_sports bude dál padat dokud nebude nová verze serveru deploynutá.
+
+## 2. SportReal DB je aktuálně prázdná
+  K 2026-08-25 obsahuje "Sports" 0 řádků a ověřené fotbalové tabulky
+  ("FootballLeagues", "FootballTeams", "FootballPlayers", "FootballMatchTeams",
+  "FootballMatches") také 0 řádků — stejně tak "RealMatches"/"RealTeams"/"RealLeagues".
+  I po opravě bodu 1 tedy import zatím reálně nic nenajde (0 sportů v průniku nebo
+  0 nových záznamů). Toto NENÍ chyba importeru — je to stav zdrojových dat, ověřit
+  se sportreal/collector týmem, zda a kdy se DB naplní.
+
+## 3. sr_get_matches / sr_get_teams / sr_get_players / sr_get_leagues — SCHEMA MISMATCH, NEOPRAVENO
+  Tyto nástroje (mcp-sportreal/server.js) předpokládají sloupce "Id", "Name",
+  "HomeTeamId", "AwayTeamId", "StartTime", "Finished", "Cancelled", "FirstName",
+  "LastName", "Nationality", "CountryId", "LeagueId" přímo na sportovních tabulkách.
+  Ověřeno na Football rodině tabulek: žádný z těchto sloupců neexistuje. Skutečné
+  schéma je Guid-based a normalizované — týmy k zápasu se váží přes join tabulku
+  "{Sport}MatchTeams" (FK "{Sport}MatchId"/"{Sport}TeamId", flag "IsHome"/"IsWinner",
+  skóre v "Sc1"/"Sc2"/"ScTotal"/"ScET"/"ScPen"), hráči mají "PlayerNameFull" místo
+  FirstName/LastName. Datum a stav zápasu (StartTime/Finished/Cancelled) NEMÁ
+  "{Sport}Matches" ani "{Sport}MatchTeams" žádný odpovídající sloupec — tato
+  informace v aktuálním schématu chybí úplně (nejde o špatný název sloupce, ale
+  o chybějící data model). Než se toto opraví, je nutné se schema ownerem ověřit,
+  kde/jak je plánováno ukládat datum a stav zápasu, jinak by oprava byla jen hádání.
+  Tyto 4 nástroje proto NEBYLY opraveny v této revizi — očekávejte stejnou třídu
+  chyby ("column ... does not exist") jakmile se do zdrojových tabulek dostanou data.
+
+## 4. SR_ImporterRuns ve VO2QNAPDBAI má špatné schéma
+  Tabulka existuje, ale byla založena přes generický ensure_table base-structure
+  (Guid, CreatedAt/UpdatedAt, Emoji/Colors, *Score sloupce…) — chybí AgentName,
+  SportName, MatchCount, TeamCount, PlayerCount, LeagueCount, StartedAt, CompletedAt,
+  Success, které Chapter 1/5 a sr-run-report-writer/sr-delta-sync-calculator (Skills)
+  vyžadují. Bez těchto sloupců nepůjde LastSyncAt delta-sync (Chapter 2 krok 6) ani
+  run-summary zápis dle specifikace fungovat. Potřeba ensure_columns na VO2QNAPDBAI
+  (mimo scope tohoto importeru — má pouze read/write na sportovní tabulky a
+  ensure_table jen pro SR_ImporterRuns/SR_SchemaCache, ne ensure_columns na existující
+  tabulku bez potvrzení).
+
+=============================================================
 COMPATIBILITY MATRIX
 =============================================================
-PromptVersion: 1.4.0
-MCP_SR_VERSION: 1.0.0  (mcp-sportreal)
+PromptVersion: 1.4.1
+MCP_SR_VERSION: 1.0.1  (mcp-sportreal)
 MCP_AI_VERSION: 10.1.0 (VO2QNAPDBAI)
 
 CHANGELOG:
+  1.4.1 — Chapter 9 (známé problémy): opravena sr_list_sports (Guid/SportName/IsDeleted
+           místo Id/Name/IsActive), zdokumentován prázdný stav SportReal DB a schema
+           mismatch v sr_get_matches/teams/players/leagues (neopraveno, čeká na schema
+           owner), zdokumentován chybný SR_ImporterRuns schema na AI straně
   1.4.0 — SILENT MODE, SR_SchemaCache (discovery cache 7 dní), bulk dedup (smart_upsert_batch),
            pre-import COUNT check (skip empty sport), single ntfy per run místo per-sport
   1.3.0 — Leagues dedup, Seasons dedup, LeagueId/TeamId mapping, schedule 04:00 UTC, LOWER() normalization, SyncedAt
