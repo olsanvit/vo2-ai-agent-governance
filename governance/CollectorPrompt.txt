@@ -1,13 +1,13 @@
-Agent: 11.2.0 [COLLECTION_NAME] Collector
+Agent: 11.2.1 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.2.0
+PromptVersion: 11.2.1
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.2.0
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.2.1
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -82,6 +82,18 @@ SCHEDULED RUN (v tomto pořadí):
                                          → PŘIDAT extra ntfy na agent-maintenance
                title: "🔧 {AgentName} — maintenance"
                message: "{maintenanceAction} | {count} záznamů"
+             !! ESKALACE: JAKÝKOLI nevyřešený problém → POVINNĚ do ntfy !!
+                Hlavní operátorský chat čte ntfy a řeší problémy, které samotný routine nezvládne.
+                Každý problém, který agent sám nevyřeší, MUSÍ jít do ntfy (ne jen do run reportu):
+                - selhání/nedostupnost connectoru či toolu (capability_missing, timeout+rollback, MCP disconnect/403, chybějící očekávaný tool)
+                - blokovaný/nedostupný zdroj (egress-blocked, 403/429, source blocked)
+                - chybějící/nekonzistentní schema, tabulka, sloupec; chyby dat
+                - cokoliv, co vyžaduje lidský zásah nebo opravu mimo možnosti routine
+                message segment: "Problém: {popis} {stav}" (např. "Problém: AIDB write timeout+rollback")
+                topic: degradace → agent-alerts/high; úplný blok/run zastaven → agent-errors/urgent;
+                       obejito fallbackem (běh OK) → topic dle výsledku, ale segment "Problém: ..." zůstává
+                více problémů: nejzávažnější + "+N dalších". Vždy i do error tabu + AgentRunReports.Errors.
+                Platí pro všechny typy agentů (Manager/Catalog/Collector/Generator/Checker/Importer).
              L ntfy selže → log capability_missing("ntfy"), pokračovat
 11. UNLOCK → advisory lock uvolnit
 
@@ -441,7 +453,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 Spouštět: explicitní žádost | první run | každých 30 runů
 
 BLOK 1 — DB & MCP: db_ping → db_reachable + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze: PromptVersion == 11.2.0 | MCP_VERSION >= 10.0.1 | SkillsVersion == 11.2.0
+BLOK 2 — Verze: PromptVersion == 11.2.1 | MCP_VERSION >= 10.0.1 | SkillsVersion == 11.2.0
 BLOK 2d — [ChatGPT only] Platform:
   Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 dostupný od 9. 7. 2026
   Context window: ~11K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
