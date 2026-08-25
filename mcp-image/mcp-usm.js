@@ -48,8 +48,8 @@ const metrics = {
 
 // ─── Column setup ─────────────────────────────────────────────────────────────
 async function ensureImageColumns() {
-  await pool.query(`ALTER TABLE "Teams"   ADD COLUMN IF NOT EXISTS "LogoUrl"  text NULL`);
-  await pool.query(`ALTER TABLE "Players" ADD COLUMN IF NOT EXISTS "PhotoUrl" text NULL`);
+  await pool.query(`ALTER TABLE "SmTeams"   ADD COLUMN IF NOT EXISTS "LogoUrl"  text NULL`);
+  await pool.query(`ALTER TABLE "SmPlayers" ADD COLUMN IF NOT EXISTS "PhotoUrl" text NULL`);
   console.log("LogoUrl on Teams and PhotoUrl on Players ensured");
 }
 
@@ -278,10 +278,10 @@ function createMcpServer() {
 
   // Coverage stats
   wrap("get_stats", "Image coverage stats: how many bot teams/players have logos/photos.", {}, async () => {
-    const teamTotal   = await pool.query(`SELECT COUNT(*)::int AS n FROM "Teams" WHERE "IsBot"=true AND "IsActive"=true`);
-    const teamMissing = await pool.query(`SELECT COUNT(*)::int AS n FROM "Teams" WHERE "IsBot"=true AND "IsActive"=true AND ("LogoUrl" IS NULL OR "LogoUrl"='')`);
-    const plTotal     = await pool.query(`SELECT COUNT(*)::int AS n FROM "Players" WHERE "IsBot"=true AND "IsActive"=true`);
-    const plMissing   = await pool.query(`SELECT COUNT(*)::int AS n FROM "Players" WHERE "IsBot"=true AND "IsActive"=true AND ("PhotoUrl" IS NULL OR "PhotoUrl"='')`);
+    const teamTotal   = await pool.query(`SELECT COUNT(*)::int AS n FROM "SmTeams" WHERE "IsBot"=true AND "IsActive"=true`);
+    const teamMissing = await pool.query(`SELECT COUNT(*)::int AS n FROM "SmTeams" WHERE "IsBot"=true AND "IsActive"=true AND ("LogoUrl" IS NULL OR "LogoUrl"='')`);
+    const plTotal     = await pool.query(`SELECT COUNT(*)::int AS n FROM "SmPlayers" WHERE "IsBot"=true AND "IsActive"=true`);
+    const plMissing   = await pool.query(`SELECT COUNT(*)::int AS n FROM "SmPlayers" WHERE "IsBot"=true AND "IsActive"=true AND ("PhotoUrl" IS NULL OR "PhotoUrl"='')`);
     return {
       botTeams:   { total: teamTotal.rows[0].n, missing: teamMissing.rows[0].n, covered: teamTotal.rows[0].n - teamMissing.rows[0].n },
       botPlayers: { total: plTotal.rows[0].n,   missing: plMissing.rows[0].n,   covered: plTotal.rows[0].n - plMissing.rows[0].n },
@@ -295,7 +295,7 @@ function createMcpServer() {
   }, async ({ limit = 100 }) => {
     const r = await pool.query(
       `SELECT "Guid", "Name", "Code3", "Stadium", "BotProfile", "BotSkill"
-       FROM "Teams"
+       FROM "SmTeams"
        WHERE "IsBot"=true AND "IsActive"=true AND ("LogoUrl" IS NULL OR "LogoUrl"='')
        ORDER BY "Name"
        LIMIT $1`,
@@ -310,7 +310,7 @@ function createMcpServer() {
   }, async ({ limit = 100 }) => {
     const r = await pool.query(
       `SELECT "Guid", "FullName", "Forename", "Surname", "Position", "BotArchetype"
-       FROM "Players"
+       FROM "SmPlayers"
        WHERE "IsBot"=true AND "IsActive"=true AND ("PhotoUrl" IS NULL OR "PhotoUrl"='')
        ORDER BY "FullName"
        LIMIT $1`,
@@ -336,7 +336,7 @@ function createMcpServer() {
     const publicUrl = buildPublicUrl("team-logos", fileName);
 
     await pool.query(
-      `UPDATE "Teams" SET "LogoUrl"=$1, "UpdatedAt"=now() WHERE "Guid"=$2`,
+      `UPDATE "SmTeams" SET "LogoUrl"=$1, "UpdatedAt"=now() WHERE "Guid"=$2`,
       [publicUrl, guid]
     );
 
@@ -361,7 +361,7 @@ function createMcpServer() {
     const publicUrl = buildPublicUrl("player-photos", fileName);
 
     await pool.query(
-      `UPDATE "Players" SET "PhotoUrl"=$1, "UpdatedAt"=now() WHERE "Guid"=$2`,
+      `UPDATE "SmPlayers" SET "PhotoUrl"=$1, "UpdatedAt"=now() WHERE "Guid"=$2`,
       [publicUrl, guid]
     );
 
@@ -375,7 +375,7 @@ function createMcpServer() {
   }, async ({ guid }) => {
     const r = await pool.query(
       `SELECT "Guid", "Name", "Code3", "Stadium", "IsBot", "BotProfile", "BotSkill", "LogoUrl", "IsActive"
-       FROM "Teams" WHERE "Guid"=$1`,
+       FROM "SmTeams" WHERE "Guid"=$1`,
       [guid]
     );
     if (!r.rowCount) return { error: "Team not found" };
@@ -388,7 +388,7 @@ function createMcpServer() {
   }, async ({ guid }) => {
     const r = await pool.query(
       `SELECT "Guid", "FullName", "Forename", "Surname", "Position", "IsBot", "BotArchetype", "PhotoUrl", "IsActive"
-       FROM "Players" WHERE "Guid"=$1`,
+       FROM "SmPlayers" WHERE "Guid"=$1`,
       [guid]
     );
     if (!r.rowCount) return { error: "Player not found" };
@@ -402,7 +402,7 @@ function createMcpServer() {
   }, async ({ name, limit = 10 }) => {
     const r = await pool.query(
       `SELECT "Guid", "Name", "Code3", "Stadium", "BotProfile", "LogoUrl"
-       FROM "Teams"
+       FROM "SmTeams"
        WHERE "IsBot"=true AND LOWER("Name") LIKE LOWER($1)
        ORDER BY "Name" LIMIT $2`,
       [`%${name}%`, Math.min(limit, 50)]
@@ -417,7 +417,7 @@ function createMcpServer() {
   }, async ({ name, limit = 10 }) => {
     const r = await pool.query(
       `SELECT "Guid", "FullName", "Position", "BotArchetype", "PhotoUrl"
-       FROM "Players"
+       FROM "SmPlayers"
        WHERE "IsBot"=true AND LOWER("FullName") LIKE LOWER($1)
        ORDER BY "FullName" LIMIT $2`,
       [`%${name}%`, Math.min(limit, 50)]
@@ -430,7 +430,7 @@ function createMcpServer() {
     limit: z.number().optional(),
   }, async ({ limit = 50 }) => {
     const r = await pool.query(
-      `SELECT "Guid", "Name", "Code3", "LogoUrl" FROM "Teams"
+      `SELECT "Guid", "Name", "Code3", "LogoUrl" FROM "SmTeams"
        WHERE "IsBot"=true AND "IsActive"=true AND "LogoUrl" IS NOT NULL AND "LogoUrl" != ''
        ORDER BY "UpdatedAt" DESC LIMIT $1`,
       [Math.min(limit, 200)]
@@ -443,7 +443,7 @@ function createMcpServer() {
     limit: z.number().optional(),
   }, async ({ limit = 50 }) => {
     const r = await pool.query(
-      `SELECT "Guid", "FullName", "Position", "PhotoUrl" FROM "Players"
+      `SELECT "Guid", "FullName", "Position", "PhotoUrl" FROM "SmPlayers"
        WHERE "IsBot"=true AND "IsActive"=true AND "PhotoUrl" IS NOT NULL AND "PhotoUrl" != ''
        ORDER BY "UpdatedAt" DESC LIMIT $1`,
       [Math.min(limit, 200)]
@@ -455,7 +455,7 @@ function createMcpServer() {
   wrap("clear_team_logo", "Remove the assigned logo from a team (sets LogoUrl to NULL). Use to correct wrong assignments.", {
     guid: z.string(),
   }, async ({ guid }) => {
-    await pool.query(`UPDATE "Teams" SET "LogoUrl" = NULL WHERE "Guid" = $1`, [guid]);
+    await pool.query(`UPDATE "SmTeams" SET "LogoUrl" = NULL WHERE "Guid" = $1`, [guid]);
     return { ok: true, guid, cleared: "LogoUrl" };
   });
 
@@ -463,13 +463,13 @@ function createMcpServer() {
   wrap("clear_player_photo", "Remove the assigned photo from a player (sets PhotoUrl to NULL). Use to correct wrong assignments.", {
     guid: z.string(),
   }, async ({ guid }) => {
-    await pool.query(`UPDATE "Players" SET "PhotoUrl" = NULL WHERE "Guid" = $1`, [guid]);
+    await pool.query(`UPDATE "SmPlayers" SET "PhotoUrl" = NULL WHERE "Guid" = $1`, [guid]);
     return { ok: true, guid, cleared: "PhotoUrl" };
   });
 
   // List available sports (for filtering teams by sport)
   wrap("list_sports", "List all available sports in the database. Use SportId to filter teams by sport.", {}, async () => {
-    const r = await pool.query(`SELECT "Guid", "Name", "Discriminator" FROM "Sports" ORDER BY "Name"`);
+    const r = await pool.query(`SELECT "Guid", "Name", "Discriminator" FROM "SmSports" ORDER BY "Name"`);
     return { count: r.rowCount, sports: r.rows };
   });
 
