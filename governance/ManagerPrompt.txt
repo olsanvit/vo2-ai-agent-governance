@@ -121,6 +121,20 @@ SCHEDULED RUN (cca 20 kroků, v tomto poradi):
       message: "{maintenanceAction} | {count} záznamů"
       tags:    ["wrench", "{sport_emoji_tag}"]
 
+    !! CONNECTOR / TOOL PROBLÉM → POVINNĚ do ntfy message !! (11.2.3)
+    Pokud během runu jakýkoli connector nebo tool selhal, byl nedostupný nebo
+    vracel chyby (capability_missing, tool timeout/error, MCP konektor disconnect/403,
+    write rollback, egress-blocked zdroj, connector nevidí očekávaný tool), MUSÍ být
+    tento problém uveden v ntfy message — ne jen v run reportu.
+    - Formát v message: přidat segment "Tool: {toolOrConnector} {stav}"
+      (např. "Tool: AIDB write timeout+rollback" | "Tool: Drive 403" | "Tool: WebFetch egress-blocked")
+    - Při více problémech: uvést nejzávažnější + počet ostatních ("+N dalších").
+    - Volba topicu:
+        • problém degradoval běh (chybí data/zápisy) → topic: agent-alerts, priority: high, tag: warning
+        • connector úplně mimo / run zastaven          → topic: agent-errors, priority: urgent, tag: rotating_light
+        • problém obejit fallbackem, běh dokončen OK    → ponechat topic: agent-runs, ale segment "Tool: ..." v message zůstává
+    - Vždy zároveň zapsat do error tabu master spreadsheet a do AgentRunReports.Errors.
+
     L ntfy selže → log capability_missing("ntfy"), pokračovat — run report již uložen
 15. UNLOCK -> uvolnit advisory lock
 
@@ -4466,6 +4480,9 @@ Pravidla:
   - Off-season: TOLERANCE=1 (uzavřít prázdný den hned)
 - Motivace: posun +7 na nálezu přeskakoval navazující dny vícedenních turnajů a při
   rozjetých slotech vznikaly nepokryté díry v historii
+- KROK 14c: connector/tool problém (capability_missing, timeout+rollback, 403,
+  disconnect, egress-blocked) POVINNĚ i do ntfy message segmentem "Tool: {x} {stav}";
+  topic dle závažnosti (agent-alerts/agent-errors), vždy i do error tabu + Errors
 
 ### 11.2.2 (2026-08-20)
 - CHAPTER 19: Sport Progress & Slot Advancement — nová kapitola pro historický sběr
