@@ -104,17 +104,20 @@ function createMcpServer() {
   // ── Sports ─────────────────────────────────────────────────────────────────
   tool("sr_list_sports", "List active sports.", {}, async () => {
     const r = await pool.query(
-      `SELECT "Id", "Name", "NormalizedName", "IsActive"
+      `SELECT "Guid", "SportName", "Discipline"
        FROM "Sports"
-       WHERE "IsActive" = true
-       ORDER BY "Name"`
+       WHERE "IsDeleted" = false
+       ORDER BY "SportName"`
     );
     return ok({ sports: r.rows, count: r.rowCount });
   });
 
   // ── Matches ────────────────────────────────────────────────────────────────
+  // Schema: sport-specific tables (e.g. FootballMatches) extend BaseMatches via Guid FK.
+  // BaseMatches has: Guid, MatchName, DatePlayed, IsDeleted.
+  // Sport-specific tables have: Guid, ScoreHome, ScoreAway, Season, Matchday, WinnerTeamId, etc.
   tool("sr_get_matches",
-    "Finished matches from a sport table (e.g. FootballMatches, CyclingRaces). Filter by date range.",
+    "Matches from a sport table (e.g. FootballMatches). JOINs BaseMatches for DatePlayed. Filter by date range.",
     {
       matchTable: z.string(),
       dateFrom: z.string().optional(),
@@ -125,17 +128,18 @@ function createMcpServer() {
     async ({ matchTable, dateFrom, dateTo, limit = 100, offset = 0 }) => {
       const t = normalizeId(matchTable);
       const effectiveLimit = Math.min(limit, MAX_SELECT_ROWS);
-      const conditions = [`"Finished" = true`, `"Cancelled" = false`];
+      const conditions = [`bm."IsDeleted" = false`];
       const params = [];
-      if (dateFrom) { params.push(dateFrom); conditions.push(`"StartTime" >= $${params.length}::date`); }
-      if (dateTo)   { params.push(dateTo);   conditions.push(`"StartTime" <= $${params.length}::date`); }
+      if (dateFrom) { params.push(dateFrom); conditions.push(`bm."DatePlayed" >= $${params.length}::date`); }
+      if (dateTo)   { params.push(dateTo);   conditions.push(`bm."DatePlayed" <= $${params.length}::date`); }
       params.push(effectiveLimit, offset);
       const where = conditions.join(" AND ");
-      const sql = `SELECT "Id","HomeTeamId","AwayTeamId","StartTime","Finished","Cancelled",
-                          "ScoreHome","ScoreAway","LeagueId","Season","Round"
-                   FROM "${t}"
+      const sql = `SELECT sm."Guid", bm."MatchName", bm."DatePlayed",
+                          sm."ScoreHome", sm."ScoreAway", sm."Season", sm."Matchday", sm."WinnerTeamId"
+                   FROM "${t}" sm
+                   JOIN "BaseMatches" bm ON bm."Guid" = sm."Guid"
                    WHERE ${where}
-                   ORDER BY "StartTime" DESC
+                   ORDER BY bm."DatePlayed" DESC
                    LIMIT $${params.length - 1} OFFSET $${params.length}`;
       const client = await pool.connect();
       try {
@@ -149,22 +153,24 @@ function createMcpServer() {
   );
 
   // ── Teams ──────────────────────────────────────────────────────────────────
+  // Schema: sport-specific team tables extend BaseTeams via Guid FK.
+  // BaseTeams has: Guid, TeamName, CountryId, SportId, IsDeleted.
   tool("sr_get_teams",
-    "Teams from a sport table (e.g. FootballTeams). Optional leagueId filter.",
+    "Teams from a sport table (e.g. FootballTeams). JOINs BaseTeams for TeamName and CountryId.",
     {
       teamTable: z.string(),
-      leagueId: z.number().optional(),
       limit: z.number().optional(),
       offset: z.number().optional(),
     },
-    async ({ teamTable, leagueId, limit = 200, offset = 0 }) => {
+    async ({ teamTable, limit = 200, offset = 0 }) => {
       const t = normalizeId(teamTable);
       const effectiveLimit = Math.min(limit, MAX_SELECT_ROWS);
       const params = [effectiveLimit, offset];
-      const leagueFilter = leagueId ? `WHERE "LeagueId" = ${Number(leagueId)}` : "";
-      const sql = `SELECT "Id","Name","ShortName","FullName","LeagueId","Overall","Rating","Level","CountryId","FoundedYear"
-                   FROM "${t}" ${leagueFilter}
-                   ORDER BY "Name"
+      const sql = `SELECT bt."Guid", bt."TeamName", bt."CountryId", bt."SportId", bt."Emoji"
+                   FROM "${t}" st
+                   JOIN "BaseTeams" bt ON bt."Guid" = st."Guid"
+                   WHERE bt."IsDeleted" = false
+                   ORDER BY bt."TeamName"
                    LIMIT $1 OFFSET $2`;
       const client = await pool.connect();
       try {
@@ -178,11 +184,14 @@ function createMcpServer() {
   );
 
   // ── Players ────────────────────────────────────────────────────────────────
+  // Schema: sport-specific player tables extend BasePlayers via Guid FK.
+  // BasePlayers has: Guid, PlayerName, CountryId, Age, IsDeleted.
+  // TeamPlayers join table has: PlayerGuid (or PlayerId), TeamGuid (or TeamId) — use Guid types.
   tool("sr_get_players",
-    "Players from a sport table (e.g. FootballPlayers, MmaFighters). Optional teamId filter via TeamPlayers join.",
+    "Players from a sport table (e.g. FootballPlayers). JOINs BasePlayers. Optional teamId (uuid) filter via TeamPlayers.",
     {
       playerTable: z.string(),
-      teamId: z.number().optional(),
+      teamId: z.string().optional(),
       limit: z.number().optional(),
       offset: z.number().optional(),
     },
@@ -192,19 +201,22 @@ function createMcpServer() {
       const effectiveLimit = Math.min(limit, MAX_SELECT_ROWS);
       let sql, params;
       if (teamId) {
-        params = [Number(teamId), effectiveLimit, offset];
-        sql = `SELECT p."Id", p."FirstName", p."LastName", p."PositionText", p."Rating",
-                      p."Nationality", p."BirthDate", p."ShirtNumber", p."HeightCm"
-               FROM "${t}" p
-               JOIN "${tp}" tp ON tp."PlayerId" = p."Id"
-               WHERE tp."TeamId" = $1
-               ORDER BY p."LastName"
+        params = [teamId, effectiveLimit, offset];
+        sql = `SELECT bp."Guid", bp."PlayerName", bp."CountryId", bp."Age", bp."Emoji"
+               FROM "${t}" sp
+               JOIN "BasePlayers" bp ON bp."Guid" = sp."Guid"
+               JOIN "${tp}" tpp ON tpp."PlayersGuid" = sp."Guid"
+               WHERE tpp."TeamsGuid" = $1::uuid
+                 AND bp."IsDeleted" = false
+               ORDER BY bp."PlayerName"
                LIMIT $2 OFFSET $3`;
       } else {
         params = [effectiveLimit, offset];
-        sql = `SELECT "Id","FirstName","LastName","PositionText","Rating","Nationality","BirthDate","ShirtNumber","HeightCm"
-               FROM "${t}"
-               ORDER BY "LastName"
+        sql = `SELECT bp."Guid", bp."PlayerName", bp."CountryId", bp."Age", bp."Emoji"
+               FROM "${t}" sp
+               JOIN "BasePlayers" bp ON bp."Guid" = sp."Guid"
+               WHERE bp."IsDeleted" = false
+               ORDER BY bp."PlayerName"
                LIMIT $1 OFFSET $2`;
       }
       const client = await pool.connect();
@@ -219,22 +231,23 @@ function createMcpServer() {
   );
 
   // ── Leagues ────────────────────────────────────────────────────────────────
+  // Schema: sport-specific league tables extend BaseLeagues via Guid FK.
+  // BaseLeagues has: Guid, LeagueName, CountryId, SportId, Level, IsDeleted.
   tool("sr_get_leagues",
-    "Leagues from a sport table (e.g. FootballLeagues). Optional countryId filter.",
+    "Leagues from a sport table (e.g. FootballLeagues). JOINs BaseLeagues for LeagueName.",
     {
       leagueTable: z.string(),
-      countryId: z.number().optional(),
       limit: z.number().optional(),
     },
-    async ({ leagueTable, countryId, limit = 200 }) => {
+    async ({ leagueTable, limit = 200 }) => {
       const t = normalizeId(leagueTable);
       const effectiveLimit = Math.min(limit, MAX_SELECT_ROWS);
       const params = [effectiveLimit];
-      const countryFilter = countryId ? `AND "CountryId" = ${Number(countryId)}` : "";
-      const sql = `SELECT "Id","Name","CountryId","Confederation","NumberOfTeams","CurrentChampion","FoundedYear"
-                   FROM "${t}"
-                   WHERE 1=1 ${countryFilter}
-                   ORDER BY "Name"
+      const sql = `SELECT bl."Guid", bl."LeagueName", bl."CountryId", bl."SportId", bl."Level", bl."Emoji"
+                   FROM "${t}" sl
+                   JOIN "BaseLeagues" bl ON bl."Guid" = sl."Guid"
+                   WHERE bl."IsDeleted" = false
+                   ORDER BY bl."LeagueName"
                    LIMIT $1`;
       const r = await pool.query(sql, params);
       return ok({ leagueTable: t, rowCount: r.rowCount, rows: r.rows });
@@ -242,21 +255,22 @@ function createMcpServer() {
   );
 
   // ── League seasons ─────────────────────────────────────────────────────────
+  // Schema: LeagueSeasons.LeagueId is uuid (FK to BaseLeagues.Guid).
   tool("sr_get_league_seasons",
-    "League seasons. Optional leagueId filter, currentOnly flag.",
+    "League seasons. Optional leagueId (uuid) filter, currentOnly flag.",
     {
-      leagueId: z.number().optional(),
+      leagueId: z.string().optional(),
       currentOnly: z.boolean().optional(),
       limit: z.number().optional(),
     },
     async ({ leagueId, currentOnly = false, limit = 100 }) => {
       const effectiveLimit = Math.min(limit, MAX_SELECT_ROWS);
-      const conditions = [];
+      const conditions = [`"IsDeleted" = false`];
       const params = [effectiveLimit];
-      if (leagueId) { params.push(Number(leagueId)); conditions.push(`"LeagueId" = $${params.length}`); }
+      if (leagueId) { params.push(leagueId); conditions.push(`"LeagueId" = $${params.length}::uuid`); }
       if (currentOnly) conditions.push(`"IsCurrent" = true`);
-      const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-      const sql = `SELECT "Id","LeagueId","SeasonLabel","StartYear","EndYear","IsCurrent","IsDone"
+      const where = `WHERE ${conditions.join(" AND ")}`;
+      const sql = `SELECT "Guid","LeagueId","SeasonLabel","StartYear","EndYear","IsCurrent","IsDone"
                    FROM "LeagueSeasons"
                    ${where}
                    ORDER BY "StartYear" DESC
