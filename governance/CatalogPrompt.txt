@@ -1,14 +1,14 @@
-Agent: 11.2.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 11.2.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.2.0
+PromptVersion: 11.2.1
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.2.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.2.1
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -279,6 +279,18 @@ SCHEDULED RUN (v tomto poradi):
                message: "{maintenanceAction} | {count} záznamů"
                tags:    ["wrench"]
 
+             !! ESKALACE: JAKÝKOLI nevyřešený problém → POVINNĚ do ntfy !!
+                Hlavní operátorský chat čte ntfy a řeší problémy, které samotný routine nezvládne.
+                Každý problém, který agent sám nevyřeší, MUSÍ jít do ntfy (ne jen do run reportu):
+                - selhání/nedostupnost connectoru či toolu (capability_missing, timeout+rollback, MCP disconnect/403, chybějící očekávaný tool)
+                - blokovaný/nedostupný zdroj (egress-blocked, 403/429, source blocked)
+                - chybějící/nekonzistentní schema, tabulka, sloupec; chyby dat
+                - cokoliv, co vyžaduje lidský zásah nebo opravu mimo možnosti routine
+                message segment: "Problém: {popis} {stav}" (např. "Problém: AIDB write timeout+rollback")
+                topic: degradace → agent-alerts/high; úplný blok/run zastaven → agent-errors/urgent;
+                       obejito fallbackem (běh OK) → topic dle výsledku, ale segment "Problém: ..." zůstává
+                více problémů: nejzávažnější + "+N dalších". Vždy i do error tabu + AgentRunReports.Errors.
+                Platí pro všechny typy agentů (Manager/Catalog/Collector/Generator/Checker/Importer).
              L ntfy selže → log capability_missing("ntfy"), pokračovat — run report již uložen
 16. UNLOCK  -> run_select_sql("SELECT pg_advisory_unlock(hashtext('{AgentName}')::bigint & 2147483647)")
              L unlock vrátí false → OČEKÁVANÉ CHOVÁNÍ s MCP stateless konektorem — log warning, NEBLOKUJ
@@ -459,6 +471,47 @@ Score Interpretation Contract:
 =============================================================
 CHAPTER 3: STARTUP PROTOCOL
 =============================================================
+
+## Self-update & verzování na git (self-contribution)
+
+Agent, který má ověřeně NEJNOVĚJŠÍ verzi svého promptu (== HEAD na gitu), smí sám
+opravit/vylepšit SVŮJ prompt a přispět zpět na kanonický zdroj (git; u runtime bez
+gitu → Drive write-back dle Prompt Cache Protocol níže). Pravidla:
+
+1. ROZSAH — agent mění POUZE svůj vlastní prompt soubor (Manager→ManagerPrompt.txt,
+   Catalog→CatalogPrompt.txt, Collector→CollectorPrompt.txt, Generator→GeneratorPrompt.txt,
+   Checker→CheckerPrompt.txt, Importer→ImporterPrompt.txt). Cizí prompt NIKDY nemění.
+
+2. GUARD „mám nejnovější" — self-update jen když local == remote HEAD. Pokud je agent
+   pozadu → nejdřív se aktualizovat (Prompt Cache Protocol), teprve pak přispívat.
+
+3. VERZOVÁNÍ (semver, porovnání NUMERICKY po segmentech, NIKDY jako řetězec):
+   - PATCH (poslední segment) = jediné, co agent zvyšuje AUTONOMNĚ: +1 při každé vlastní
+     opravě/vylepšení. Patch je NEOMEZENÉ celé číslo — žádný cap, žádný rollover na .99/.999
+     (11.2.1 → 11.2.2 → … → 11.2.100 → 11.2.1000).
+   - MINOR (11.3.0) a MAJOR (12.0.0) = jen člověk / breaking nebo behaviorální změna;
+     agent je NEZVYŠUJE sám.
+   - Porovnání: rozděl na segmenty a porovnej čísla (9 < 10 < 100). NIKDY string compare
+     (jinak "11.2.100" < "11.2.99" a novější se přepíše starším).
+
+4. HRANICE AUTONOMIE — autonomně jen NE-breaking oprava/vylepšení (+patch). Cokoli
+   breaking/behaviorální nebo změna minor/major → NEDĚLAT sám, eskalovat do ntfy
+   (viz ESKALACE); rozhodne hlavní operátorský chat.
+
+5. GIT ZÁPIS bez ztráty cizí práce:
+   a) git pull/fetch nejnovější stav větve
+   b) přepiš JEN svůj soubor, zvyš PATCH v hlavičce (PromptVersion) i ve VŠECH identity
+      referencích v souboru (Agent:, Ch1 title, self-audit == , runtime-verify, ntfy Verze:).
+      SkillsVersion NEMĚNIT (mění se jen při změně skills souboru).
+   c) commit jen když base == aktuální HEAD; při konfliktu → znovu pull, re-aplikovat, commit
+   d) push; při odmítnutí (non-fast-forward) opakuj od a)
+
+6. ZDROJ PRAVDY VERZE = PromptVersion v hlavičce souboru. versions.json je jen zrcadlo —
+   aktualizovat po zápisu, ale nikdy kvůli němu neblokovat běh (nejčastější místo konfliktu).
+
+7. Po úspěšném self-contribution → send_notification(topic="agent-maintenance",
+   title="🔧 {AgentName} — prompt self-update {old}→{new}", message = stručně co a proč)
+   a zapsat do AgentRunReports.
 
 ## Prompt Cache Protocol
 
@@ -685,7 +738,7 @@ Krok 0 — DB ping: SELECT 1 AS db_ok. Pokud selže → db_unavailable, přesko�
     Podporované klíče: ImportantScore.{TableName} | SLA.hours | MaxEntitiesPerRun | SkipTables | PriorityQueue
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.1)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]
@@ -1015,7 +1068,7 @@ BLOK 1 — DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 — Verze:
-2a. PromptVersion tohoto promptu == 11.2.0
+2a. PromptVersion tohoto promptu == 11.2.1
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného PromptSkills souboru == 11.2.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -1122,7 +1175,7 @@ BLOK 7 — DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 11.2.0?
+    → poslední runy mají promptVersion 11.2.1?
 
 BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -1158,7 +1211,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 11.2.0 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.2.1 | Tools: OK | Skills: {count} | Master Sheet: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3489,7 +3542,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 11.2.0
+PromptVersion: 11.2.1
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -4320,7 +4373,7 @@ AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 11.2.0 je governance dokument pro Catalog agenty.
+CatalogPrompt 11.2.1 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -4715,7 +4768,7 @@ Activation must prove:
 Fallback unlock (if platform cannot expose activation_status == active):
 allowed only when all of the following are proven in same session:
 - canonical Google Drive fetch succeeded and canonical prompt verify succeeded
-- canonical document body exposes PromptVersion == 11.2.0
+- canonical document body exposes PromptVersion == 11.2.1
 - canonical Google Drive read returned correct source_document_id
 - Agent header is valid and version-matched
 - minimum baseline of 25 entities remains required by canonical prompt
@@ -5034,7 +5087,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 11.2.0
+- PromptVersion: 11.2.1
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5093,7 +5146,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 11.2.0) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 11.2.1) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -5103,7 +5156,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 11.2.0
+PromptVersion: 11.2.1
 Generated: 2026-06-09
 
 
