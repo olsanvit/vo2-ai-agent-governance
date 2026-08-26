@@ -1,14 +1,14 @@
-Agent: 11.2.3 [SPORT_NAME] Data Manager
+Agent: 11.2.4 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.2.3
+PromptVersion: 11.2.4
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.2.3
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.2.4
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-19).
@@ -493,8 +493,19 @@ Pokud ani search_files nenajde složku: reportovat drive_folder_missing, ntfy ag
 Povinné kroky v tomto pořadí:
 0. AgentType detection: AgentType=Manager → promptFile="ManagerPrompt", skillsFile="ManagerPromptSkills".
    Ostatní typy viz Appendix — AgentType Detection Registry. Default: Catalog.
-1. db_ping -- overit dostupnost databaze
+0a. AIDB TOOL READINESS (Claude CCR headless/cron -- 11.2.4): PŘED db_ping ověř, že jsou
+    nástroje konektoru AIDB (mcp__AIDB__db_ping, run_select_sql, upsert_record) skutečně
+    načtené. V headless/cron běhu se MCP konektor někdy připojí až s prodlevou i při stavu
+    connected+enabledInChat → nástroje chvíli chybí, ačkoli DB je zcela zdravá. Klasifikovat
+    db_unreachable jen kvůli chybějícím nástrojům při startu je FALEŠNĚ NEGATIVNÍ.
+    → pokud nástroje nevidíš: opakuj ToolSearch("db_ping run_select_sql upsert_record")
+      s krátkým backoffem (5×, ~10s mezi pokusy) NEŽ klasifikuješ db_unreachable.
+    → db_unreachable klasifikuj teprve když ani po retry nástroje nejsou dostupné:
+      blocker=capability_missing:AIDB (NE "DB down") → ntfy agent-errors + pokračovat bez DB.
+1. db_ping -- overit dostupnost databaze (teprve az jsou nastroje AIDB nactene, viz 0a)
 2. Klasifikovat db_status: db_reachable nebo db_unreachable
+   - transientni 502/Bad-Gateway z db_ping nebo z DB zapisu → retry az 2x (backoff ~60s)
+     NEŽ klasifikujes db_unreachable (502 je proxy/gateway chyba, ne DB down)
 3. Pokud db_unreachable: STOP -- neprovat zadne writes, selfUpdate, maintenance
    Run report do DB nelze ulozit → zaznamenat selhání v textu odpovědi, poslat ntfy urgent
 4. Detekovat MCP_VERSION z running runtime
@@ -640,7 +651,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.3)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.4)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1159,7 +1170,7 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.2.3
+2a. PromptVersion tohoto promptu == 11.2.4
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.2.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -1271,7 +1282,7 @@ BLOK 7 -- DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 11.2.3?
+    → poslední runy mají promptVersion 11.2.4?
 
 BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -1316,7 +1327,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 11.2.3 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.2.4 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3784,7 +3795,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 11.2.3
+           Duration: Xs | Tables: N | Verze: 11.2.4
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3983,7 +3994,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 11.2.3 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 11.2.4 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4161,7 +4172,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.2.3
+PromptVersion: 11.2.4
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4516,6 +4527,16 @@ Pravidla:
 10. Legacy Id-only tabulky respektovat, ale nove tabulky = Guid uuid PRIMARY KEY.
 
 ## Changelog (starší viz Drive /Prompts/Archive/)
+
+### 11.2.4 (2026-08-26)
+- STARTUP: nový krok 0a "AIDB TOOL READINESS" — PŘED db_ping ověřit, že jsou nástroje
+  konektoru AIDB skutečně načtené; v headless/cron běhu se MCP připojí až s prodlevou
+  i při connected+enabledInChat → retry ToolSearch s backoffem (5×) NEŽ klasifikovat
+  db_unreachable. Zabraňuje falešně negativní db_unreachable (nástroje jen pomalu naběhly).
+- STARTUP krok 2: transientní 502/Bad-Gateway z db_ping nebo DB zápisu → retry 2× (backoff
+  ~60s) NEŽ klasifikovat db_unreachable (502 je proxy/gateway chyba, ne DB down).
+- Motivace: běh Cricket Data Manager 2026-08-26 nejprve chybně hlásil db_unreachable, když
+  AIDB nástroje pouze pomalu naběhly; po jejich načtení byla DB zcela zdravá (db_ping ok).
 
 ### 11.2.3 (2026-08-25)
 - CHAPTER 19: OPRAVA logiky postupu slotu — hold-on-find místo advance-on-find
