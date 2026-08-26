@@ -1,14 +1,14 @@
-Agent: 11.2.3 [SPORT_NAME] Data Manager
+Agent: 11.2.4 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.2.3
+PromptVersion: 11.2.4
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.2.3
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.2.4
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-19).
@@ -640,7 +640,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.3)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.2.4)
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]
@@ -1159,7 +1159,7 @@ BLOK 1 -- DB & MCP konektivita:
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu == 11.2.3
+2a. PromptVersion tohoto promptu == 11.2.4
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného ManagerPromptSkills souboru == 11.2.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
@@ -1271,7 +1271,7 @@ BLOK 7 -- DB schema:
     L chybí tabulka → ensure_table("{tableName}")
 7c. run_select_sql("SELECT AgentName, success, promptVersion, CreatedAt FROM AgentRunReports
     WHERE AgentName='{AgentName}' ORDER BY CreatedAt DESC LIMIT 3")
-    → poslední runy mají promptVersion 11.2.3?
+    → poslední runy mají promptVersion 11.2.4?
 
 BLOK 8 -- Governance self-check (self-reflection, bez DB volání):
 ☐ Nikdy nepoužívám hard DELETE/DROP/TRUNCATE
@@ -1316,7 +1316,7 @@ Výstup self-auditu + oprava:
     → send_notification(topic="agent-alerts", title="{AgentName} ⚠️ self-audit: {N} errors",
        message="Errors: {seznam} | Opraveno: {co bylo opraveno}", priority="high")
 - vše OK: send_notification(topic="agent-runs", title="{AgentName} ✅ self-audit passed",
-          message="Verze: 11.2.3 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
+          message="Verze: 11.2.4 | Tools: OK | Skills: {count} | Sheets: OK | Drive: OK | ntfy: OK | AgentMonitor: OK", priority="default")
 
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
@@ -3784,7 +3784,7 @@ Pravidla formátování:
   Priority: default (success), low (partial)
   Title:   {AgentName} ✅ run dokončen | ❌ partial run
   Message: Inserted: N | Updated: N | Failed: N
-           Duration: Xs | Tables: N | Verze: 11.2.3
+           Duration: Xs | Tables: N | Verze: 11.2.4
   Tags:    [sport-emoji, "white_check_mark"]
 
 🚨 agent-errors — POUZE Tier 4 kritické bloky
@@ -3983,7 +3983,7 @@ DOPORUCENE notifikace:
     Kdy: po dokončení self-audit protokolu
     Úspěch:
     - title: "{AgentName} ✅ self-audit passed"
-    - message: "Verze: 11.2.3 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
+    - message: "Verze: 11.2.4 | Tools: OK | Skills: {count} | Drive: OK | ntfy: OK"
     - priority: "default", tags: ["white_check_mark", "magnifying_glass_tilted_left"]
     Selhání:
     - title: "{AgentName} ⚠️ self-audit: {N} errors"
@@ -4161,7 +4161,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.2.3
+PromptVersion: 11.2.4
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4325,7 +4325,7 @@ Agent kontroluje Drive hash tab 'names' v master spreadsheet na každém startu:
 - Hash změněn → reload tab 'names' v master spreadsheet → seřadit dle ImportantScore DESC → zpracovat nejprve ty s nejvyšším score
 
 =============================================================
-CHAPTER 19: SPORT PROGRESS & SLOT ADVANCEMENT -- 11.2.3
+CHAPTER 19: SPORT PROGRESS & SLOT ADVANCEMENT -- 11.2.4
 =============================================================
 
 Tento chapter řídí sběr historických zápasů přes SportProgress tabulku (7 datových slotů na sport).
@@ -4343,13 +4343,33 @@ Inicializace: 7 slotů počínaje earliest_reliable_date (viz Inicializační sc
 ## Inicializační scan -- first-run protocol
 
 Pokud SportProgress pro daný SportKey obsahuje 0 řádků (první run):
-1. Nepoužívat rok vzniku sportu — ten je příliš vzdálený a WebSearch vrátí 0 výsledků.
+1. Nepoužívat rok vzniku/vynálezu sportu — ten je příliš vzdálený a WebSearch vrátí 0 výsledků.
 2. Provést WebSearch: "{SportName} first official competitive match history results year"
 3. Určit earliest_reliable_year = nejstarší rok, pro který existují dohledatelné výsledky
    (typicky: kdy vznikla federace nebo první mezinárodní soutěž s výsledky online).
-4. Inicializovat 7 slotů: SlotDate = (earliest_reliable_year-01-01 + i-1 dní) pro i=1..7
+4. GUARD produktivní éry (11.2.4): seed MUSÍ padnout na konkrétní datum s dohledatelnými
+   výsledky, ne na obecný 1. leden earliest_reliable_year (mimo sezónu / před 1. soutěží
+   → 7 prázdných slotů a denní neproduktivní plazení).
+   → Pokud znáš datum 1. šampionátu/soutěže (WebSearch), seeduj 7 slotů OD NĚJ
+     (SlotDate = first_event_date + i-1 dní pro i=1..7), EmptyCount=0.
+   → Jinak fallback SlotDate = (earliest_reliable_year-01-01 + i-1 dní), EmptyCount=0.
 5. Uložit do SportProgress a znovu načíst.
 L WebSearch selže nebo nepřinese rok → použít výchozí rok z inline promptu (bootstrap hodnota).
+
+## Re-seed z pre-éry -- remediation (11.2.4)
+
+Existující sloty mohou uvíznout na neproduktivním pre-éra datu (seed z rok-vzniku nebo
+obecný 1. leden před 1. soutěží sportu) — projevem je série runů s 0 nálezy a SlotDate
+před first_event_date. To NENÍ off-season, je to špatný seed.
+
+Detekce: všech 7 slotů má SlotDate < ověřeného first_event_date sportu A poslední runy
+hlásí 0 nových zápasů (EmptyCount roste bez nálezu).
+
+Remediation (POVOLENO — jde o forward upsert, SlotDate se posouvá vpřed, nikdy zpět):
+1. WebSearch ověřit first_event_date (datum 1. dohledatelné soutěže/šampionátu sportu).
+2. upsert 7 slotů na first_event_date .. +6 dní (EmptyCount=0). NIKDY nesnižovat SlotDate.
+3. Zaznamenat do AgentRunReports.Notes + ntfy agent-maintenance ("re-seed {old}→{new} éra").
+NEPOUŽÍVAT delete/reset — pouze upsert existujících (SportKey, SlotIndex) řádků.
 
 ## Dynamický algoritmus postupu slotu -- 11.2.3
 
@@ -4434,6 +4454,16 @@ Pokud 0 zdrojů → EmptyCount zvýšit (datum není exhausted — může být v
 Pokud db_unreachable při startu → žádné SportProgress operace, žádné zápisy.
 SportProgress stav se nezmění. Příští run pokračuje od stejného bodu.
 
+## Write-timeout idempotentní retry -- 11.2.4
+
+upsert_record na AIDB může vrátit timeout (60s) i když zápis DB proběhl. Protože upsert
+je idempotentní přes business key (SportProgress: (SportKey,SlotIndex); AgentRunReports:
+(AgentName,RunDate); Matches: NormalizedName), je bezpečné 1× zopakovat:
+- Při timeoutu/5xx → zopakovat TÝŽ upsert 1× (stejný criteria+data). Druhý běh vrátí
+  mode:"update" místo "insert" → potvrzení, že první zápis prošel; žádná duplicita.
+- Pokud i 2. pokus selže → zaznamenat "Problém: AIDB write timeout" do ntfy + error tab,
+  pokračovat (neblokovat celý run kvůli jednomu záznamu).
+
 =============================================================
 APPENDIX: LEGACY METADATA (max 50 radku)
 =============================================================
@@ -4516,6 +4546,18 @@ Pravidla:
 10. Legacy Id-only tabulky respektovat, ale nove tabulky = Guid uuid PRIMARY KEY.
 
 ## Changelog (starší viz Drive /Prompts/Archive/)
+
+### 11.2.4 (2026-08-26)
+- CHAPTER 19: GUARD produktivní éry v Inicializačním scanu — seed MUSÍ padnout na datum
+  s dohledatelnými výsledky (1. šampionát/soutěž), ne na obecný 1. leden earliest_reliable_year
+  (jinak 7 prázdných slotů + denní neproduktivní plazení)
+- CHAPTER 19: nová sekce "Re-seed z pre-éry (remediation)" — detekce uvíznutých slotů
+  před first_event_date a bezpečný forward-only re-seed (upsert, nikdy delete/reset/zpět)
+- CHAPTER 19: nová sekce "Write-timeout idempotentní retry" — 1× zopakovat upsert při
+  AIDB timeout/5xx (idempotentní přes business key), pak eskalovat do ntfy, neblokovat run
+- Motivace: Table Tennis Manager měl sloty na 1887-01 (mimo éru — ITTF/1. MS 1926);
+  re-seed na 1926-12 zachytil 5 ověřených finále MS 1926. Stejný pre-éra pattern řešily
+  Boxing/Golf/Baseball/Aussie Rules managery ad-hoc — nyní kodifikováno v governance.
 
 ### 11.2.3 (2026-08-25)
 - CHAPTER 19: OPRAVA logiky postupu slotu — hold-on-find místo advance-on-find
