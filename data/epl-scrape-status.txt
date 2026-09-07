@@ -1,0 +1,35 @@
+EPL historical all-time tables scrape — STATUS: BLOCKED
+
+Timestamp (UTC): 2026-09-07T13:47:44Z
+Source URL: https://www.worldfootball.net/competition/co91/england-premier-league/records-all-time-table/
+
+Result: FAILED — network egress blocked (not a Cloudflare challenge)
+
+Details:
+Both direct HTTP requests (via cloudscraper, which handles Cloudflare
+challenges) and the WebFetch tool were unable to reach worldfootball.net.
+The failure is not a Cloudflare anti-bot challenge as anticipated by the
+task instructions — it is a hard block enforced by this environment's
+outbound network egress proxy (organization policy), returning:
+
+  EGRESS_BLOCKED — "Access to www.worldfootball.net is blocked by the
+  network egress proxy."
+
+Proxy status confirmed a policy-level CONNECT rejection:
+  kind: connect_rejected
+  detail: "gateway answered 403 to CONNECT (policy denial or upstream failure)"
+  host: www.worldfootball.net:443
+
+Because this is an infrastructure-level allowlist restriction rather than
+a site-side bot challenge, no amount of retrying, header spoofing, or
+cloudscraper usage can work around it from within this session.
+
+No tables were scraped. No data/epl-historical-tables.json file was created
+or modified in this run.
+
+Next steps (needs human action):
+- Add www.worldfootball.net to the environment's network egress allowlist
+  (organization policy), or
+- Run the scraper from an environment/session where outbound access to
+  worldfootball.net is permitted, or
+- Provide the historical table data via an alternative source/method.

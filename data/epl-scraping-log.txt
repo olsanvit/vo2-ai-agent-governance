@@ -1,0 +1,14 @@
+EPL historical all-time tables — scraping run log
+==================================================
+
+2026-09-07T13:47:44Z
+  Trigger: scheduled autonomous task
+  Source: https://www.worldfootball.net/competition/co91/england-premier-league/records-all-time-table/
+  URLs found: 0 (main page never fetched)
+  Tables scraped: 0
+  Result: BLOCKED — network egress proxy denied CONNECT to www.worldfootball.net
+          (organization policy, not a Cloudflare challenge). Tried
+          cloudscraper (direct request) and the WebFetch tool; both failed
+          with EGRESS_BLOCKED / connect_rejected (403 on CONNECT).
+  Output: data/epl-historical-tables.json NOT created.
+          Details recorded in data/epl-scrape-status.txt.
