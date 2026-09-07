@@ -1,6 +1,6 @@
 SkillsFor: ManagerPrompt
-SkillsVersion: 11.2.0
-Generated: 2026-07-30
+SkillsVersion: 11.2.3
+Generated: 2026-09-06
 
 Skills jsou konfigurovány per agent v Claude.ai — konkrétní sada dostupná agentovi se může lišit.
 Tento soubor je autoritativní seznam skills povolených pro Manager agenty.
