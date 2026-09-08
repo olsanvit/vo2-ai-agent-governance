@@ -2,7 +2,7 @@ Agent: 11.2.3 [SPORT_NAME] Data Manager
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
 Alias: [SPORT_ALIAS_OPTIONAL]
-PromptVersion: 11.2.3
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
@@ -194,6 +194,35 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
 - Vzdy ulozit run report -- i pri plnem selhani; pokud DB down: zaznamenat v textu + ntfy
 - Max 3 ntfy/run -- nespamovat
 - Kalendář: CALENDAR_ID pevně dle AgentType (NIKDY "AI Managers" jako parametr přímo)
+
+-----------------------------------------------------------
+FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
+-----------------------------------------------------------
+Povinný formát — každý řádek začíná emoji, hodnoty inline za dvojtečkou:
+
+📋 Finální report — {AgentName}
+🔧 final_readiness: {ok | warn | error}  ← ok=vše proběhlo, warn=degraded/partial, error=kritická závislost chybí
+✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
+✅/🚨 db_ping/MCP_VERSION: {stav — OK | CONNECT_TIMEOUT | db_unreachable | verze}
+📁 master_sheet: {found | not_found | created} — {AgentName}, ID {id}, tabs_count={N} ({seznam tabů})
+📊 processing: active_rows={N}, completed_rows={M} ({stav nebo poznámka})
+📅 calendar_readiness: {ready | missing | created} — {popis nalezeného/vytvořeného eventu}
+⚠️/🔕 ntfy_readiness: {ready | degraded | failed} — {důvod pokud není ready}
+❓ skill_coverage: {ok | degraded | nelze ověřit} — {seznam chybějících nebo problematických skillů}
+🚨 capability_missing: {seznam nedostupných závislostí, nebo "žádné"}
+▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {konkrétní akce}
+
+🛠️ Navrhované opravy (řazeno prioritou)
+1. 🚨 KRITICKÉ — {popis kritického problému vyžadujícího okamžitý zásah}
+2. ⚠️ STŘEDNÍ — {popis středně závažného problému}
+3. 🔻 NÍZKÉ — {popis nízko prioritního vylepšení}
+(vynechat kategorie bez položek; zachovat emoji 🚨/⚠️/🔻 u každé položky)
+
+Pravidla:
+- řádky "final_readiness" a "db_ping" vždy přítomny i při chybě
+- "Navrhované opravy" sekce jen když je co opravit (vynechat při čistém runu)
+- zachovat pořadí řádků výše — nepřidávat vlastní řádky před 📋 header
+- každá položka v "Navrhované opravy" musí obsahovat emoji (🚨 / ⚠️ / 🔻)
 
 -----------------------------------------------------------
 SPORT EMOJI PRO NTFY TAGS:
@@ -4161,7 +4190,7 @@ Rules:
 GovernanceVersion: 11.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.2.3
+PromptVersion: 11.5.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range

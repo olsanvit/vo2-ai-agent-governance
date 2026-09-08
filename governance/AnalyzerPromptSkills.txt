@@ -1,0 +1,117 @@
+SkillsFile: AnalyzerPromptSkills
+AgentType: Analyzer
+SkillsVersion: 11.5.0
+
+=============================================================
+AnalyzerPromptSkills 11.5.0 — Skills Library
+=============================================================
+
+Tento soubor obsahuje sdílené skills pro Analyzer agenty.
+Načítá se automaticky při startup sekvenci (krok 3: SKILLS CACHE PROTOCOL).
+
+-----------------------------------------------------------
+SKILL: data-freshness-analyzer
+-----------------------------------------------------------
+Účel: Analyzovat stáří dat v každé tabulce.
+
+Postup:
+1. Pro každou tabulku v AnalysisScope:
+   SELECT COUNT(*), MAX(UpdatedAt), MIN(UpdatedAt) FROM {table}
+2. Klasifikovat freshness:
+   fresh:    MAX(UpdatedAt) < 7 dní
+   stale:    MAX(UpdatedAt) 7-30 dní
+   outdated: MAX(UpdatedAt) > 30 dní nebo LookbackDays
+   empty:    COUNT(*) = 0
+
+Výstup: [{table, count, lastUpdate, freshness}]
+
+-----------------------------------------------------------
+SKILL: trend-detector
+-----------------------------------------------------------
+Účel: Detekovat trendy srovnáním s předchozím runem.
+
+Postup:
+1. Načíst předchozí run: SELECT * FROM AgentRunReports WHERE AgentName = {name} ORDER BY RunAt DESC LIMIT 1
+2. Porovnat metriky: counts, InsightCount, CriticalCount
+3. Výpočet:
+   growth_rate = (current - previous) / previous * 100
+   anomálie = |current - avg| > 2 * stddev
+4. Klasifikovat: growing | stable | declining | anomaly
+
+Výstup: [{metric, previous, current, growth_rate, classification}]
+
+-----------------------------------------------------------
+SKILL: quality-scorer
+-----------------------------------------------------------
+Účel: Ohodnotit datovou kvalitu na škále 0-100%.
+
+Složky skóre:
+  BaseGuid completeness (30%):
+    - Guid NOT NULL: 10%
+    - CreatedAt NOT NULL: 5%
+    - UpdatedAt NOT NULL: 5%
+    - IsDeleted NOT NULL: 5%
+    - CreatedBy/UpdatedBy NOT NULL: 5%
+  Freshness (20%): fresh=20%, stale=10%, outdated=0%
+  Consistency (25%):
+    - FK integrity (orphaned records): -5% per orphaned table
+    - Duplicate business keys: -5% per table
+  Completeness (25%):
+    - NULL rate v klíčových polích: 25% * (1 - null_rate)
+
+SQL pro NULL rate:
+  SELECT COUNT(*) FILTER (WHERE {column} IS NULL) * 100.0 / COUNT(*) AS null_rate FROM {table}
+
+Výstup: {table, score, breakdown}
+
+-----------------------------------------------------------
+SKILL: insight-formatter
+-----------------------------------------------------------
+Účel: Strukturovat analytický nález do standardního formátu.
+
+Formát:
+  category:        data_quality | freshness | volume | consistency | schema
+  severity:        critical | medium | low
+  evidence:        konkrétní čísla/SQL výsledky (ne odhady)
+  recommendation:  akce + odpovědný agent/typ + priorita
+
+Pravidla:
+  - critical:  score < 50% NEBO outlier > 3σ NEBO tabulka empty > 7 dní
+  - medium:    score 50-75% NEBO stale data NEBO duplicity < 5%
+  - low:       score > 75% NEBO informativní trend
+
+Výstup: {category, severity, evidence, recommendation}
+
+-----------------------------------------------------------
+SKILL: report-writer
+-----------------------------------------------------------
+Účel: Zapsat analytický report na Drive.
+
+Formát souboru: {AgentName}-YYYY-MM.md (nebo .json dle ReportFormat)
+
+Markdown struktura:
+  # {AgentName} Analysis Report — YYYY-MM
+  **RunAt:** {timestamp}
+  **PromptVersion:** 11.5.0
+  **TablesAnalyzed:** {N}
+
+  ## Summary
+  {klíčové čísla}
+
+  ## Critical Insights
+  {seznam critical nálezů}
+
+  ## Recommendations
+  {prioritizovaný seznam}
+
+  ## Appendix
+  {detailní data}
+
+Postup:
+1. Sestavit obsah dle ReportFormat
+2. Drive: create_file nebo update_file (pokud existuje za stejný měsíc)
+3. Ověřit: get_file_metadata → lastModified = nyní
+
+=============================================================
+END OF AnalyzerPromptSkills 11.5.0
+=============================================================

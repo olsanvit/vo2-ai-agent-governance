@@ -1,6 +1,6 @@
 Agent: 11.2.1 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5

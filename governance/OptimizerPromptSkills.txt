@@ -1,0 +1,113 @@
+SkillsFile: OptimizerPromptSkills
+AgentType: Optimizer
+SkillsVersion: 11.5.0
+
+=============================================================
+OptimizerPromptSkills 11.5.0 — Skills Library
+=============================================================
+
+Tento soubor obsahuje sdílené skills pro Optimizer agenty.
+Načítá se automaticky při startup sekvenci (krok 3: SKILLS CACHE PROTOCOL).
+
+-----------------------------------------------------------
+SKILL: schema-gap-fixer
+-----------------------------------------------------------
+Účel: Doplnit chybějící BaseGuid sloupce do DB tabulek.
+
+BaseGuid standard (povinné sloupce):
+  Guid        UUID          DEFAULT gen_random_uuid() NOT NULL
+  CreatedAt   TIMESTAMP     DEFAULT NOW() NOT NULL
+  UpdatedAt   TIMESTAMP     DEFAULT NOW() NOT NULL
+  IsDeleted   BOOLEAN       DEFAULT false NOT NULL
+  DeletedAt   TIMESTAMP     NULL
+  DeletedBy   TEXT          NULL
+  CreatedBy   TEXT          NULL
+  UpdatedBy   TEXT          NULL
+
+Postup:
+1. list_tables() → seznam tabulek
+2. Pro každou tabulku: get_table_schema() → existující sloupce
+3. Identifikovat chybějící BaseGuid sloupce
+4. Pro každý chybějící sloupec:
+   ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {type} {constraint};
+5. Ověřit: get_table_schema() znovu → sloupec přítomen
+
+Pravidla:
+  - Vždy ADD COLUMN IF NOT EXISTS (nikdy ne bez IF NOT EXISTS)
+  - Nikdy DROP, RENAME, ALTER TYPE
+  - Max 20 sloupců per run
+
+-----------------------------------------------------------
+SKILL: index-optimizer
+-----------------------------------------------------------
+Účel: Přidat chybějící indexy na Guid a composite klíče.
+
+Postup:
+1. list_tables() → seznam tabulek
+2. Pro každou tabulku: list_indexes() → existující indexy
+3. Identifikovat:
+   a) tabulky bez indexu na Guid → přidat
+   b) tabulky bez indexu na IsDeleted → přidat (pokud existuje sloupec)
+   c) tabulky bez indexu na CreatedAt → přidat (pokud existuje sloupec)
+4. Pro každý chybějící index:
+   CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_{table}_{column} ON {table}({column});
+
+Pravidla:
+  - Vždy CONCURRENTLY (nesmí blokovat zápisy)
+  - Vždy IF NOT EXISTS
+  - Nikdy DROP INDEX (jen přidávat)
+  - Počkat na dokončení (CONCURRENTLY je async) — ověřit list_indexes()
+
+-----------------------------------------------------------
+SKILL: prompt-version-sync
+-----------------------------------------------------------
+Účel: Synchronizovat versions.json s aktuálními PromptVersion v .txt souborech.
+
+Postup:
+1. Stáhnout governance/versions.json z Drive nebo GitHub
+2. Pro každý prompt v versions.json:
+   - Stáhnout odpovídající .txt soubor
+   - Přečíst první řádek s PromptVersion nebo SkillsVersion
+   - Srovnat s hodnotou v versions.json
+3. Pokud nesouhlasí → aktualizovat versions.json
+4. Commitnout: git commit -m "chore: sync versions.json" + git push main
+5. Submodule: git submodule update --remote src/SharedServices (vždy před commitem)
+
+Výstup: {synced: N, updated: M, errors: P}
+
+-----------------------------------------------------------
+SKILL: schedule-balancer
+-----------------------------------------------------------
+Účel: Optimalizovat časy spouštění agentů (AgentSchedules).
+
+Postup:
+1. SELECT * FROM AgentSchedules WHERE IsActive = true ORDER BY ScheduledTime
+2. Identifikovat konflikty: agenti se stejným ScheduledTime (±5 min)
+3. Navrhnout rozložení: rozvrhnout konfliktní agenty s 5min odstupy
+4. UPDATE AgentSchedules SET ScheduledTime = {newTime} WHERE AgentName = {name}
+5. Ověřit: žádné překrývání < 5 min
+
+Pravidla:
+  - Změnit jen časy v rámci stejné hodiny (max ±30 min posun)
+  - Nikdy měnit datum nebo frekvenci
+  - Logovat každou změnu (původní → nový čas)
+
+-----------------------------------------------------------
+SKILL: prompt-updater
+-----------------------------------------------------------
+Účel: Aktualizovat PromptVersion v .txt souborech dle cílové verze.
+
+Postup:
+1. Pro každý soubor v OptimizationScope:
+   sed -i 's/PromptVersion: {current}/PromptVersion: {target}/' {file}
+2. Commitnout s popisem: "chore: bump PromptVersion to {target}"
+3. Push na main
+
+Pravidla:
+  - Vždy git submodule update --remote src/SharedServices před commitem
+  - Bump jen main verze (ne embedded sections)
+  - Aktualizovat versions.json ve stejném commitu
+
+=============================================================
+END OF OptimizerPromptSkills 11.5.0
+=============================================================

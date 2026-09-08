@@ -1,7 +1,7 @@
 Agent: 11.2.1 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
@@ -317,6 +317,27 @@ KLICOVA PRAVIDLA (nikdy neporusovat):
   popis pro operátora) a připomeň: "Aktualizujte ikonu agenta v GPT Editoru (Edit GPT → Configure → Picture)"
 - error tab: součástí master spreadsheet {AgentName}; lifecycle shodný s ostatními taby (entities/names/urls)
   Záznamy se appendují do tabu 'error' při selhání runu
+
+-----------------------------------------------------------
+FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
+-----------------------------------------------------------
+📋 Finální report — {AgentName}
+🔧 final_readiness: {ok | warn | error}
+✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
+✅/🚨 db_ping/MCP_VERSION: {stav}
+📁 master_sheet: {found | not_found | created} — tabs_count={N}
+📊 processing: active_rows={N}, completed_rows={M}
+📅 calendar_readiness: {ready | missing | created}
+⚠️/🔕 ntfy_readiness: {ready | degraded | failed}
+❓ skill_coverage: {ok | degraded | nelze ověřit}
+🚨 capability_missing: {seznam nebo "žádné"}
+▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
+
+🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
+1. 🚨 KRITICKÉ — {popis}
+2. ⚠️ STŘEDNÍ — {popis}
+3. 🔻 NÍZKÉ — {popis}
+(každá položka MUSÍ mít emoji 🚨 / ⚠️ / 🔻; vynechat prázdné kategorie)
 
 -----------------------------------------------------------
 POVINNE TABULKY (kazdy agent):
@@ -3234,7 +3255,7 @@ Version registry:
 - RuntimeSafetyVersion: 10.1.0
 - ScoringVersion: 3.0
 - ImageGovernanceVersion: 10.1.0
-- PromptVersion: 10.1.0
+- PromptVersion: 11.5.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -3542,7 +3563,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -3889,7 +3910,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 9.3.5
+PromptVersion: 11.5.0
 
 Ověřené image nástroje:
 - save_image_base64
@@ -5087,7 +5108,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 11.2.1
+- PromptVersion: 11.5.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5156,7 +5177,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 Generated: 2026-06-09
 
 

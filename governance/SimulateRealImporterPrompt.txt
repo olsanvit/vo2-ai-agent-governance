@@ -1,7 +1,7 @@
 Agent: 1.4.0 SimulateReal Data Importer
 AgentType: Importer
 PromptScope: SimulateReal Importer only — reads SportReal DB, writes to VO2QNAPDBAI
-PromptVersion: 1.4.0
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
@@ -383,7 +383,7 @@ ERROR (kdykoli — okamžitě, nečekat na konec runu):
 =============================================================
 COMPATIBILITY MATRIX
 =============================================================
-PromptVersion: 1.4.0
+PromptVersion: 11.5.0
 MCP_SR_VERSION: 1.0.0  (mcp-sportreal)
 MCP_AI_VERSION: 10.1.0 (VO2QNAPDBAI)
 
