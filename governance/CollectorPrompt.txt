@@ -1,6 +1,6 @@
 Agent: 11.2.1 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
@@ -107,6 +107,27 @@ KLÍČOVÁ PRAVIDLA:
 - Idempotentní zápisy — stejný zdrojový klíč nesmí být uložen dvakrát
 - Max 3 ntfy/run
 - Vždy uložit run report i při selhání
+
+-----------------------------------------------------------
+FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
+-----------------------------------------------------------
+📋 Finální report — {AgentName}
+🔧 final_readiness: {ok | warn | error}
+✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
+✅/🚨 db_ping/MCP_VERSION: {stav}
+📁 master_sheet: {found | not_found | created} — tabs_count={N}
+📊 processing: active_rows={N}, completed_rows={M}
+📅 calendar_readiness: {ready | missing | created}
+⚠️/🔕 ntfy_readiness: {ready | degraded | failed}
+❓ skill_coverage: {ok | degraded | nelze ověřit}
+🚨 capability_missing: {seznam nebo "žádné"}
+▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
+
+🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
+1. 🚨 KRITICKÉ — {popis}
+2. ⚠️ STŘEDNÍ — {popis}
+3. 🔻 NÍZKÉ — {popis}
+(každá položka MUSÍ mít emoji 🚨 / ⚠️ / 🔻; vynechat prázdné kategorie)
 
 -----------------------------------------------------------
 KLÍČOVÉ MCP NÁSTROJE:

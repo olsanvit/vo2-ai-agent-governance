@@ -1,4 +1,4 @@
-SkillsVersion: 1.4.0
+SkillsVersion: 11.5.0
 AgentType: Importer
 SkillsFor: SimulateRealImporterPrompt
 Generated: 2026-07-30

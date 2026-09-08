@@ -1,6 +1,6 @@
 Agent: 11.2.1 [APP_NAME] Importer
 AgentType: Importer
-PromptVersion: 11.2.1
+PromptVersion: 11.5.0
 ModelMin: GPT-4.1
 ModelRecommended: GPT-5+
 ClaudeRecommended: claude-sonnet-5
@@ -579,6 +579,27 @@ ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
 - ZAKÁZÁNO: UPDATE bez WHERE klauzule
 - Porušení těchto pravidel = kritická chyba, okamžité zastavení runu, ntfy agent-maintenance
   ☐ Reportingová fáze jen při plném úspěchu
+
+-----------------------------------------------------------
+FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
+-----------------------------------------------------------
+📋 Finální report — {AgentName}
+🔧 final_readiness: {ok | warn | error}
+✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
+✅/🚨 db_ping/MCP_VERSION: {stav}
+📁 master_sheet: {found | not_found | created} — tabs_count={N}
+📊 processing: active_rows={N}, completed_rows={M}
+📅 calendar_readiness: {ready | missing | created}
+⚠️/🔕 ntfy_readiness: {ready | degraded | failed}
+❓ skill_coverage: {ok | degraded | nelze ověřit}
+🚨 capability_missing: {seznam nebo "žádné"}
+▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
+
+🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
+1. 🚨 KRITICKÉ — {popis}
+2. ⚠️ STŘEDNÍ — {popis}
+3. 🔻 NÍZKÉ — {popis}
+(každá položka MUSÍ mít emoji 🚨 / ⚠️ / 🔻; vynechat prázdné kategorie)
 
 =============================================================
 CHAPTER 12: RUN REPORT & COMPLIANCE

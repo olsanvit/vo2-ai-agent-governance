@@ -1,0 +1,94 @@
+SkillsFile: MonitorPromptSkills
+AgentType: Monitor
+SkillsVersion: 11.5.0
+
+=============================================================
+MonitorPromptSkills 11.5.0 — Skills Library
+=============================================================
+
+Tento soubor obsahuje sdílené skills pro Monitor agenty.
+Načítá se automaticky při startup sekvenci (krok 3: SKILLS CACHE PROTOCOL).
+
+-----------------------------------------------------------
+SKILL: system-health-check
+-----------------------------------------------------------
+Účel: Ping DB, MCP konektory, ntfy — klasifikovat stav systémů.
+
+Postup:
+1. DB ping: run_select_sql("SELECT 1 AS db_ok") → ok | db_unreachable
+2. Ntfy ping: send_notification s dry_run/test → ok | ntfy_degraded | ntfy_failed
+3. MCP konektor ping: db_ping() → ok | unreachable
+4. Výsledek: classify per component, aggregate = worst case
+
+Timeout: 10s per check
+Výstup: {db: ok|unreachable, ntfy: ok|degraded|failed, mcp: ok|unreachable}
+
+-----------------------------------------------------------
+SKILL: error-sheet-reader
+-----------------------------------------------------------
+Účel: Projít SheetsFolder → najít nezopravené chyby.
+
+Postup:
+1. sheets_get_values(SheetsFolder) → seznam Sheets
+2. Pro každý Sheet: hledat tab "error"
+3. sheets_get_values(spreadsheetId, "error") → řádky
+4. Filtrovat: status NOT IN (opraveno, fixed, OK, resolved)
+5. Deduplikovat dle: AgentName + ErrorType + datum (ponechat nejnovější)
+
+Výstup: [{AgentName, ErrorType, LastSeen, Status, Count}]
+
+-----------------------------------------------------------
+SKILL: ci-status-checker
+-----------------------------------------------------------
+Účel: Zkontrolovat GitHub CI status pro zadané repozitáře.
+
+Postup:
+1. Pro každý repo: gh run list --repo olsanvit/{repo} --limit 1 --json status,conclusion,createdAt
+2. Klasifikovat: success/in_progress = ok; failure/cancelled = chyba
+3. Max 12 repozitářů per run
+
+Repozitáře (výchozí seznam):
+  Mercenaries-and-Beasts, SimulateCar, SimulateGames, SimulateReal,
+  UniSportManager, VINWMIVehicles, TopElevenStats, VO2DataManager,
+  ScorerApp, AgentsPromptsSkills, Metin2Bausia, ClubManager
+
+Výstup: [{repo, status, conclusion, createdAt}]
+
+-----------------------------------------------------------
+SKILL: ntfy-reader
+-----------------------------------------------------------
+Účel: Číst zprávy z NtfyTopics za posledních 24h.
+
+Postup:
+1. Pro každý topic v NtfyTopics:
+   GET https://ntfy.vo2info.cz/{topic}/json?since=24h
+2. Parsovat: id, title, message, priority, time
+3. Extrahovat: AgentName (z title), ErrorType, Severity, Timestamp
+4. Prioritizovat: urgent/high priority první
+
+Výstup: [{topic, AgentName, ErrorType, Severity, Timestamp, Message}]
+
+-----------------------------------------------------------
+SKILL: auto-fixer
+-----------------------------------------------------------
+Účel: Provést safe auto-opravy bez SSH.
+
+Povolené akce:
+  - GitHub PR opravy: gh repo clone → fix → git commit → git push main
+  - Submodule: git submodule update --remote src/SharedServices (vždy před commitem)
+  - Workflow yaml: gh api PATCH /repos/olsanvit/{repo}/contents/.github/workflows/{file}
+
+Zakázané akce (vždy "vyžaduje manuální akci"):
+  - SSH příkazy
+  - docker restart/stop/start
+  - DB DROP/DELETE/TRUNCATE
+  - Přepis secrets nebo konfigurace na serveru
+
+Postup:
+1. Pro každý nález typu "auto-fixable": provést akci
+2. Ověřit: gh run list (CI status po opravě)
+3. Zalogovat: akce + výsledek + timestamp
+
+=============================================================
+END OF MonitorPromptSkills 11.5.0
+=============================================================
