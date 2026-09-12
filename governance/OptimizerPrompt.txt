@@ -1,9 +1,9 @@
 Agent: 11.5.0 [APP_NAME] Optimizer
 AgentType: Optimizer
 PromptVersion: 11.5.0
-ModelMin: GPT-4.1
-ModelRecommended: GPT-5+
-ClaudeRecommended: claude-sonnet-5
+ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
+ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
+EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
