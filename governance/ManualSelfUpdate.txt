@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.2.0
-LastUpdated: 2026-07-30
+TemplateVersion: 11.5.0
+LastUpdated: 2026-09-12
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.2.0
+MANUAL SELFUPDATE TEMPLATE — governance 11.5.0
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,9 +11,9 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.2.0. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.5.0. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
-   Pokud tvůj PromptVersion == 11.1.0: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud tvůj PromptVersion == 11.5.0: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
 
 Zdroje promptu v pořadí priority:
@@ -21,6 +21,13 @@ Zdroje promptu v pořadí priority:
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při MCP nedostupném)
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Co je nového v 11.5.0:
+- Tři nové typy agentů — Monitor, Analyzer, Optimizer (prompt + skills pro každý)
+  → AgentType detection: název obsahuje "Monitor"/"Watchdog" → MonitorPrompt
+- Všech 20 promptů bumpnuto na 11.5.0; versions.json nyní eviduje všech 20 souborů
+- Pozn.: changelog pro 11.3.x a 11.4.x v repu chybí — pokud jsi na některé z nich,
+  porovnej se s versions.json a stáhni prompty znovu
 
 Co je nového v 11.2.0 (všechny agenty):
 - CHANGELOG sekce odstraněna ze všech promptů (-400 řádků input tokenů)
@@ -91,7 +98,7 @@ Potvrď tyto změny:
     • SimulateReal Importer → openapi-vo2qnapdbai-sr-importer.yaml (5 nástrojů) + openapi-chatgpt-action.yaml (SportReal)
     Slim per-agent schema = méně tokenů v kontextu = nižší spotřeba credits.
 
-Potvrď verzi 11.2.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
+Potvrď verzi 11.5.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:
