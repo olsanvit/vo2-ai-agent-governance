@@ -44,3 +44,58 @@ Smazání z HEAD nestačí, staré commity jsou dál veřejné. Dvě cesty:
 - **`git filter-repo`** — přepíše historii, nutný `push --force` a přegenerování všech klonů.
 
 Bez ohledu na volbu platí: **credentials, které jednou byly v public repu, se musí rotovat.**
+
+---
+
+## Ověřená mapa konzumentů (2026-09-12)
+
+Zjištěno z `docker inspect` na QNAPu — **jen proměnné prostředí**, konfigurační soubory
+uvnitř kontejnerů tenhle sken nevidí.
+
+| Uživatel | Kontejnery |
+|---|---|
+| `AgentAI` | `qnap-game-mcp`, `vin-importer` |
+| `roundnet` | `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal` |
+| `mercs_beasts_usr` | `mcp-mab` + aplikace MercenariesAndBeasts (přes `appsettings.Production.json`, ne env) |
+
+Stejný `AUTH_TOKEN` sdílí 6 kontejnerů: `qnap-game-mcp`, `mcp-mab`, `mcp-usm`,
+`qnap-te-mcp`, `mcp-sportreal`, `mcp-oauth`.
+
+**`.env` na QNAPu neexistuje** — hodnoty jsou inline v `/share/Container/mcp-qnap/docker-compose.yml`.
+
+**`mcp-router` loguje token** do `*-json.log` (přes 20 MB v čitelné podobě). Po rotaci logy
+smazat a opravit logování, jinak se tam nový token vysype znovu.
+
+## Postup pro `AgentAI` (nejmenší rozsah — 2 kontejnery)
+
+```bash
+DOCKER=/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
+NEW=$(openssl rand -base64 24 | tr -d '/+=' | head -c 28)   # heslo si ulož do Vaultwarden
+
+# 1) nové heslo v pg16
+$DOCKER exec pg16 psql -U postgres -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
+
+# 2) .env vedle compose (nově — dosud tam nebyl)
+cd /share/Container/mcp-qnap
+grep -q AGENT_DB_PASSWORD .env 2>/dev/null || echo "AGENT_DB_PASSWORD=$NEW" >> .env
+chmod 600 .env
+
+# 3) v docker-compose.yml nahradit heslo za ${AGENT_DB_PASSWORD}
+#    (compose dosadí z .env ve stejném adresáři)
+
+# 4) restart obou konzumentů
+$DOCKER compose up -d qnap-game-mcp
+# vin-importer má vlastní compose — najít přes: $DOCKER inspect vin-importer | grep compose
+
+# 5) ověření — musí vrátit tělo s protocolVersion i serverInfo, ne jen HTTP 200
+curl -s -X POST http://localhost:3000/health | head -c 200
+```
+
+Pořadí je důležité: heslo v DB se mění jako první, protože od té chvíle kontejner stejně
+nefunguje — čím kratší mezera do restartu, tím míň chyb v logu agentů.
+
+## Co po rotaci NESMÍ zůstat
+
+- staré heslo v `docker-compose.yml` (nahradit `${VAR}`)
+- token v logách `mcp-router`
+- staré hodnoty ve Vaultwarden (přepsat, ne přidat druhý záznam)
