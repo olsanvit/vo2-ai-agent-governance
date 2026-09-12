@@ -1,0 +1,7 @@
+# Generováno post-deploy.sh z audit-generator.py — patří do wwwroot, ne do repa
+audit-report.html
+
+# Skutečné hodnoty tajemství (repo je public) — v repu smí být jen ${PROMĚNNÉ}
+.env
+*.env
+service-account.json
