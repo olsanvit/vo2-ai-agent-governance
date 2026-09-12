@@ -108,7 +108,7 @@ diff --git a/server.js b/server.js
 @@ -10,11 +10,17 @@
  const { Pool } = pkg;
  
- const AUTH_TOKEN = process.env.AUTH_TOKEN || "Roundnet575Padel";
+ const AUTH_TOKEN = process.env.AUTH_TOKEN || "REDACTED";
 -const MCP_VERSION = "5.3.0";
 +const MCP_VERSION = "5.4.0";
  const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);

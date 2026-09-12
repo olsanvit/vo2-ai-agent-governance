@@ -6,10 +6,9 @@ https://mcp.vo2info.cz/SR
 ```
 
 ## Auth token
-```
-Roundnet575Padel
-```
-Stejný jako ostatní MCP konektory.
+
+Uložen ve Vaultwarden (`MCP_SPORTREAL_AUTH_TOKEN`). Stejný jako ostatní MCP konektory.
+Do repa ani do poznámek ho nevkládat — repo je public.
 
 ## QNAP docker-compose.yml — přidat sekci
 
@@ -21,8 +20,8 @@ Stejný jako ostatní MCP konektory.
     restart: unless-stopped
     network_mode: host
     environment:
-      DATABASE_URL: postgresql://sportreal_usr:SPORTREAL_DB_PASSWORD@192.168.60.221:5432/SportReal
-      AUTH_TOKEN: Roundnet575Padel
+      DATABASE_URL: postgresql://sportreal_usr:${SPORTREAL_DB_PASSWORD}@192.168.60.221:5433/SportReal
+      AUTH_TOKEN: ${MCP_SPORTREAL_AUTH_TOKEN}
       PORT: "3002"
       MAX_SELECT_ROWS: "500"
       SELECT_TIMEOUT_MS: "30000"
@@ -37,7 +36,7 @@ Stejný jako ostatní MCP konektory.
       start_period: 30s
 ```
 
-Nahraď `SPORTREAL_DB_PASSWORD` skutečným heslem (z Vaultwarden).
+Hodnoty `SPORTREAL_DB_PASSWORD` a `MCP_SPORTREAL_AUTH_TOKEN` dosaď z Vaultwarden do `.env` vedle docker-compose.yml.
 
 ## Caddy reverse proxy — přidat do Caddyfile
 
@@ -76,7 +75,7 @@ handle /SR* {
 
 6. Ověřit:
    ```
-   curl -H "Authorization: Bearer Roundnet575Padel" \
+   curl -H "Authorization: Bearer $MCP_SPORTREAL_AUTH_TOKEN" \
         https://mcp.vo2info.cz/SR/health
    ```
 

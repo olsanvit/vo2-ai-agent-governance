@@ -3,6 +3,10 @@
 #
 # JAK APLIKOVAT:
 #   ssh admin@qnap "cd /share/Container/mcp-qnap && nano docker-compose.yml"
+#
+# HODNOTY: AGENT_DB_PASSWORD, MCP_AUTH_TOKEN a GITEA_TOKEN patří do souboru .env
+# vedle docker-compose.yml na QNAPu (docker compose je dosadí sám). Do repa nikdy
+# nepatří — je public.
 #   nebo: cat patch | ssh admin@qnap "cat > /share/Container/mcp-qnap/docker-compose.yml"
 
 version: '3.9'
@@ -13,13 +17,13 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      DATABASE_URL: postgresql://AgentAI:Runeterra575Padel@192.168.60.221:5433/AIData
-      AUTH_TOKEN: Roundnet575Padel
+      DATABASE_URL: postgresql://AgentAI:${AGENT_DB_PASSWORD}@192.168.60.221:5433/AIData
+      AUTH_TOKEN: ${MCP_AUTH_TOKEN}
       UPLOAD_DIR: /app/uploads
       PUBLIC_UPLOAD_BASE_URL: https://mcp.vo2info.cz/uploads
       GOOGLE_SERVICE_ACCOUNT_JSON_FILE: /app/service-account.json
       GOVERNANCE_DIR: /app/governance
-      GITEA_TOKEN: 2cd29d25ae3b48bd7b966f8d27fd98bd0feb46a0
+      GITEA_TOKEN: ${GITEA_TOKEN}
       PG_POOL_MAX: 5
       MCP_CONCURRENCY: "15"        # max souběžných requestů
       MCP_REQUEST_TIMEOUT: "30000" # ms před timeout
