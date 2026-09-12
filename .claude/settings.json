@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 audit-generator.py *)",
+      "Bash(node --check *)",
+      "Bash(curl -s -o /dev/null -w * https://mcp.vo2info.cz/*)",
+      "Bash(curl -s -o /dev/null -w * https://raw.githubusercontent.com/olsanvit/*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
