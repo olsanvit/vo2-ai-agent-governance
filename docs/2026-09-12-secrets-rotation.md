@@ -8,7 +8,7 @@
 | Soubor | Hodnota | Commit |
 |---|---|---|
 | `patches/docker-compose-hardening.yml` | heslo `AgentAI` k `AIData` (pg16, port 5433), `AUTH_TOKEN` MCP serveru, `GITEA_TOKEN` | `b60bcc8` |
-| `mcp-sportreal/deploy-notes.md` | heslo `sportreal_usr`, `AUTH_TOKEN` (i v příkladu `curl`) | `ddbb7f0` |
+| `mcp-sportreal/deploy-notes.md` | `AUTH_TOKEN` (i v příkladu `curl`); heslo `sportreal_usr` tam **nebylo** — jen placeholder `SPORTREAL_DB_PASSWORD` | `ddbb7f0` |
 | `releases/vo2-governance-5.4.0.patch` | fallback `AUTH_TOKEN` v `server.js` | `c8c2eb1` |
 
 Ověřeno `curl`em 2026-09-12: `raw.githubusercontent.com` vracel na oba první soubory HTTP 200 bez přihlášení.
@@ -19,7 +19,7 @@ Pořadí je zvolené tak, aby výpadek byl co nejkratší: nejdřív nová hodno
 
 1. **pg16 `AgentAI`** — nové heslo, pak `.env` u `mcp-qnap` a `docker compose up -d`.
    Pozor: na `AgentAI` jede většina sportovních agentů, po rotaci je nutné ověřit `db_ping`.
-2. **pg16 `sportreal_usr`** — totéž pro kontejner `mcp-sportreal`.
+2. ~~pg16 `sportreal_usr`~~ — **nerotovat kvůli úniku**: ověřeno 2026-09-14, že heslo v historii nikdy nebylo (jen název proměnné). `mcp-sportreal` navíc ve skutečnosti běží pod `roundnet`.
 3. **`AUTH_TOKEN` MCP serverů** — mění se současně na serveru i ve všech MCP konektorech
    (`qnap-ai`, `qnap-mab`, `qnap-te`, `qnap-usm`, `qnap-sr` v `~/.claude.json`).
    Dokud se nepřenastaví obě strany, konektory vrací 401.
@@ -103,3 +103,26 @@ nefunguje — čím kratší mezera do restartu, tím míň chyb v logu agentů.
 - staré heslo v `docker-compose.yml` (nahradit `${VAR}`)
 - token v logách `mcp-router`
 - staré hodnoty ve Vaultwarden (přepsat, ne přidat druhý záznam)
+
+## Doplněno 2026-09-14 — rozsah úniku v celé historii
+
+Ověřeno skenem všech 283 commitů (včetně větví a PR) a zkušebním `git filter-repo` na zrcadlové kopii.
+
+**Skutečně uniklé hodnoty jsou tři:**
+
+| Hodnota | Kde všude v historii |
+|---|---|
+| heslo `AgentAI` | 2 výskyty v obsahu |
+| `GITEA_TOKEN` | 2 výskyty v obsahu |
+| MCP `AUTH_TOKEN` | 20× jako text + **8× jako base64 `admin:<token>`** ve starých verzích `CatalogPrompt` / `ManagerPrompt` + 1× ve zprávě commitu `a00d6699` |
+
+**MCP token je zároveň heslo admina ntfy** (Basic auth `admin:<token>`). Rotace tokenu tedy musí
+zahrnout i ntfy — jinak zůstane ntfy chráněný uniklou hodnotou.
+
+**Přepis historie** musí nahrazovat i zakódované varianty a zprávy commitů
+(`--replace-text` + `--replace-message`); samotná náhrada přímého textu nechá base64 i zprávu v historii.
+Zkušební přepis s 3 hodnotami + 18 variantami: 57 výskytů → 0, strom aktuálního `main` beze změny.
+
+**Po force-pushi zůstanou staré commity dostupné přes `refs/pull/*`** — všech 10 PR (i zavřených)
+má tajemství ve své historii a tyto reference uživatel smazat nemůže. Nutné požádat GitHub Support
+o odstranění cached views a PR referencí. Rotace je proto povinná bez ohledu na přepis.
