@@ -4,12 +4,19 @@ Canonical repository for VO2 AI agent governance prompts and runtime.
 
 ## Current release
 
-Version: `5.3.0`
+Version: `11.2.0`
 
 ## Canonical active files
 
-- `CommonCatalog/CommonPrompt.txt`
-- `SportManager/SportPrompt.txt`
+- `governance/CatalogPrompt.txt` + `governance/CatalogPromptSkills.txt`
+- `governance/ManagerPrompt.txt` + `governance/ManagerPromptSkills.txt`
+- `governance/CollectorPrompt.txt` + `governance/CollectorPromptSkills.txt`
+- `governance/CheckerPrompt.txt` + `governance/CheckerPromptSkills.txt`
+- `governance/GeneratorPrompt.txt` + `governance/GeneratorPromptSkills.txt`
+- `governance/ImporterPrompt.txt` + `governance/ImporterPromptSkills.txt`
+- `governance/versions.json` — per-prompt version registry
+- `mcp-image/mcp-usm.js` — VO2QNAPUSM MCP server (USM DB, Sheets, ntfy, scheduling)
+- `mcp-image/mcp-mab.js` — VO2QNAPDB MCP server
 - `server.js`
 
 ## Source of truth policy
