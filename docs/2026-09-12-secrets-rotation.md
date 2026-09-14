@@ -55,8 +55,12 @@ uvnitř kontejnerů tenhle sken nevidí.
 | Uživatel | Kontejnery |
 |---|---|
 | `AgentAI` | `qnap-game-mcp`, `vin-importer` |
-| `roundnet` | `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal` |
+| `roundnet` ⚠️ **superuser** | `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal` |
 | `mercs_beasts_usr` | `mcp-mab` + aplikace MercenariesAndBeasts (přes `appsettings.Production.json`, ne env) |
+
+**`roundnet` je superuser pg16** a podle pravidla smí sloužit jen migracím. Tři MCP servery
+ho přesto používají. Rotace jeho hesla shodí všechny tři **a** migrace. Správná oprava:
+vytvořit každému serveru vlastní roli s právy jen na jeho DB a teprve pak `roundnet` rotovat.
 
 Stejný `AUTH_TOKEN` sdílí 6 kontejnerů: `qnap-game-mcp`, `mcp-mab`, `mcp-usm`,
 `qnap-te-mcp`, `mcp-sportreal`, `mcp-oauth`.
