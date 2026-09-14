@@ -28,6 +28,14 @@ const pool = new Pool({
   max: Number(process.env.PG_POOL_MAX || 10),
   idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT || 30000),
   connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT || 10000),
+  // Cap runaway statements so a single slow query can't hold a pooled connection
+  // for the whole request-timeout window and cascade into pool exhaustion under
+  // concurrent agent load. Fast-path upserts complete in <1s, so this only trips
+  // on pathological queries.
+  statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT || 30000),
+  // Reap sessions left "idle in transaction" (e.g. a client that timed out mid-txn)
+  // so they stop holding row locks and blocking other writers.
+  idle_in_transaction_session_timeout: Number(process.env.PG_IDLE_TX_TIMEOUT || 15000),
   keepAlive: true,
   keepAliveInitialDelayMillis: 10000,
 });
@@ -189,6 +197,13 @@ let vectorAvailable = false;
 
 const schemaCache = new Map();
 const SCHEMA_CACHE_TTL = 5 * 60 * 1000; // 5 minut
+
+// Tables whose full structure (base columns, triggers, FKs, standard indexes) has
+// been ensured in this process. Lets the upsert hot-path skip the expensive
+// CREATE TABLE / ALTER / CREATE INDEX / information_schema churn that otherwise
+// runs on EVERY upsert and serializes on catalog locks under concurrent load.
+const structureEnsured = new Map(); // normalizedTable -> loadedAt (ms)
+const STRUCTURE_ENSURED_TTL = Number(process.env.STRUCTURE_ENSURED_TTL || 5 * 60 * 1000);
 
 const metrics = {
   startedAt: new Date().toISOString(),
@@ -547,8 +562,14 @@ async function getColumns(table) {
 }
 
 function invalidateSchema(table = null) {
-  if (table) schemaCache.delete(normalizeIdentifierName(table));
-  else schemaCache.clear();
+  if (table) {
+    const t = normalizeIdentifierName(table);
+    schemaCache.delete(t);
+    structureEnsured.delete(t);
+  } else {
+    schemaCache.clear();
+    structureEnsured.clear();
+  }
 }
 
 function baseColumnsSql() {
@@ -699,9 +720,24 @@ async function ensureStandardIndexes(table) {
 
 async function ensureColumnsInternal(table, data = {}) {
   const t = normalizeIdentifierName(table);
+  const explicitTypes = data.ColumnTypes && typeof data.ColumnTypes === "object" ? data.ColumnTypes : {};
+
+  const dataKeys = Object.keys(data || {})
+    .map(normalizeIdentifierName)
+    .filter(k => k && k !== "ColumnTypes" && !ALL_RESERVED_COLUMNS.has(k));
+
+  // Fast path: structure already ensured for this table in this process and every
+  // requested column already exists → skip all DDL/catalog work. This is the common
+  // case for repeated upserts and avoids per-upsert catalog-lock contention that,
+  // under many concurrent agents, pushes a trivial upsert past the request timeout.
+  const structFresh = structureEnsured.has(t) && (Date.now() - structureEnsured.get(t)) < STRUCTURE_ENSURED_TTL;
+  if (structFresh) {
+    const existingCols = await getColumns(t);
+    if (dataKeys.every(k => existingCols.has(k))) return;
+  }
+
   await ensureTable(t);
   let existing = await getColumns(t);
-  const explicitTypes = data.ColumnTypes && typeof data.ColumnTypes === "object" ? data.ColumnTypes : {};
 
   for (const [rawKey, rawValue] of Object.entries(data || {})) {
     const key = normalizeIdentifierName(rawKey);
@@ -716,6 +752,7 @@ async function ensureColumnsInternal(table, data = {}) {
 
   await autoForeignKeys(t);
   await ensureStandardIndexes(t);
+  structureEnsured.set(t, Date.now());
 }
 
 async function createForeignKey(table, column, refTable, refColumn = "Guid") {
