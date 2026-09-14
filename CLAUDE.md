@@ -44,6 +44,6 @@ s fallbackem na GitHub — proto přepnutí repa na private rozbije fallback v `
 
 ## Poznámky
 
-- `README.md` je zastaralý: uvádí verzi 5.3.0 a soubory `CommonCatalog/CommonPrompt.txt`
-  a `SportManager/SportPrompt.txt`, které v repu už nejsou.
+- `README.md` uvádí verzi governance release (`GovernanceVersion`), ne verze jednotlivých
+  promptů — ty se mohou lišit (např. ManagerPrompt 11.5.1 v release 11.5.0), viz `versions.json`.
 - Změny promptů se projeví až po selfUpdate agenta — samotný commit nic nenasadí.
