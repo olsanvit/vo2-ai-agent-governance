@@ -77,7 +77,28 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 - `vin-importer`, `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal`, `mcp-oauth` jsou **`docker run`**
   s env inline — změna hesla/tokenu = kontejner znovu vytvořit (`docker inspect` → stejné parametry, nová hodnota).
   `.env` + `docker compose up` na ně nestačí.
-- `vin-importer`: `restart=no`, síť host, mount `/share/CACHEDEV1_DATA/homes/admin/vin-imports`, heslo v env `DB_CONN`.
+- `vin-importer`: `restart=no`, síť host, mount `/share/CACHEDEV1_DATA/homes/admin/vin-imports`, heslo v env `DB_CONN`
+  (`postgresql://AgentAI:${AGENT_DB_PASSWORD}@127.0.0.1:5432/AIData`), image `vin-importer:latest` z `/share/Container/vin-importer`.
+  Není v cronu ani v žádném skriptu — je to **poller** (`importer.py import`, interval 60 s).
+  2026-09-15 17:41 ukončen (exit 137, reset QNAPu) a kvůli `restart=no` zůstal vypnutý.
+
+### Nové vytvoření `vin-importer` (součást `rotate-secrets.sh agentai`)
+
+```bash
+DOCKER=/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
+cd /share/Container/vin-importer
+umask 077
+printf 'DB_CONN=%s\nVIN_IMPORT_DIR=/data/vin-imports\n' "postgresql://AgentAI:${NEW}@127.0.0.1:5432/AIData" > .env
+$DOCKER rm -f vin-importer
+$DOCKER run -d --name vin-importer --network host --restart unless-stopped \
+  --env-file /share/Container/vin-importer/.env \
+  -v /share/CACHEDEV1_DATA/homes/admin/vin-imports:/data/vin-imports \
+  vin-importer python importer.py import
+# ověření po ~70 s: v logu „incoming/ je prázdná" (ne chyba autentizace)
+$DOCKER logs --tail 3 vin-importer
+```
+
+Změna oproti originálu: `--env-file` místo inline env a `--restart unless-stopped` místo `no`.
 
 ## Postup pro `AgentAI` (nejmenší rozsah — 2 kontejnery)
 

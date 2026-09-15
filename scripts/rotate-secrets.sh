@@ -51,8 +51,22 @@ case "$WHAT" in
     $DOCKER exec -i pg16 psql -U roundnet -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
     # Služba se v compose jmenuje "mcp" (kontejner qnap-game-mcp).
     (cd "$COMPOSE_DIR" && $DOCKER compose up -d mcp)
-    echo "!! vin-importer NENÍ z compose (docker run, env DB_CONN inline) — je nutné ho znovu vytvořit"
-    echo "   s novým heslem v DB_CONN, jinak příští import selže na autentizaci."
+    # vin-importer je docker run bez compose — heslo nelze změnit za běhu, kontejner se musí
+    # vytvořit znovu. Env jde do vlastního .env (chmod 600), aby heslo nebylo v docker inspect
+    # parametrech skriptů ani v historii shellu. restart=unless-stopped: je to poller a
+    # s původním restart=no zůstal po resetu QNAPu (exit 137) tiše vypnutý.
+    VIN_DIR=/share/Container/vin-importer
+    umask 077
+    printf 'DB_CONN=%s\nVIN_IMPORT_DIR=/data/vin-imports\n' "postgresql://AgentAI:${NEW}@127.0.0.1:5432/AIData" > "$VIN_DIR/.env"
+    chmod 600 "$VIN_DIR/.env"
+    $DOCKER rm -f vin-importer
+    $DOCKER run -d --name vin-importer --network host --restart unless-stopped \
+      --env-file "$VIN_DIR/.env" \
+      -v /share/CACHEDEV1_DATA/homes/admin/vin-imports:/data/vin-imports \
+      vin-importer python importer.py import
+    sleep 70
+    $DOCKER logs --tail 3 vin-importer 2>&1 | cut -c1-200
+    $DOCKER inspect vin-importer --format 'vin-importer: {{.State.Status}}'
     check_health 3000 || true
     echo "Ulož nové heslo do Vaultwarden (AgentAI / AIData)."
     ;;
