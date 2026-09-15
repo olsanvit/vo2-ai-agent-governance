@@ -126,3 +126,17 @@ Zkušební přepis s 3 hodnotami + 18 variantami: 57 výskytů → 0, strom aktu
 **Po force-pushi zůstanou staré commity dostupné přes `refs/pull/*`** — všech 10 PR (i zavřených)
 má tajemství ve své historii a tyto reference uživatel smazat nemůže. Nutné požádat GitHub Support
 o odstranění cached views a PR referencí. Rotace je proto povinná bez ohledu na přepis.
+
+## Stav 2026-09-15 — historie přepsána
+
+- **GitHub:** `git filter-repo` (3 hodnoty + 18 zakódovaných variant, obsah i zprávy commitů), force push.
+  Nový `main` = `9cb3654`, obsah stromu shodný s původním `76ac149`. Před přepisem zavřeno všech 5
+  zbylých PR i s větvemi.
+- **Ověřeno na čerstvém klonu z GitHubu:** větve + tagy → **0 výskytů**.
+- **Zbývá 50 výskytů v `refs/pull/1..10/head`** — reference PR na GitHubu jsou read-only, nemají
+  s novou historií společného předka a force-push je nesmaže. **Nutný požadavek na GitHub Support**
+  (odstranění PR referencí a cached views pro repo `olsanvit/vo2-ai-agent-governance`).
+- **Gitea:** force push čeká na obnovení QNAPu (2026-09-15 znovu nedostupný).
+- **Lokální klony:** každý starší klon má starou historii — `git fetch origin && git reset --hard origin/main`
+  (nebo naklonovat znovu). Nikdy z něj nepushovat, jinak se stará historie vrátí.
+- **Rotace je dál povinná** — dokud existují PR reference a případné cizí kopie, jsou hodnoty kompromitované.
