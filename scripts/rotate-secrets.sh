@@ -43,10 +43,12 @@ case "$WHAT" in
   agentai)
     NEW=$(gen)
     set_env AGENT_DB_PASSWORD "$NEW"
-    use_var "DATABASE_URL" AGENT_DB_PASSWORD 2>/dev/null || true
-    echo "!! V $COMPOSE_DIR/docker-compose.yml zkontroluj, že DATABASE_URL zní:"
-    echo "   postgresql://AgentAI:\${AGENT_DB_PASSWORD}@192.168.60.221:5432/AIData"
-    read -r -p "Upraveno? [enter pro pokračování]" _
+    # use_var tu nejde: DATABASE_URL je v compose dvakrát (i mcp-sportreal pod roundnet) a hodnota
+    # je celá URL, ne jen heslo. Nahrazuje se proto jen heslo v URL uživatele AgentAI.
+    sed -i.bak -E 's#(postgresql://AgentAI:)[^@]*@#\1${AGENT_DB_PASSWORD}@#' "$COMPOSE_DIR/docker-compose.yml"
+    grep -c 'AgentAI:${AGENT_DB_PASSWORD}@' "$COMPOSE_DIR/docker-compose.yml" | grep -qx 1 \
+      || { echo "❌ compose neobsahuje právě jednu URL AgentAI s \${AGENT_DB_PASSWORD} — stop, heslo v DB nezměněno"; exit 1; }
+    (cd "$COMPOSE_DIR" && $DOCKER compose config >/dev/null) || { echo "❌ compose config selhal — stop"; exit 1; }
     # Role postgres v pg16 neexistuje — superuser clusteru je roundnet.
     $DOCKER exec -i pg16 psql -U roundnet -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
     # Služba se v compose jmenuje "mcp" (kontejner qnap-game-mcp).
