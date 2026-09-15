@@ -136,7 +136,7 @@ o odstranění cached views a PR referencí. Rotace je proto povinná bez ohledu
 - **Zbývá 50 výskytů v `refs/pull/1..10/head`** — reference PR na GitHubu jsou read-only, nemají
   s novou historií společného předka a force-push je nesmaže. **Nutný požadavek na GitHub Support**
   (odstranění PR referencí a cached views pro repo `olsanvit/vo2-ai-agent-governance`).
-- **Gitea:** force push čeká na obnovení QNAPu (2026-09-15 znovu nedostupný).
+- **Gitea:** force push proveden po obnovení QNAPu; ověřeno na čerstvém klonu — 1 větev, 3 tagy (shodné s GitHubem), žádné další reference, **0 výskytů**.
 - **Lokální klony:** každý starší klon má starou historii — `git fetch origin && git reset --hard origin/main`
   (nebo naklonovat znovu). Nikdy z něj nepushovat, jinak se stará historie vrátí.
 - **Rotace je dál povinná** — dokud existují PR reference a případné cizí kopie, jsou hodnoty kompromitované.
