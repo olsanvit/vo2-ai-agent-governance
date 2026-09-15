@@ -140,3 +140,21 @@ o odstranění cached views a PR referencí. Rotace je proto povinná bez ohledu
 - **Lokální klony:** každý starší klon má starou historii — `git fetch origin && git reset --hard origin/main`
   (nebo naklonovat znovu). Nikdy z něj nepushovat, jinak se stará historie vrátí.
 - **Rotace je dál povinná** — dokud existují PR reference a případné cizí kopie, jsou hodnoty kompromitované.
+
+## Oddělení `roundnet` (příprava, 2026-09-15)
+
+`patches/mcp-least-privilege.sql` vytvoří tři role s právy jen na vlastní DB:
+
+| Role | DB | Práva | Kontejner |
+|---|---|---|---|
+| `mcp_usm_usr` | UniSportManager | SELECT/INSERT/UPDATE/DELETE | `mcp-usm` |
+| `mcp_te_usr` | TopEleven | SELECT/INSERT/UPDATE/DELETE | `qnap-te-mcp` |
+| `mcp_sr_usr` | sportReal | jen SELECT (server jen čte) | `mcp-sportreal` |
+
+Pořadí: 1) spustit SQL, 2) v `.env` doplnit hesla, 3) v compose přepsat `DATABASE_URL`
+na nové role přes `${PROMĚNNÉ}`, 4) `docker compose up -d` pro tyto tři služby,
+5) ověřit `/health` tělem odpovědi, 6) teprve pak rotovat heslo `roundnet` samotné.
+
+`ALTER DEFAULT PRIVILEGES FOR ROLE roundnet` zajistí, že tabulky vytvořené budoucími
+migracemi budou pro MCP role dostupné samy — jinak by po každé migraci `mcp_*` role
+na nové tabulky neviděly.
