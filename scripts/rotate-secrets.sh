@@ -47,10 +47,12 @@ case "$WHAT" in
     echo "!! V $COMPOSE_DIR/docker-compose.yml zkontroluj, že DATABASE_URL zní:"
     echo "   postgresql://AgentAI:\${AGENT_DB_PASSWORD}@192.168.60.221:5432/AIData"
     read -r -p "Upraveno? [enter pro pokračování]" _
-    $DOCKER exec -i pg16 psql -U postgres -v ON_ERROR_STOP=1 -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
-    (cd "$COMPOSE_DIR" && $DOCKER compose up -d qnap-game-mcp)
-    echo "!! vin-importer má vlastní compose — najdi ho a nastav stejné heslo:"
-    $DOCKER inspect vin-importer --format '{{index .Config.Labels "com.docker.compose.project.working_dir"}}' 2>/dev/null || true
+    # Role postgres v pg16 neexistuje — superuser clusteru je roundnet.
+    $DOCKER exec -i pg16 psql -U roundnet -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
+    # Služba se v compose jmenuje "mcp" (kontejner qnap-game-mcp).
+    (cd "$COMPOSE_DIR" && $DOCKER compose up -d mcp)
+    echo "!! vin-importer NENÍ z compose (docker run, env DB_CONN inline) — je nutné ho znovu vytvořit"
+    echo "   s novým heslem v DB_CONN, jinak příští import selže na autentizaci."
     check_health 3000 || true
     echo "Ulož nové heslo do Vaultwarden (AgentAI / AIData)."
     ;;

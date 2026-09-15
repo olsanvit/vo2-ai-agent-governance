@@ -70,6 +70,15 @@ Stejný `AUTH_TOKEN` sdílí 6 kontejnerů: `qnap-game-mcp`, `mcp-mab`, `mcp-usm
 **`mcp-router` loguje token** do `*-json.log` (přes 20 MB v čitelné podobě). Po rotaci logy
 smazat a opravit logování, jinak se tam nový token vysype znovu.
 
+## Jak jsou kontejnery vytvořené (ověřeno 2026-09-15)
+
+- **Superuser pg16 je `roundnet`** — role `postgres` neexistuje (`psql -U roundnet -d postgres`).
+- Z compose (`/share/Container/mcp-qnap`) je **jen `qnap-game-mcp`** (služba `mcp`); `.env` tam zatím neexistuje.
+- `vin-importer`, `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal`, `mcp-oauth` jsou **`docker run`**
+  s env inline — změna hesla/tokenu = kontejner znovu vytvořit (`docker inspect` → stejné parametry, nová hodnota).
+  `.env` + `docker compose up` na ně nestačí.
+- `vin-importer`: `restart=no`, síť host, mount `/share/CACHEDEV1_DATA/homes/admin/vin-imports`, heslo v env `DB_CONN`.
+
 ## Postup pro `AgentAI` (nejmenší rozsah — 2 kontejnery)
 
 ```bash
@@ -77,7 +86,7 @@ DOCKER=/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
 NEW=$(openssl rand -base64 24 | tr -d '/+=' | head -c 28)   # heslo si ulož do Vaultwarden
 
 # 1) nové heslo v pg16
-$DOCKER exec pg16 psql -U postgres -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
+$DOCKER exec pg16 psql -U roundnet -d postgres -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
 
 # 2) .env vedle compose (nově — dosud tam nebyl)
 cd /share/Container/mcp-qnap

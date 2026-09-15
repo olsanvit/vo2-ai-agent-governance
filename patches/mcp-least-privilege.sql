@@ -6,7 +6,8 @@
 -- jen na svou databázi.
 --
 -- POUŽITÍ (na QNAPu, hesla se předávají proměnnými, nikdy inline):
---   docker exec -i pg16 psql -U postgres -v usm_pw="'<heslo>'" -v te_pw="'<heslo>'" \
+--   (role postgres v pg16 neexistuje, superuser je roundnet)
+--   docker exec -i pg16 psql -U roundnet -d postgres -v usm_pw="'<heslo>'" -v te_pw="'<heslo>'" \
 --     -v sr_pw="'<heslo>'" -f mcp-least-privilege.sql
 --
 -- Hesla vygeneruj: openssl rand -base64 30 | tr -d '/+=' | head -c 32
