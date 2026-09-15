@@ -102,6 +102,16 @@ Změna oproti originálu: `--env-file` místo inline env a `--restart unless-sto
 
 ## Postup pro `AgentAI` (nejmenší rozsah — 2 kontejnery)
 
+**Preferovaně skriptem** (neinteraktivní, ověří přihlášení novým i odmítnutí starého hesla a `/health`,
+jinak automaticky vrátí původní heslo i konfiguraci; nanečisto ověřeno 2026-09-15):
+
+```bash
+ssh -i ~/.ssh/claude-qnap admin@192.168.60.221 'sh -s' < scripts/rotate-agentai-qnap.sh
+```
+
+Skript se zastaví, pokud se `docker-compose.yml` od kontroly změnil (kontrolní md5) — pak ho
+znovu ověřit a hash ve skriptu aktualizovat. Ruční postup níže je pro pochopení kroků.
+
 ```bash
 DOCKER=/share/CACHEDEV1_DATA/.qpkg/container-station/bin/docker
 NEW=$(openssl rand -base64 24 | tr -d '/+=' | head -c 28)   # heslo si ulož do Vaultwarden

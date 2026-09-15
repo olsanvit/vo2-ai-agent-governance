@@ -41,43 +41,18 @@ check_health() { # $1=port
 
 case "$WHAT" in
   agentai)
-    NEW=$(gen)
-    set_env AGENT_DB_PASSWORD "$NEW"
-    # use_var tu nejde: DATABASE_URL je v compose dvakrát (i mcp-sportreal pod roundnet) a hodnota
-    # je celá URL, ne jen heslo. Nahrazuje se proto jen heslo v URL uživatele AgentAI.
-    sed -i.bak -E 's#(postgresql://AgentAI:)[^@]*@#\1${AGENT_DB_PASSWORD}@#' "$COMPOSE_DIR/docker-compose.yml"
-    grep -c 'AgentAI:${AGENT_DB_PASSWORD}@' "$COMPOSE_DIR/docker-compose.yml" | grep -qx 1 \
-      || { echo "❌ compose neobsahuje právě jednu URL AgentAI s \${AGENT_DB_PASSWORD} — stop, heslo v DB nezměněno"; exit 1; }
-    (cd "$COMPOSE_DIR" && $DOCKER compose config >/dev/null) || { echo "❌ compose config selhal — stop"; exit 1; }
-    # Role postgres v pg16 neexistuje — superuser clusteru je roundnet.
-    $DOCKER exec -i pg16 psql -U roundnet -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER \"AgentAI\" WITH PASSWORD '$NEW';"
-    # Služba se v compose jmenuje "mcp" (kontejner qnap-game-mcp).
-    (cd "$COMPOSE_DIR" && $DOCKER compose up -d mcp)
-    # vin-importer je docker run bez compose — heslo nelze změnit za běhu, kontejner se musí
-    # vytvořit znovu. Env jde do vlastního .env (chmod 600), aby heslo nebylo v docker inspect
-    # parametrech skriptů ani v historii shellu. restart=unless-stopped: je to poller a
-    # s původním restart=no zůstal po resetu QNAPu (exit 137) tiše vypnutý.
-    VIN_DIR=/share/Container/vin-importer
-    umask 077
-    printf 'DB_CONN=%s\nVIN_IMPORT_DIR=/data/vin-imports\n' "postgresql://AgentAI:${NEW}@127.0.0.1:5432/AIData" > "$VIN_DIR/.env"
-    chmod 600 "$VIN_DIR/.env"
-    $DOCKER rm -f vin-importer
-    $DOCKER run -d --name vin-importer --network host --restart unless-stopped \
-      --env-file "$VIN_DIR/.env" \
-      -v /share/CACHEDEV1_DATA/homes/admin/vin-imports:/data/vin-imports \
-      vin-importer python importer.py import
-    sleep 70
-    $DOCKER logs --tail 3 vin-importer 2>&1 | cut -c1-200
-    $DOCKER inspect vin-importer --format 'vin-importer: {{.State.Status}}'
-    check_health 3000 || true
-    echo "Ulož nové heslo do Vaultwarden (AgentAI / AIData)."
+    # Samostatný neinteraktivní skript s ověřením přihlášení a automatickým rollbackem —
+    # heslo v DB se mění až po úspěšné přípravě compose a vrací se, když /health neprojde.
+    echo "Použij: ssh -i ~/.ssh/claude-qnap admin@192.168.60.221 'sh -s' < scripts/rotate-agentai-qnap.sh"
+    exit 1
     ;;
   gitea)
     echo "1) V Gitei vytvoř nový token (Settings → Applications) a starý zruš."
     read -r -s -p "Vlož nový GITEA_TOKEN: " NEW; echo
     set_env GITEA_TOKEN "$NEW"
     use_var "GITEA_TOKEN" GITEA_TOKEN
-    (cd "$COMPOSE_DIR" && $DOCKER compose up -d qnap-game-mcp)
+    # Služba v compose je "mcp" (container_name qnap-game-mcp); --no-deps nesahá na mcp-sportreal.
+    (cd "$COMPOSE_DIR" && $DOCKER compose up -d --no-deps mcp)
     check_health 3000 || true
     echo "Ulož do Vaultwarden (GITEA_TOKEN)."
     ;;
@@ -95,9 +70,14 @@ WARN
     read -r -p "Pokračovat? [ano/ne] " a; [ "$a" = "ano" ] || exit 1
     NEW=$(gen)
     set_env MCP_AUTH_TOKEN "$NEW"
-    echo "!! V compose nastav u VŠECH MCP služeb: AUTH_TOKEN: \${MCP_AUTH_TOKEN}"
+    echo "!! V compose nastav u služeb mcp a mcp-sportreal: AUTH_TOKEN: \${MCP_AUTH_TOKEN}"
     read -r -p "Upraveno? [enter]" _
-    (cd "$COMPOSE_DIR" && $DOCKER compose up -d)
+    (cd "$COMPOSE_DIR" && $DOCKER compose up -d --no-deps mcp)
+    # Z compose běží jen qnap-game-mcp. mcp-mab, mcp-usm, qnap-te-mcp, mcp-sportreal a mcp-oauth
+    # jsou docker run s AUTH_TOKEN inline — compose up je nezmění, musí se znovu vytvořit.
+    echo "!! Znovu vytvoř s novým AUTH_TOKEN (docker inspect → stejné parametry, --env-file):"
+    echo "   mcp-mab mcp-usm qnap-te-mcp mcp-sportreal mcp-oauth"
+    read -r -p "Hotovo? [enter]" _
     echo "2) ntfy — stejné heslo pro admina:"
     echo "   $DOCKER exec -it ntfy ntfy user change-pass admin"
     for p in 3000 3001 3002; do check_health "$p" || true; done
