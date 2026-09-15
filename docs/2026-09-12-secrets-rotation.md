@@ -77,7 +77,7 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 - `vin-importer`, `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-sportreal`, `mcp-oauth` jsou **`docker run`**
   s env inline — změna hesla/tokenu = kontejner znovu vytvořit (`docker inspect` → stejné parametry, nová hodnota).
   `.env` + `docker compose up` na ně nestačí.
-- `vin-importer`: `restart=no`, síť host, mount `/share/CACHEDEV1_DATA/homes/admin/vin-imports`, heslo v env `DB_CONN`
+- `vin-importer`: původně `restart=no` (2026-09-15 18:04 nastaveno `docker update --restart unless-stopped`), síť host, mount `/share/CACHEDEV1_DATA/homes/admin/vin-imports`, heslo v env `DB_CONN`
   (`postgresql://AgentAI:${AGENT_DB_PASSWORD}@127.0.0.1:5432/AIData`), image `vin-importer:latest` z `/share/Container/vin-importer`.
   Není v cronu ani v žádném skriptu — je to **poller** (`importer.py import`, interval 60 s).
   2026-09-15 17:41 ukončen (exit 137, reset QNAPu) a kvůli `restart=no` zůstal vypnutý.
