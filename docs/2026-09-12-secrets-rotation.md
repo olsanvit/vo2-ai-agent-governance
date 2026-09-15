@@ -70,6 +70,20 @@ Stejný `AUTH_TOKEN` sdílí 6 kontejnerů: `qnap-game-mcp`, `mcp-mab`, `mcp-usm
 **`mcp-router` loguje token** do `*-json.log` (přes 20 MB v čitelné podobě). Po rotaci logy
 smazat a opravit logování, jinak se tam nový token vysype znovu.
 
+## Stav rotace k 2026-09-15 22:10
+
+| Hodnota | Stav |
+|---|---|
+| Heslo `AgentAI` | ✅ rotováno (21:49, `.env` → `AGENT_DB_PASSWORD`); `qnap-game-mcp` přes compose, `vin-importer` znovu vytvořen s DSN v `secrets/vin-importer.env` |
+| MCP `AUTH_TOKEN` | ✅ rotován (`.env` → `MCP_AUTH_TOKEN`); compose služby `mcp`, `mcp-sportreal` + znovu vytvořené `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-oauth` (`scripts/finish-token-rotation-qnap.sh`, env v `secrets/<kontejner>.env`, 600) |
+| Heslo admina ntfy | ❌ pořád = starý token; `NTFY_PASS` v `mcp-mab`, `mcp-usm`, `qnap-te-mcp` ho používá — rotovat spolu s klienty ntfy |
+| `GITEA_TOKEN` | ❌ nerotován, v compose literál |
+| Heslo `roundnet` | ❌ nerotováno, v compose literál (`mcp-sportreal`); řešit spolu s `patches/mcp-least-privilege.sql` |
+| `mcp-router` logy se starým tokenem | ❌ nesmazány |
+
+`/share/Container/mcp-qnap/secrets/` drží env souborů `docker run` kontejnerů — při dalším vytvoření
+kontejneru použít `--env-file` odtud, ne inline `-e`.
+
 ## Jak jsou kontejnery vytvořené (ověřeno 2026-09-15)
 
 - **Superuser pg16 je `roundnet`** — role `postgres` neexistuje (`psql -U roundnet -d postgres`).
