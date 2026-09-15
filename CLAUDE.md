@@ -3,10 +3,12 @@
 Kanonický repozitář governance promptů pro AI agenty VO2 (homelab vo2info.cz) + runtime MCP serverů.
 **Není to Blazor projekt** — žádné `.razor`, žádné EF migrace, žádný SharedServices submodul.
 
-## ⚠️ Repo je PUBLIC
+## ⚠️ Repo je od 2026-09-15 PRIVATE — tajemství přesto nikdy do repa
 
-`github.com/olsanvit/vo2-ai-agent-governance` je veřejný. Do trackovaných souborů nikdy nepatří
-hesla, tokeny ani connection stringy — jen `${PROMĚNNÁ}` nebo `process.env.X`.
+`github.com/olsanvit/vo2-ai-agent-governance` bylo veřejné a hesla v něm unikla; historie je přepsaná
+a repo přepnuté na private. Do trackovaných souborů dál nikdy nepatří hesla, tokeny ani connection
+stringy — jen `${PROMĚNNÁ}` nebo `process.env.X` (hlídá `scripts/check-secrets.sh` v CI). Gitea
+zrcadlo (`gitea.vo2info.cz`) je čitelné anonymně.
 Skutečné hodnoty žijí v `.env` vedle `docker-compose.yml` na QNAPu a ve Vaultwardenu.
 Historie úniku a postup rotace: `docs/2026-09-12-secrets-rotation.md`.
 
@@ -39,8 +41,15 @@ Výstupy scheduled běhů, reporty pro operátora a konverzace s uživatelem **�
 
 ## Distribuce
 
-GitHub je kanonický zdroj, Google Drive jen zrcadlo. Agenti stahují prompty z `mcp.vo2info.cz/governance/`
-s fallbackem na GitHub — proto přepnutí repa na private rozbije fallback v `ManualSelfUpdate.txt`.
+GitHub je kanonický zdroj, Google Drive jen zrcadlo. Agenti stahují prompty v pořadí
+MCP (`mcp.vo2info.cz/governance/`) → vo2info.cz → GitHub → Drive → DB cache → bootstrap.
+
+**Od 2026-09-15 GitHub krok anonymně selže (repo je private).** Rozhodnutí uživatele: prompty se
+neupravují — agent při selhání přejde na Drive. MCP i vo2info.cz běží na QNAPu, takže při jeho výpadku
+je **jedinou zálohou Google Drive** — musí být aktuální. Týká se i `ManualSelfUpdate.txt`,
+`AGENT_BOOTSTRAP.md` a scheduled tasků sportovních agentů na Macu (fallback na raw GitHub).
+
+vo2info má repo jako submodul `governance/` (čte ho `GovernanceService`, soubory kopíruje csproj do publish).
 
 ## Poznámky
 
