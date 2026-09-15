@@ -1,6 +1,6 @@
 # ManagerPrompt
 Soubory: `governance/ManagerPrompt.txt` (4 651 ř.) + `ManagerPromptSkills.txt` (1 205 ř.)
-AgentType: `Manager` · PromptVersion: 11.5.0
+AgentType: `Manager` · PromptVersion: **11.5.1** (ostatní prompty 11.5.0)
 Popis: Největší prompt v repu. Řídí sportovní data agenty (Football, Ice Hockey, Basketball…) — sezóny, zápasy, hráče, týmy, kurzy.
 
 ## Hotovo ✅
@@ -8,10 +8,12 @@ Popis: Největší prompt v repu. Řídí sportovní data agenty (Football, Ice 
 - Podpora obou runtime: ChatGPT Custom GPT i Claude Cloud Routine (má `ClaudeMin` i `ClaudeRecommended`)
 - Definuje, že zdroj pravdy verze je `PromptVersion` v hlavičce a `versions.json` je jen zrcadlo (ř. 385)
 
+- **11.5.1 (`5fc8c07`)** — přeneseny opravy ze 4 neslitých větví, které bump na 11.5.0 obešel: guard „MULTI-SPORT REFERENCE — NENÍ KONTAMINACE" (Ch 7), guard produktivní éry + re-seed z pre-éry + write-timeout retry (Ch 19), AIDB tool readiness a 502 retry + AIDB-outage fallback (startup)
+
 ## Chybí / Rozpracováno ⚠️
-- **Kapitola 1 hlásí verzi 11.2.3, hlavička 11.5.0.** Bump v `d64140e` přepsal jen hlavičku.
+- ✅ Opraveno 2026-09-12 (`0dd6aca`): kapitola 1, řádek 1 i self-audit kontroly srovnány s hlavičkou; hlídá `scripts/check-versions.py`
 - 28 řádků dál odkazuje na verze 11.0–11.4
-- `GovernanceVersion: 11.0.0` na ř. 4190 neodpovídá aktuální 11.5.0
+- ✅ `GovernanceVersion` srovnána na 11.5.0 (verze release, ne promptu)
 - Při 4 651 řádcích se prompt těžko vejde do menších kontextových oken; ostatní prompty u sebe mají poznámku o velikosti kontextu, Manager ne
 
 ## Návrhy na vylepšení 💡

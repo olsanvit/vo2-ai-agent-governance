@@ -8,7 +8,7 @@ Popis: Sběr dat z externích zdrojů — collection workflow, validace, zápis.
 - Poznámka o velikosti kontextu (~11K tokenů)
 
 ## Chybí / Rozpracováno ⚠️
-- Kapitola 1 hlásí 11.2.1 proti hlavičce 11.5.0; 6 řádků odkazuje na starší verze
+- ✅ Opraveno 2026-09-12 (`0dd6aca`): kapitola 1, řádek 1 i self-audit kontroly srovnány s hlavičkou; hlídá `scripts/check-versions.py`
 - Skills soubor je na svou velikost promptu neobvykle velký (449 ř.) — stojí za kontrolu, jestli se nepřekrývá s Importerem
 
 ## Návrhy na vylepšení 💡

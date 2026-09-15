@@ -9,8 +9,8 @@ Popis: Nejdelší prompt. Katalogizační agent — správa entit, deduplikace, 
 - Cost dimensions (tokeny, API kvóty, zátěž DB, cache)
 
 ## Chybí / Rozpracováno ⚠️
-- **Kapitola 1 hlásí 11.2.1, hlavička 11.5.0**; 19 řádků odkazuje na verze 11.0–11.4
-- Vnitřní rozpor verzí: ř. 3253 `GovernanceVersion: 10.1.0` a `ImageGovernanceVersion: 10.1.0`, ale ř. 4387–4392 `11.0.0` — ani jedno není 11.5.0
+- ✅ Opraveno 2026-09-12 (`0dd6aca`): kapitola 1, řádek 1 i self-audit kontroly srovnány s hlavičkou; hlídá `scripts/check-versions.py`
+- ✅ Opraveno 2026-09-12: `GovernanceVersion` sjednocena na 11.5.0; starší registr Schema/RuntimeSafety/Image srovnán s novějším (11.0.0 — jiná osa)
 - Při 247 kB je to největší jednotlivý soubor v repu
 
 ## Návrhy na vylepšení 💡

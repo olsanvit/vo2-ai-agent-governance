@@ -8,7 +8,7 @@ Popis: Auditní agent — kontroluje data a dodržování standardů, zejména B
 - Poznámka o velikosti kontextu (~10K tokenů)
 
 ## Chybí / Rozpracováno ⚠️
-- Kapitola 1 hlásí 11.2.1 proti hlavičce 11.5.0; 6 řádků odkazuje na starší verze
+- ✅ Opraveno 2026-09-12 (`0dd6aca`): kapitola 1, řádek 1 i self-audit kontroly srovnány s hlavičkou; hlídá `scripts/check-versions.py`
 
 ## Návrhy na vylepšení 💡
 - Do auditu přidat kontrolu indexů `idx_*_Guid` — jejich absence způsobila [[project_mcp_upsert_self_deadlock]]

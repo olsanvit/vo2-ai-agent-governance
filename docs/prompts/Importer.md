@@ -8,7 +8,7 @@ Popis: Import dat ze souborů do DB — parsování, zápis, správa souborů, s
 - Poznámka o velikosti kontextu (~11K tokenů → vejde se do Plus 32K)
 
 ## Chybí / Rozpracováno ⚠️
-- Kapitola 1 hlásí 11.2.1 proti hlavičce 11.5.0; 6 řádků odkazuje na starší verze
+- ✅ Opraveno 2026-09-12 (`0dd6aca`): kapitola 1, řádek 1 i self-audit kontroly srovnány s hlavičkou; hlídá `scripts/check-versions.py`
 - **`AgentType: Importer` sdílí se `SimulateRealImporterPrompt`** — detekce typu podle názvu agenta může sáhnout po špatném promptu
 
 ## Návrhy na vylepšení 💡

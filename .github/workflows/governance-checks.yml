@@ -1,0 +1,29 @@
+# PROČ: drift verzí uvnitř promptů a literální hesla se do repa dostaly ručními změnami,
+# které nikdo nezkontroloval. Tahle kontrola je zachytí dřív, než se dostanou do public historie.
+name: governance-checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Literální hesla a tokeny
+        run: bash scripts/check-secrets.sh
+
+      - name: Verze promptů odpovídají versions.json
+        run: python3 scripts/check-versions.py
+
+      - name: Syntaxe MCP serverů
+        run: |
+          for f in server.js mcp-image/*.js mcp-sportreal/server.js; do
+            node --check "$f"
+          done
