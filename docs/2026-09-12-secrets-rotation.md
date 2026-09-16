@@ -76,7 +76,9 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 |---|---|
 | Heslo `AgentAI` | ✅ rotováno (21:49, `.env` → `AGENT_DB_PASSWORD`); `qnap-game-mcp` přes compose, `vin-importer` znovu vytvořen s DSN v `secrets/vin-importer.env` |
 | MCP `AUTH_TOKEN` | ✅ rotován (`.env` → `MCP_AUTH_TOKEN`); compose služby `mcp`, `mcp-sportreal` + znovu vytvořené `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-oauth` (`scripts/finish-token-rotation-qnap.sh`, env v `secrets/<kontejner>.env`, 600) |
-| Heslo admina ntfy | ❌ pořád = starý token; `NTFY_PASS` v `mcp-mab`, `mcp-usm`, `qnap-te-mcp` ho používá — rotovat spolu s klienty ntfy |
+| Heslo admina ntfy | ❌ pořád = starý token; ntfy je veřejně na `ntfy.vo2info.cz` (admin = plný přístup). Hodnotu používá **15 kontejnerů** jako `NTFY_PASS` (qnap-te-mcp, mcp-usm, mcp-mab, simulategames, vo2status, metin2bausia, agentspromptssk, vo2datamanager, topelevenst, unisportmanager, scorerapp, vinwmivehicles, mercenariesandbeasts, simulatereal) + skripty (`deploy.sh`, `diun.yml`, uptime-kuma `*.py`, `qnap-monitor.sh`, `zabbix-*`, compose `mcp-oauth`, `vo2status`, `Metin2Bausia`, `Public/mcp`). `auth-default-access: write-only` → publikovat jde i anonymně. **2026-09-16: base64 podoba `admin:<hodnota>` se omylem objevila v přepisu session governance** |
+| Heslo `n8nuser` (pg16) | ✅ 2026-09-16 13:15: bylo = starý token (MD5, dostupné z LAN) → nové SCRAM heslo v `secrets/n8nuser.pw`; `n8n` stojí, při spuštění mu nastavit nové heslo |
+| `mt2-postgres` (`POSTGRES_PASSWORD`) | ⚠️ = starý token; kontejner stojí, bez publikovaného portu — rotovat při dalším spuštění |
 | `GITEA_TOKEN` | ✅ 2026-09-16 13:06 zneplatněn (`revoke-gitea-token-qnap.sh`): token `agents-token-…` uživatele `olsanvit` (admin, scope all) smazán z DB, Gitea restartována, starý token → 401; z compose odstraněn (kód ho nepoužívá). Nový token nevytvořen — není potřeba |
 | Heslo `roundnet` | ✅ 2026-09-16 12:45 (`rotate-roundnet-qnap.sh`): nové heslo v DB a v `appsettings.Production.json` BlazorSimulateReal, BlazorSportManager, BlazorSimulateBackup; `simulatereal` a `unisportmanager` restartovány bez chyb. Nové heslo v `secrets/roundnet.pw` → Vaultwarden, pak smazat |
 | `mcp-sportreal` → `mcp_sr_usr` | ✅ 2026-09-16: role jen pro čtení na `sportReal` (`default_transaction_read_only`), heslo v `.env` → `MCP_SR_DB_PASSWORD`; compose už `roundnet` neobsahuje |
@@ -109,6 +111,10 @@ Nespouštět přes `ssh … 'sh -s' < skript` — `docker exec -i` uvnitř by sp
   (`mcp-image/mcp-usm.js`) pracuje s `SmTeams`/`SmPlayers` ze staré DB `sportManager`. Log: stovky
   „DB init attempt … relation SmTeams does not exist". `/health` přesto hlásí `db ok` (jen ping).
 - ~~`mcp-sportreal` čte `sportReal`~~ — ✅ opraveno 2026-09-16, čte `SportReal` (1856 sportů).
+- **MCP servíruje zastaralé prompty:** `/share/Container/mcp-qnap/governance` (→ `https://mcp.vo2info.cz/governance/`,
+  bez přihlášení) má `PromptVersion 11.2.0` z 2026-07-30 a jen 7 promptů; repo i Drive jsou na 11.5.x.
+  Agenti stahují nejdřív z MCP → dostávají 11.2.0. Staré kopie `ManagerPrompt.txt`/`CatalogPrompt.txt` v kořeni
+  `mcp-qnap/` (nepublikované) obsahují base64 `admin:<starý token>`.
 
 ### ⚠️ pg_hba: `trust` pro všechna lokální spojení (zjištěno 2026-09-16)
 
