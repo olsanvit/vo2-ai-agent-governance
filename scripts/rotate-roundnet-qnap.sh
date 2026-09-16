@@ -36,8 +36,10 @@ NEW=$(openssl rand -base64 30 | tr -d '/+=\n' | cut -c1-32); [ ${#NEW} -eq 32 ] 
 # 2) zálohy, nové heslo do souborů (spolu s DB, ať je výpadek co nejkratší)
 for f in $FILES; do cp -p "$f" "$f.pre-rotace-$TS"; chmod 600 "$f.pre-rotace-$TS"; done
 restore_files() { for f in $FILES; do cp -p "$f.pre-rotace-$TS" "$f"; done; }
-login() { printf '%s\n' "$1" | $D exec -i pg16 sh -c 'read -r PGPASSWORD; export PGPASSWORD; psql -h 127.0.0.1 -U roundnet -d postgres -tAc "select 1"' 2>/dev/null | grep -qx 1; }
-login "$old" || { echo "❌ současné heslo z konfigurace nefunguje ani teď — stop"; exit 1; }
+# Přihlášení heslem nejde na QNAPu ověřit: pg_hba má `trust` pro 127.0.0.1, 172.16.0.0/12 i IP QNAPu
+# a lokální spojení přicházejí přes docker proxy z 172.29.0.1. Ověřuje se proto změna otisku v pg_authid.
+pwhash() { q -d postgres -tAc "SELECT md5(rolpassword) FROM pg_authid WHERE rolname='roundnet'"; }
+H_OLD=$(pwhash)
 
 printf "ALTER USER roundnet WITH PASSWORD '%s';\n" "$NEW" | $D exec -i pg16 psql -U roundnet -v ON_ERROR_STOP=1 -q -d postgres
 for f in $FILES; do
@@ -53,9 +55,9 @@ rollback() {
   restore_files; for a in $APPS; do $D restart "$a" >/dev/null 2>&1 </dev/null || true; done
   rm -f "$SEC/roundnet.pw"; echo "↩ ROLLBACK: původní heslo a konfigurace vráceny, aplikace restartovány"
 }
-login "$NEW" || { echo "❌ nové heslo nefunguje"; rollback; exit 1; }
-login "$old" && { echo "❌ staré heslo pořád funguje"; rollback; exit 1; }
-echo "✓ nové heslo platí, staré odmítnuto"
+H_NEW=$(pwhash)
+[ -n "$H_NEW" ] && [ "$H_NEW" != "$H_OLD" ] || { echo "❌ otisk hesla v pg_authid se nezměnil"; rollback; exit 1; }
+echo "✓ otisk hesla v pg_authid změněn (ověření zvenčí: z LAN klienta)"
 
 # 3) restart aplikací a kontrola přihlášení
 START=$(date -u +%Y-%m-%dT%H:%M:%S)

@@ -78,10 +78,10 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 | MCP `AUTH_TOKEN` | ✅ rotován (`.env` → `MCP_AUTH_TOKEN`); compose služby `mcp`, `mcp-sportreal` + znovu vytvořené `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-oauth` (`scripts/finish-token-rotation-qnap.sh`, env v `secrets/<kontejner>.env`, 600) |
 | Heslo admina ntfy | ❌ pořád = starý token; `NTFY_PASS` v `mcp-mab`, `mcp-usm`, `qnap-te-mcp` ho používá — rotovat spolu s klienty ntfy |
 | `GITEA_TOKEN` | ❌ nerotován, v compose literál |
-| Heslo `roundnet` | ❌ nerotováno. MCP servery od něj odpojovány (viz níže). Používá ho i aplikace `simulatereal` (DB `SportReal`) — rotace ji shodí, nutno přenastavit i ji |
+| Heslo `roundnet` | ✅ 2026-09-16 12:45 (`rotate-roundnet-qnap.sh`): nové heslo v DB a v `appsettings.Production.json` BlazorSimulateReal, BlazorSportManager, BlazorSimulateBackup; `simulatereal` a `unisportmanager` restartovány bez chyb. Nové heslo v `secrets/roundnet.pw` → Vaultwarden, pak smazat |
 | `mcp-sportreal` → `mcp_sr_usr` | ✅ 2026-09-16: role jen pro čtení na `sportReal` (`default_transaction_read_only`), heslo v `.env` → `MCP_SR_DB_PASSWORD`; compose už `roundnet` neobsahuje |
-| `mcp-usm` → `mcp_usm_usr` | ⏸ skript `scripts/least-privilege-usm-qnap.sh` připraven, spuštění zablokoval klasifikátor |
-| `qnap-te-mcp` → vlastní role | ⏸ rozhodnutí: 17 tabulek v `TopEleven` vlastní `roundnet` (agentní i `UserAchievements`, `Wallpapers`, `TopEleven`, `CardGameEntities`) — převést na `topeleven_usr`? |
+| `mcp-usm` → `mcp_usm_usr` | ✅ 2026-09-16 (člen `sportmanager_usr`); server dál nefunkční kvůli schématu, viz níže |
+| `qnap-te-mcp` → `mcp_te_usr` | ✅ 2026-09-16: 17 tabulek + funkce `set_updated_at` v `TopEleven` převedeny na `topeleven_usr` (seznam v `secrets/te-owned-by-roundnet-20260916-124204.txt`), „DB initialized OK" |
 | `mcp-router` logy se starým tokenem | ❌ nesmazány |
 
 `/share/Container/mcp-qnap/secrets/` drží env souborů `docker run` kontejnerů — při dalším vytvoření
@@ -108,8 +108,19 @@ Nespouštět přes `ssh … 'sh -s' < skript` — `docker exec -i` uvnitř by sp
 - **`mcp-usm` je nefunkční:** míří na DB `UniSportManager` (živá, tabulky `Teams`/`Players`), ale kód
   (`mcp-image/mcp-usm.js`) pracuje s `SmTeams`/`SmPlayers` ze staré DB `sportManager`. Log: stovky
   „DB init attempt … relation SmTeams does not exist". `/health` přesto hlásí `db ok` (jen ping).
-- **`mcp-sportreal` čte `sportReal`** (tabulka `Sports` prázdná), zatímco data jsou v `SportReal`
-  (1856 sportů), kterou používá aplikace `simulatereal`.
+- ~~`mcp-sportreal` čte `sportReal`~~ — ✅ opraveno 2026-09-16, čte `SportReal` (1856 sportů).
+
+### ⚠️ pg_hba: `trust` pro všechna lokální spojení (zjištěno 2026-09-16)
+
+Aktivní pravidla pg16: `trust` pro `127.0.0.1`, `::1`, **`172.16.0.0/12`** (všechny Docker sítě),
+`192.168.60.221` a `172.29.0.0/22`; heslo (`scram-sha-256` pro `roundnet`, `md5` ostatní) jen pro zbytek.
+Spojení vzniklá na QNAPu (i na jeho LAN IP) přicházejí přes docker proxy ze `172.29.0.1` → **bez hesla,
+pro libovolného uživatele včetně superuživatele**. Z LAN (Mac) server heslo vyžaduje (ověřeno sondou).
+
+Důsledky: kdo ovládne libovolný kontejner na QNAPu, je superuživatel pg16; hesla v konfiguracích aplikací
+se na QNAPu vůbec nekontrolují (aplikace se špatným heslem „fungují"); testy přihlášení na QNAPu nic
+neprokazují. Náprava = změnit `trust` na `scram-sha-256` pro Docker sítě — předtím ověřit, že každá aplikace
+má v konfiguraci platné heslo (dnes to nikdo nekontroluje) a `password_encryption` = scram (je).
 
 ## Jak jsou kontejnery vytvořené (ověřeno 2026-09-15)
 

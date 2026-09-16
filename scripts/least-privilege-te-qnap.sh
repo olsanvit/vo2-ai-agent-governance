@@ -26,15 +26,22 @@ ping_state() {
 }
 BEFORE=$(ping_state); echo "  db_ping před: $BEFORE"
 
-# 1) seznam objektů roundnet v TopEleven (pro vrácení) a převod na topeleven_usr
-q -d TopEleven -tAc "SELECT c.relkind||' '||quote_ident(c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','S','v','m','p') AND pg_get_userbyid(c.relowner)='roundnet' ORDER BY 1" > "$LIST"
+# 1) seznam objektů roundnet v TopEleven (pro vrácení) a převod na topeleven_usr.
+#    Sekvence navázané na sloupec se vynechávají — vlastníka mění PostgreSQL spolu s tabulkou.
+q -d TopEleven -tAc "SELECT c.relkind::text||' '||quote_ident(c.relname) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind IN ('r','S','v','m','p') AND pg_get_userbyid(c.relowner)='roundnet' AND NOT (c.relkind='S' AND EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_class'::regclass AND d.objid=c.oid AND d.deptype IN ('a','i'))) ORDER BY 1" > "$LIST"
+# Funkce vytvořené serverem (např. set_updated_at) — CREATE OR REPLACE vyžaduje vlastnictví.
+# Funkce rozšíření (pgcrypto, citext) patří k rozšíření a nepřevádějí se.
+q -d TopEleven -tAc "SELECT 'F '||quote_ident(n.nspname)||'.'||quote_ident(p.proname)||'('||pg_get_function_identity_arguments(p.oid)||')' FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname NOT IN ('pg_catalog','information_schema') AND pg_get_userbyid(p.proowner)='roundnet' AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid='pg_proc'::regclass AND d.objid=p.oid AND d.deptype='e') ORDER BY 1" >> "$LIST"
 echo "  objektů k převodu: $(wc -l < "$LIST") (seznam $(basename "$LIST"))"
 set_owner() { # $1 = nový vlastník
   while read -r k name; do
     [ -n "$name" ] || continue
-    case "$k" in S) t=SEQUENCE;; v) t=VIEW;; m) t="MATERIALIZED VIEW";; *) t=TABLE;; esac
+    case "$k" in
+      F) echo "ALTER FUNCTION $name OWNER TO $1;"; continue;;
+      S) t=SEQUENCE;; v) t=VIEW;; m) t="MATERIALIZED VIEW";; *) t=TABLE;;
+    esac
     echo "ALTER $t public.$name OWNER TO $1;"
-  done < "$LIST" | qi -d TopEleven
+  done < "$LIST" | qi -1 -d TopEleven   # jedna transakce: buď všechno, nebo nic
 }
 set_owner topeleven_usr || { echo "❌ převod vlastnictví"; set_owner roundnet || true; exit 1; }
 echo "✓ vlastnictví převedeno na topeleven_usr"
