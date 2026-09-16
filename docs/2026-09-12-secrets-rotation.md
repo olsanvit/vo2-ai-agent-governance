@@ -78,11 +78,22 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 | MCP `AUTH_TOKEN` | ✅ rotován (`.env` → `MCP_AUTH_TOKEN`); compose služby `mcp`, `mcp-sportreal` + znovu vytvořené `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-oauth` (`scripts/finish-token-rotation-qnap.sh`, env v `secrets/<kontejner>.env`, 600) |
 | Heslo admina ntfy | ❌ pořád = starý token; `NTFY_PASS` v `mcp-mab`, `mcp-usm`, `qnap-te-mcp` ho používá — rotovat spolu s klienty ntfy |
 | `GITEA_TOKEN` | ❌ nerotován, v compose literál |
-| Heslo `roundnet` | ❌ nerotováno, v compose literál (`mcp-sportreal`); řešit spolu s `patches/mcp-least-privilege.sql` |
+| Heslo `roundnet` | ❌ nerotováno. MCP servery od něj odpojovány (viz níže). Používá ho i aplikace `simulatereal` (DB `SportReal`) — rotace ji shodí, nutno přenastavit i ji |
+| `mcp-sportreal` → `mcp_sr_usr` | ✅ 2026-09-16: role jen pro čtení na `sportReal` (`default_transaction_read_only`), heslo v `.env` → `MCP_SR_DB_PASSWORD`; compose už `roundnet` neobsahuje |
+| `mcp-usm` → `mcp_usm_usr` | ⏸ skript `scripts/least-privilege-usm-qnap.sh` připraven, spuštění zablokoval klasifikátor |
+| `qnap-te-mcp` → vlastní role | ⏸ rozhodnutí: 17 tabulek v `TopEleven` vlastní `roundnet` (agentní i `UserAchievements`, `Wallpapers`, `TopEleven`, `CardGameEntities`) — převést na `topeleven_usr`? |
 | `mcp-router` logy se starým tokenem | ❌ nesmazány |
 
 `/share/Container/mcp-qnap/secrets/` drží env souborů `docker run` kontejnerů — při dalším vytvoření
 kontejneru použít `--env-file` odtud, ne inline `-e`.
+
+### Nalezené chyby konfigurace (2026-09-16, neopraveno)
+
+- **`mcp-usm` je nefunkční:** míří na DB `UniSportManager` (živá, tabulky `Teams`/`Players`), ale kód
+  (`mcp-image/mcp-usm.js`) pracuje s `SmTeams`/`SmPlayers` ze staré DB `sportManager`. Log: stovky
+  „DB init attempt … relation SmTeams does not exist". `/health` přesto hlásí `db ok` (jen ping).
+- **`mcp-sportreal` čte `sportReal`** (tabulka `Sports` prázdná), zatímco data jsou v `SportReal`
+  (1856 sportů), kterou používá aplikace `simulatereal`.
 
 ## Jak jsou kontejnery vytvořené (ověřeno 2026-09-15)
 

@@ -1,5 +1,13 @@
 -- Oddělení MCP serverů od superuživatele roundnet.
 --
+-- ⚠️ NESPOUŠTĚT V TÉTO PODOBĚ (zjištěno 2026-09-16 na živé DB):
+--   * UniSportManager vlastní sportmanager_usr, TopEleven topeleven_usr (+17 tabulek roundnet) —
+--     ALTER DEFAULT PRIVILEGES FOR ROLE roundnet je pro ně neúčinné.
+--   * mcp-usm i server qnap-te-mcp spouštějí při startu DDL (ALTER/CREATE TABLE) — DML-only role by
+--     je shodila. Místo toho: role jako člen vlastníka DB (scripts/least-privilege-usm-qnap.sh).
+--   * Část pro sportReal je správně a PROVEDENA: scripts/least-privilege-sportreal-qnap.sh.
+--
+--
 -- PROČ: pravidlo zní „roundnet = superuser, jen pro migrace", ale mcp-usm, qnap-te-mcp
 -- a mcp-sportreal se jím dnes přihlašují. Tři veřejně dostupné MCP servery tak jedou
 -- s právy superuživatele nad celým clusterem. Každý dostane vlastní roli s právy
