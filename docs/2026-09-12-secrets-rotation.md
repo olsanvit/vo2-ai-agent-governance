@@ -82,7 +82,7 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 | `mcp-sportreal` → `mcp_sr_usr` | ✅ 2026-09-16: role jen pro čtení na `sportReal` (`default_transaction_read_only`), heslo v `.env` → `MCP_SR_DB_PASSWORD`; compose už `roundnet` neobsahuje |
 | `mcp-usm` → `mcp_usm_usr` | ✅ 2026-09-16 (člen `sportmanager_usr`); server dál nefunkční kvůli schématu, viz níže |
 | `qnap-te-mcp` → `mcp_te_usr` | ✅ 2026-09-16: 17 tabulek + funkce `set_updated_at` v `TopEleven` převedeny na `topeleven_usr` (seznam v `secrets/te-owned-by-roundnet-20260916-124204.txt`), „DB initialized OK" |
-| `mcp-router` logy se starým tokenem | ❌ nesmazány |
+| `mcp-router` | ✅ 2026-09-16 13:03 (`fix-mcp-router-token-qnap.sh`): nginx `map` měl natvrdo STARÝ token → od rotace 09-15 22:08 veřejný endpoint odmítal nový token (všechny konektory 401). Opraveno, `log_format` už neobsahuje `Authorization`, staré logy smazány, `nginx.conf*` práva 600 |
 
 `/share/Container/mcp-qnap/secrets/` drží env souborů `docker run` kontejnerů — při dalším vytvoření
 kontejneru použít `--env-file` odtud, ne inline `-e`.
