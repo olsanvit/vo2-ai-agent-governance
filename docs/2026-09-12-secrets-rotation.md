@@ -131,6 +131,26 @@ se na QNAPu vůbec nekontrolují (aplikace se špatným heslem „fungují"); te
 neprokazují. Náprava = změnit `trust` na `scram-sha-256` pro Docker sítě — předtím ověřit, že každá aplikace
 má v konfiguraci platné heslo (dnes to nikdo nekontroluje) a `password_encryption` = scram (je).
 
+### Plán: odstranění `trust` z pg_hba (připraveno 2026-09-16, NEPROVEDENO)
+
+**Inventura spotřebitelů pg16** (env kontejnerů + `appsettings.Production.json` + živá spojení):
+`AgentAI` (qnap-game-mcp, vin-importer), `mcp_sr_usr`, `mcp_usm_usr`, `mcp_te_usr`, `agent_mon_usr` a
+`mercs_beasts_usr` (mcp-mab), `aps_usr`, `myzabbix_usr`, `scorer_usr`, `sportcar_usr`, `sportgame_usr`,
+`sportreal_usr` (BlazorSimulateReal1), `sportmanager_usr`, `topeleven_usr`, `transittycoon_usr`, `vinwmi_usr`,
+`vo2data_usr`, `vo2info_usr`, `vo2info_ro`, `gitea` (přes pgbouncer :5433 z 172.29.0.1), `roundnet`
+(simulatereal, unisportmanager `AiDataConnection`, migrace). Hesla v konfiguracích dnes nikdo neověřuje.
+
+**Postup po rolích** (bez výpadku, vratný):
+1. Před řádky `trust` vložit `host all <role> 172.16.0.0/12 md5` (+ totéž pro `192.168.60.221/32`, `127.0.0.1/32`).
+   Metoda `md5` přijme i hesla uložená jako SCRAM; role s MD5 otiskem (`agent_mon_usr`, `aps_usr`,
+   `sportgame_usr`, `sportreal_usr`) fungují také.
+2. `SELECT pg_reload_conf();` — existující spojení zůstanou, nová se ověřují heslem.
+3. Vynutit nové spojení dané aplikace (restart kontejneru / čekat na pool) a sledovat log pg16
+   (`password authentication failed for user "<role>"`). Při chybě řádek odebrat, reload, opravit heslo v konfiguraci.
+4. Opakovat pro všechny role; pgbouncer (Gitea) ověřit zvlášť (auth soubor pgbouncer).
+5. Nakonec řádky `trust` pro `172.16.0.0/12`, `172.29.0.0/22`, `192.168.60.221` nahradit `md5`
+   (ponechat `local` trust pro správu přes `docker exec pg16 psql`).
+
 ## Jak jsou kontejnery vytvořené (ověřeno 2026-09-15)
 
 - **Superuser pg16 je `roundnet`** — role `postgres` neexistuje (`psql -U roundnet -d postgres`).
