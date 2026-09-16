@@ -87,6 +87,22 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 `/share/Container/mcp-qnap/secrets/` drží env souborů `docker run` kontejnerů — při dalším vytvoření
 kontejneru použít `--env-file` odtud, ne inline `-e`.
 
+### Připravené kroky ke spuštění (2026-09-16, v tomto pořadí)
+
+Každý skript: `scp` do `/share/Container/mcp-qnap/secrets/`, spustit `sh <soubor>` na QNAPu, pak smazat.
+Nespouštět přes `ssh … 'sh -s' < skript` — `docker exec -i` uvnitř by spolklo zbytek skriptu.
+
+1. `scripts/mcp-sportreal-db-fix-qnap.sh` — `mcp-sportreal` na `SportReal` (data), ověří neprázdné `sr_list_sports`.
+2. `scripts/least-privilege-usm-qnap.sh` — `mcp-usm` na `mcp_usm_usr` (člen `sportmanager_usr`).
+3. `scripts/least-privilege-te-qnap.sh` — převod 17 objektů v `TopEleven` na `topeleven_usr`, `qnap-te-mcp` na `mcp_te_usr`.
+4. `scripts/rotate-roundnet-qnap.sh` — až po 2 a 3 (sám to kontroluje): nové heslo `roundnet`, úprava
+   `appsettings.Production.json` u BlazorSimulateReal, BlazorSportManager, BlazorSimulateBackup (666 → 644),
+   restart `simulatereal` a `unisportmanager`, kontrola chyb autentizace, jinak rollback.
+
+`mcp-usm` zůstane i po kroku 2 nefunkční: nástroje zapisují `LogoUrl`/`PhotoUrl`, které v živém schématu
+`UniSportManager` nejsou — patří do EF migrace aplikace UniSportManager, pak přepsat `mcp-usm.js`
+(repo i QNAP kopie se navíc liší). Obě DB jsou momentálně bez týmů a hráčů.
+
 ### Nalezené chyby konfigurace (2026-09-16, neopraveno)
 
 - **`mcp-usm` je nefunkční:** míří na DB `UniSportManager` (živá, tabulky `Teams`/`Players`), ale kód
