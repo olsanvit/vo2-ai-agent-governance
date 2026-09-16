@@ -76,7 +76,10 @@ smazat a opravit logování, jinak se tam nový token vysype znovu.
 |---|---|
 | Heslo `AgentAI` | ✅ rotováno (21:49, `.env` → `AGENT_DB_PASSWORD`); `qnap-game-mcp` přes compose, `vin-importer` znovu vytvořen s DSN v `secrets/vin-importer.env` |
 | MCP `AUTH_TOKEN` | ✅ rotován (`.env` → `MCP_AUTH_TOKEN`); compose služby `mcp`, `mcp-sportreal` + znovu vytvořené `mcp-mab`, `mcp-usm`, `qnap-te-mcp`, `mcp-oauth` (`scripts/finish-token-rotation-qnap.sh`, env v `secrets/<kontejner>.env`, 600) |
-| Heslo admina ntfy | ❌ pořád = starý token; ntfy je veřejně na `ntfy.vo2info.cz` (admin = plný přístup). Hodnotu používá **15 kontejnerů** jako `NTFY_PASS` (qnap-te-mcp, mcp-usm, mcp-mab, simulategames, vo2status, metin2bausia, agentspromptssk, vo2datamanager, topelevenst, unisportmanager, scorerapp, vinwmivehicles, mercenariesandbeasts, simulatereal) + skripty (`deploy.sh`, `diun.yml`, uptime-kuma `*.py`, `qnap-monitor.sh`, `zabbix-*`, compose `mcp-oauth`, `vo2status`, `Metin2Bausia`, `Public/mcp`). `auth-default-access: write-only` → publikovat jde i anonymně. **2026-09-16: base64 podoba `admin:<hodnota>` se omylem objevila v přepisu session governance** |
+| Heslo admina ntfy | ✅ 2026-09-16: uniklá hodnota už heslem admina **není** (ntfy ji odmítá, 401; kdy se heslo změnilo, nelze zjistit) → 14 kontejnerů s `NTFY_USER=admin` a starou hodnotou posílalo notifikace neúspěšně. Nově uživatel `publisher` (write-only na `*`, heslo + token v `secrets/ntfy-publisher.env`); všech 14 kontejnerů znovu vytvořeno přes Docker API se stejnou konfigurací (`scripts/qnap/docker-clone-with-env.js`), soubory na QNAPu upraveny (`scripts/qnap/ntfy-files-fix.sh`, zálohy `secrets/files-backup-*`) |
+| Hlavní heslo Vaultwardenu | ❌ **= uniklá hodnota** (`vw-import.sh`/`.py` v `mcp-qnap/`, práva 600) — změnit v rozhraní Vaultwardenu (uživatel), pak smazat `vw-import.*` (obsahují i další přístupy) |
+| Heslo uptime-kuma | ❌ **= uniklá hodnota** (`uptime-kuma/*.py`, práva 600) — změnit v rozhraní (uživatel) |
+| `diun` token | ✅ nahrazen tokenem `publisher` (`diun` stojí) |
 | Heslo `n8nuser` (pg16) | ✅ 2026-09-16 13:15: bylo = starý token (MD5, dostupné z LAN) → nové SCRAM heslo v `secrets/n8nuser.pw`; `n8n` stojí, při spuštění mu nastavit nové heslo |
 | `mt2-postgres` (`POSTGRES_PASSWORD`) | ⚠️ = starý token; kontejner stojí, bez publikovaného portu — rotovat při dalším spuštění |
 | `GITEA_TOKEN` | ✅ 2026-09-16 13:06 zneplatněn (`revoke-gitea-token-qnap.sh`): token `agents-token-…` uživatele `olsanvit` (admin, scope all) smazán z DB, Gitea restartována, starý token → 401; z compose odstraněn (kód ho nepoužívá). Nový token nevytvořen — není potřeba |
@@ -111,7 +114,7 @@ Nespouštět přes `ssh … 'sh -s' < skript` — `docker exec -i` uvnitř by sp
   (`mcp-image/mcp-usm.js`) pracuje s `SmTeams`/`SmPlayers` ze staré DB `sportManager`. Log: stovky
   „DB init attempt … relation SmTeams does not exist". `/health` přesto hlásí `db ok` (jen ping).
 - ~~`mcp-sportreal` čte `sportReal`~~ — ✅ opraveno 2026-09-16, čte `SportReal` (1856 sportů).
-- **MCP servíruje zastaralé prompty:** `/share/Container/mcp-qnap/governance` (→ `https://mcp.vo2info.cz/governance/`,
+- ~~**MCP servíruje zastaralé prompty**~~ ✅ 2026-09-16 13:14 nasazeno 11.5.x (záloha `governance-backup-20260916-131441.tgz`): `/share/Container/mcp-qnap/governance` (→ `https://mcp.vo2info.cz/governance/`,
   bez přihlášení) má `PromptVersion 11.2.0` z 2026-07-30 a jen 7 promptů; repo i Drive jsou na 11.5.x.
   Agenti stahují nejdřív z MCP → dostávají 11.2.0. Staré kopie `ManagerPrompt.txt`/`CatalogPrompt.txt` v kořeni
   `mcp-qnap/` (nepublikované) obsahují base64 `admin:<starý token>`.
