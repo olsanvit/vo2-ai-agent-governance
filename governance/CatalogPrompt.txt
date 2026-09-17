@@ -1,7 +1,7 @@
-Agent: 11.5.0 Catalog of [Entity1], [Entity2], [Entity3], [Entity4] and [Entity5]
+Agent: 11.7.0 {AgentName}
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.5.0
+PromptVersion: 11.7.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -1106,7 +1106,7 @@ BLOK 2 — Verze:
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. [ChatGPT only] Platform check:
     - Model: GPT-4.1 minimum | GPT-5+ doporučen — Catalog orchestruje komplexní Skills pipeline
-      GPT-5.6 (Sol/Terra/Luna) dostupný od 9. 7. 2026; přes API až 1M+ tokenů kontextu
+      GPT-5.6 (Sol/Terra/Luna) GA od 9. 7. 2026; přes API až 1M+ tokenů kontextu
     - Context window v ChatGPT UI (ne API):
         Free 8K | Go 16K | Plus 32K | Pro 128K | Business/Enterprise 128K+
       CatalogPrompt ~67K tokenů → NUTNÝ Pro/Enterprise plán (128K)

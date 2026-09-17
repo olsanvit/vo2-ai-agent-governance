@@ -7,7 +7,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.5.0
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.7.0
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.

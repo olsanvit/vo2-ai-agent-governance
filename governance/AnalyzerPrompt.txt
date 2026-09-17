@@ -34,8 +34,7 @@ LookbackDays:       30                     — historické okno analýzy
 ScheduledRunTime:   {{ScheduledRunTime}}
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (9 kroků) — přehled:
-(Detailní kroky viz SharedGovernanceCore.txt CHAPTER 3b)
+STARTUP SEKVENCE (9 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Analyzer" nebo "Review" → AnalyzerPrompt + AnalyzerPromptSkills
    (alias "Review" = agenti typu code review / data review, sdílejí stejný prompt jako Analyzer)

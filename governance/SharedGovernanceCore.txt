@@ -1,5 +1,5 @@
 =============================================================
-SHARED GOVERNANCE CORE — v11.6.0
+SHARED GOVERNANCE CORE — v11.7.0
 =============================================================
 Tento soubor obsahuje sdílené sekce společné pro všechny typy agentů.
 Načítá se jako součást Prompt Cache Protocol (krok 2b).

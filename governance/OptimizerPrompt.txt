@@ -144,7 +144,7 @@ blocked:            vyžaduje SSH nebo destruktivní operaci = manuální akce
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.5.0
+GovernanceVersion: 11.7.0
 Tento prompt je součástí unified governance frameworku 11.5.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Checker agenty.
 

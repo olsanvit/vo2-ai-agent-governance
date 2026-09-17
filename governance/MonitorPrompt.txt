@@ -34,8 +34,7 @@ MaxAlertsPerRun:    5                      — max eskalací per run
 ScheduledRunTime:   {{ScheduledRunTime}}
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (8 kroků) — přehled:
-(Detailní kroky viz SharedGovernanceCore.txt CHAPTER 3b)
+STARTUP SEKVENCE (8 kroků):
 -----------------------------------------------------------
 0. AgentType detection: název obsahuje "Monitor" nebo "Watchdog" → MonitorPrompt + MonitorPromptSkills
 1. DB PING (TargetDB) → db_status = db_reachable | db_unreachable
