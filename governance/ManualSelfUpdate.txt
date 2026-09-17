@@ -11,9 +11,9 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.5.0. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 11.7.0. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
-   Pokud tvůj PromptVersion == 11.5.0: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud tvůj PromptVersion == 11.7.0: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
 
 Zdroje promptu v pořadí priority:
@@ -22,11 +22,28 @@ Zdroje promptu v pořadí priority:
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 
+Co je nového v 11.7.0 (všechny agenty):
+- SharedGovernanceCore.txt — nový sdílený soubor (~255 řádků); Chapter 11 Governance
+  Extensions extrahovány z Collector/Generator/CheckerPrompt → ušetří ~400 řádků input tokenů
+- Prompt Cache Protocol: nový krok 2b — načtení SharedGovernanceCore.txt
+- MonitorPrompt + AnalyzerPrompt: přidány NTFY FALLBACK LAN IP, ZAKÁZANÉ OPERACE, Agent Health Reporting
+- MonitorPrompt: ESKALACE thresholds sjednoceny s referenčními prompty
+- ImporterPrompt: FINÁLNÍ CHAT REPORT FORMAT přesunut do Ch1
+- CheckerPrompt: odstraněn duplicitní DB ping v startup sekvenci
+- CatalogPrompt: opraveno číslování fallback zdrojů (skok 1→3 → 1→2→3)
+- ManagerPrompt: odstraněn zastaralý GPT-5.6 text, opravena diacritika, ntfy priority unifikovány
+- Generator/Checker/Importer: section headers přidány před Ch3
+- Generator/CheckerPrompt: names + urls tabs dokumentovány
+
+Co je nového v 11.6.0 (všechny agenty):
+- Telegram relay dokumentace: agent-errors a agent-alerts automaticky přeposílány na Telegram
+  (infrastruktura na QNAPu, bez akce agenta)
+
 Co je nového v 11.5.0:
 - Tři nové typy agentů — Monitor, Analyzer, Optimizer (prompt + skills pro každý)
   → AgentType detection: název obsahuje "Monitor"/"Watchdog" → MonitorPrompt
 - Všech 20 promptů bumpnuto na 11.5.0; versions.json nyní eviduje všech 20 souborů
-- Pozn.: changelog pro 11.3.x a 11.4.x v repu chybí — pokud jsi na některé z nich,
+- Pozn.: changelog pro 11.3.x–11.4.x v repu chybí — pokud jsi na některé z nich,
   porovnej se s versions.json a stáhni prompty znovu
 
 Co je nového v 11.2.0 (všechny agenty):
@@ -88,7 +105,7 @@ Potvrď tyto změny:
    Vypiš které skills máš aktivní a které chybí.
 9. Web Search Fallback (10.0.3+):
    • Prázdný tab 'names' v master spreadsheet {AgentName} (prázdný nebo 100 % resolved): WebSearch "{téma agenta} {league/region} {entity type} list" → append nalezené entity do tab 'names' (status=unresolved), log "web_search_names_refill: {count} entit přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
-   • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures 2025" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
+   • Prázdný/vyčerpaný tab 'urls' v master spreadsheet {AgentName}: WebSearch "{téma} {league} stats OR results OR fixtures {currentYear}" → append nalezené URL do tab 'urls' (Status=new), log "web_search_urls_refill: {count} URL přidáno". Pokud WebSearch není dostupný: přeskočit, nepovažovat za chybu.
    • Chybějící basic skill (skills soubor načten, ale skill chybí): navrhnout nový skill dle Skill Directory formátu, přidat návrh do tab 'error' v master spreadsheet {AgentName} jako "skill_proposal", pokračovat bez blokace — capability_missing pouze pokud skills soubor vůbec nepůjde načíst.
 
 10. Zkontroluj svůj připojený VO2QNAPDB konektor — zjisti který máš aktivní a zapni u něj všechny dostupné akce. Ostatní konektory neřeš.
@@ -98,7 +115,7 @@ Potvrď tyto změny:
     • SimulateReal Importer → openapi-vo2qnapdbai-sr-importer.yaml (5 nástrojů) + openapi-chatgpt-action.yaml (SportReal)
     Slim per-agent schema = méně tokenů v kontextu = nižší spotřeba credits.
 
-Potvrď verzi 11.5.0, proveď BLOK 8 self-audit a poté spusť testovací běh v SILENT MODE.
+Potvrď verzi 11.7.0, proveď krok 8 (skills audit) a poté spusť testovací běh v SILENT MODE.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:
