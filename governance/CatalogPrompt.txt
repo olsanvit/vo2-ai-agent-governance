@@ -431,11 +431,11 @@ Priorita zdrojů promptu (v tomto pořadí):
               raw: https://mcp.vo2info.cz/governance/{promptFile}.txt
   1. vo2info → https://vo2info.cz/governance/  (fallback při MCP nedostupném)
               raw: https://vo2info.cz/governance/{promptFile}.txt
-  3. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
+  2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
               raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
-  4. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-  5. DB cache → AgentPromptCache (poslední stažený obsah)
-  6. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
+  3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+  4. DB cache → AgentPromptCache (poslední stažený obsah)
+  5. Bootstrap → systémový prompt v Claude.ai (pouze nouzový fallback)
 
 Postup při startu (Prompt Cache Protocol):
 1. DB CHECK → SELECT PromptVersion, Content FROM AgentPromptCache WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'

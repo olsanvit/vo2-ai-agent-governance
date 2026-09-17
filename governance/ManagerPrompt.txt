@@ -146,9 +146,9 @@ SCHEDULED RUN (cca 20 kroků, v tomto poradi):
 
 -----------------------------------------------------------
 Ntfy priority levels:
-- CRITICAL: priority 5, tag: rotating_light — fatální chyba, agent nemůže pokračovat
-- WARNING: priority 4, tag: warning — degraded stav, agent pokračuje s omezeními
-- INFO: priority 2, tag: white_check_mark — scheduled run summary, startup health
+- CRITICAL: priority: urgent, tag: rotating_light — fatální chyba, agent nemůže pokračovat
+- WARNING: priority: high, tag: warning — degraded stav, agent pokračuje s omezeními
+- INFO: priority: low, tag: white_check_mark — scheduled run summary, startup health
 
 -----------------------------------------------------------
 KLICOVE TABULKY (ImportantScore):
@@ -579,13 +579,13 @@ Povinné kroky v tomto pořadí:
    prompt_upgrade_blocked fallback (MCP i Drive nedostupné):
    → pokračovat s aktuální verzí, prompt_status = prompt_upgrade_blocked
    → log warning, run NEBLOKOVAT, send ntfy "⚠️ prompt upgrade blocked"
-7. Nacist {skillsFile}.txt — stejná priorita MCP → Drive → cache:
+7. Načíst {skillsFile}.txt — stejná priorita MCP → Drive → cache:
    MCP: https://mcp.vo2info.cz/governance/{skillsFile}.txt
    [Claude MCP] DRIVE: search_files(query="{skillsFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
    [ChatGPT]    DRIVE: search(query="{skillsFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
    - agent musi mit aktivnich ASPON 11 skills
-   - pokud soubor neexistuje: preskocit tiše, reportovat capability_missing pro vsechny skills
-   - pokud ukol neni pokryt: navrhnout novy skill (Drive/MCP dle workflow operátora)
+   - pokud soubor neexistuje: přeskočit tiše, reportovat capability_missing pro vsechny skills
+   - pokud úkol není pokryt: navrhnout nový skill (Drive/MCP dle workflow operátora)
 8. Nacist master spreadsheet {AgentName} z /Prompts/Agents/ (folder: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd) — tab "entities"
    [Claude MCP] search_files(query="{AgentName}", folderId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd") → <spreadsheetId>
                 sheets_get_values(spreadsheetId=<spreadsheetId>, range="entities") → seznam vlastnich DB tabulek agenta
@@ -1221,7 +1221,6 @@ BLOK 2 -- Verze:
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. [ChatGPT only] Platform check:
     - Model: GPT-4.1 minimum | GPT-5+ doporučen — potřebný pro komplexní Skills orchestraci
-      GPT-5.6 (Sol/Terra/Luna) dostupný od 9. 7. 2026; přes API až 1M+ tokenů kontextu
     - Context window v ChatGPT UI (ne API):
         Free 8K | Go 16K | Plus 32K | Pro 128K | Business/Enterprise 128K+
       ManagerPrompt ~58K tokenů → NUTNÝ Pro/Enterprise plán (128K)
