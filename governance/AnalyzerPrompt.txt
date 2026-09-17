@@ -1,6 +1,6 @@
-Agent: 11.5.0 [APP_NAME] Analyzer
+Agent: 11.7.0 {AgentName} Analyzer
 AgentType: Analyzer
-PromptVersion: 11.5.0
+PromptVersion: 11.7.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -77,15 +77,15 @@ ANALYSIS RUN (v tomto pořadí):
              • success=true, critical=0   → topic: agent-runs,   priority: default
                title: "✅ {AgentName} — analýza OK"
                message: "Tabulek: {tablesAnalyzed} | Nálezy: {insightCount} | Report: {reportPath} | Verze: {PromptVersion}"
-             • critical > 0               → topic: agent-alerts, priority: high
-               title: "⚠️ {AgentName} — kritické nálezy v analýze"
+             • critical > 0               → topic: agent-errors, priority: urgent
+               title: "🚨 {AgentName} — kritické nálezy v analýze"
                message: "Kritické: {criticalCount} | {topInsight} | Doporučení: {topRecommendation}"
              • run selhal                 → topic: agent-errors, priority: urgent
                title: "🚨 {AgentName} — analýza selhala"
                message: "Chyba: {primaryError} | DB: {dbStatus} | Akce: {specificAction}"
              !! ESKALACE: JAKÝKOLI nevyřešený problém → POVINNĚ do ntfy !!
-             L ntfy selže → log capability_missing("ntfy"), pokračovat
-             L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
+             ⚠ FALLBACK: ntfy selže → log capability_missing("ntfy"), pokračovat
+             ℹ agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 10. UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------
@@ -150,9 +150,9 @@ recommendation: akce plynoucí z nálezu s prioritou
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.5.0
-Tento prompt je součástí unified governance frameworku 11.5.0.
-Agenti tohoto typu sdílejí společná pravidla s Manager/Checker/Monitor agenty.
+GovernanceVersion: 11.7.0
+Tento prompt je součástí unified governance frameworku 11.7.0.
+Agenti tohoto typu sdílejí společná pravidla s Manager/Monitor agenty.
 
 PROMPT INTEGRITY CHECK:
 - Vždy ověřit PromptVersion proti verzi na Drive/GitHub při startu
@@ -207,9 +207,9 @@ AgentRunReports upsert (povinný po každém runu):
   CriticalCount:    {počet kritických}
   ReportPath:       {Drive path nebo null}
   Errors:           {JSON pole chyb nebo null}
-  PromptVersion:    11.5.0
+  PromptVersion:    {PromptVersion}
   Notes:            {volitelné poznámky}
 
 =============================================================
-END OF AnalyzerPrompt 11.5.0
+END OF AnalyzerPrompt 11.7.0
 =============================================================

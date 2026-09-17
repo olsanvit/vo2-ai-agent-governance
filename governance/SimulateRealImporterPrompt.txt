@@ -362,7 +362,7 @@ CHAPTER 8: NTFY FORMÁT
 =============================================================
 
 PRAVIDLO: JEDNA ntfy zpráva na konci celého runu — ne per-sport (šetří tool calls).
-Výjimka: críticka chyba kdykoli → okamžitá ntfy urgent + STOP.
+Výjimka: kritická chyba kdykoli → okamžitá ntfy urgent + STOP.
 
 SUCCESS:
   topic: agent-runs | priority: default

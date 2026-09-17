@@ -1,6 +1,6 @@
-Agent: 11.5.0 [APP_NAME] Image Generator
+Agent: 11.7.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 11.5.0
+PromptVersion: 11.7.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -33,7 +33,7 @@ ScopeFilter:     {WHERE podmínka nebo prázdné} — filtr entit (např. IsBot 
 ImageTypes:      {logo, portrait, banner, ...} — typy generovaných obrázků
 MaxPerRun:       10                          — max entit per run
 ImageSize:       1024x1024                   — výchozí velikost (čtvercový formát)
-ScheduledRunTime: {{ScheduledRunTime}}
+ScheduledRunTime: {ScheduledRunTime}
 
 -----------------------------------------------------------
 STARTUP SEKVENCE (10 kroků):
@@ -309,7 +309,7 @@ NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí �
 → send_notification(topic="agent-alerts", title="⚠️ {AgentName} master sheet 403 → nový vytvořen", message="{newSpreadsheetId}", priority="high")
 
 =============================================================
-CHAPTER 3: STARTUP SEKVENCE — DETAILNÍ KROKY
+CHAPTER 3b: STARTUP SEKVENCE — DETAILNÍ KROKY
 =============================================================
 
 0. AgentType detection (viz Ch 2)
@@ -466,7 +466,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
 BLOK 2 — Verze == 11.5.0
 BLOK 2d — [ChatGPT only] Platform:
-  Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 dostupný od 9. 7. 2026
+  Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 GA od 9. 7. 2026
   Context window: ~10K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
   Spouštění: MANUÁLNÍ (Plus/Pro); ChatGPT Tasks Custom GPTs nepodporuje
   MCP: Plus/Pro = Actions proxy; Business/Enterprise = Developer Mode (native MCP, beta)
@@ -520,7 +520,7 @@ Forbidden: DELETE, DROP, TRUNCATE; přepis existujícího obrázku; generování
   Zahrnuje: Data Lineage, Environment Support, DryRun, Agent Health Reporting,
   Prompt Version Pinning, Agent Deprecation Lifecycle, Source Discovery Protocol,
   Quality Trend Tracking, Retention Policy, Cross-agent Deduplication.
-→ Pokud SharedGovernanceCore.txt nebyl načten: níže následuje záložní obsah.
+→ Pokud SharedGovernanceCore.txt nebyl načten: načti znovu dle Prompt Cache Protocol (krok 2b).
 
 =============================================================
 APPENDIX — AgentType Detection Registry

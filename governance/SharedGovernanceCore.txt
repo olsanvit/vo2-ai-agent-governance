@@ -68,7 +68,6 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
       → send_notification(topic="agent-runs", title="🔄 {AgentName} — prompt upgradován", message="{PromptFile}: {old_version} → {new_version}", priority="low")
    c. MCP nedostupný → FALLBACK vo2info.cz:
       GET https://vo2info.cz/governance/{PromptFile}
-      fallback 3:
    c2. vo2info.cz nedostupná → FALLBACK GitHub raw:
       GET https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
    d. GitHub nedostupný → zkusit Drive: read_file_content({PromptFile}, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
@@ -88,14 +87,14 @@ NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí �
 → send_notification(topic="agent-alerts", title="⚠️ {AgentName} master sheet 403 → nový vytvořen", message="{newSpreadsheetId}", priority="high")
 
 BLOK 2d — [ChatGPT only] Platform:
-  Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 dostupný od 9. 7. 2026
+  Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 GA od 9. 7. 2026
   Context window: ~11K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
   Spouštění: MANUÁLNÍ (Plus/Pro); ChatGPT Tasks Custom GPTs nepodporuje
   MCP: Plus/Pro = Actions proxy; Business/Enterprise = Developer Mode (native MCP, beta)
   Workspace Agents: automatický schedule jen pro Business/Enterprise (duben 2026)
 BLOK 2d — [Claude CCR] Platform:
-  Model: claude-sonnet-5 (default) | scheduling: automatický cron bez uživatele
-  Context: full window bez omezení; CollectorPrompt se načte celý
+  Model: claude-sonnet-4-6 (default) | scheduling: automatický cron bez uživatele
+  Context: full window bez omezení; {AgentType}Prompt se načte celý
   MCP: AIDB e3c5d981 + qnap-ai/te/mab/usm dle projektu; Memory: pouze DB + Sheets
 
 SKILL MINIMUM PROTOKOL:
@@ -240,7 +239,7 @@ Memory: není canonical source.
 Ntfy: send_notification MCP tool; selhání = reporting degradation.
 AgentSchedules: conflict detection zakázána.
 Calendar: vždy list_calendars() → CALENDAR_ID.
-Master spreadsheet: {AgentName} v /Prompts/Collectors/ (ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd).
+Master spreadsheet: {AgentName} ve složce dle AgentType (viz AgentType Detection Registry níže).
 
 =============================================================
 ESKALACE — sdílené pravidlo (všechny typy agentů)
@@ -250,6 +249,6 @@ ESKALACE — sdílené pravidlo (všechny typy agentů)
    • degradace (partial fail, skip) → topic: agent-alerts, priority: high
    • info (self-update, upgrade)    → topic: agent-maintenance, priority: default
    Max 3 ntfy zprávy per run (kromě kritického alertu).
-   L ntfy selže → log capability_missing("ntfy"), pokračovat
-   L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
+   ⚠ FALLBACK: ntfy selže → log capability_missing("ntfy"), pokračovat
+   ℹ agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 =============================================================

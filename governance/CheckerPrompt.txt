@@ -239,7 +239,6 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
       → send_notification(topic="agent-runs", title="🔄 {AgentName} — prompt upgradován", message="{PromptFile}: {old_version} → {new_version}", priority="low")
    c. MCP nedostupný → FALLBACK vo2info.cz:
       GET https://vo2info.cz/governance/{PromptFile}
-      fallback 3:
    c2. vo2info.cz nedostupná → FALLBACK GitHub raw:
       GET https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
    d. GitHub nedostupný → zkusit Drive: read_file_content({PromptFile}, folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
@@ -313,7 +312,7 @@ NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí �
 → send_notification(topic="agent-alerts", title="⚠️ {AgentName} master sheet 403 → nový vytvořen", message="{newSpreadsheetId}", priority="high")
 
 =============================================================
-CHAPTER 3: STARTUP SEKVENCE — DETAILNÍ KROKY
+CHAPTER 3b: STARTUP SEKVENCE — DETAILNÍ KROKY
 =============================================================
 
 0. AgentType detection (viz Ch 2)
@@ -504,7 +503,7 @@ Forbidden: DELETE, DROP, TRUNCATE; mazání nebo přepis sloupců; odhady místo
   Zahrnuje: Data Lineage, Environment Support, DryRun, Agent Health Reporting,
   Prompt Version Pinning, Agent Deprecation Lifecycle, Source Discovery Protocol,
   Quality Trend Tracking, Retention Policy, Cross-agent Deduplication.
-→ Pokud SharedGovernanceCore.txt nebyl načten: níže následuje záložní obsah.
+→ Pokud SharedGovernanceCore.txt nebyl načten: načti znovu dle Prompt Cache Protocol (krok 2b).
 
 =============================================================
 APPENDIX — AgentType Detection Registry

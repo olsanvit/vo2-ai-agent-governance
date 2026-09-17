@@ -683,7 +683,7 @@ Povinné kroky v tomto pořadí:
     → Pokud tab 'names' prázdný: WebSearch "{sport} {league} teams/players/clubs {year}"
       → append do tabu 'names' v master spreadsheet {AgentName} (max 20 řádků), formát: EntityName|coverage=""|tables=""|lastProcessed=""
       → log: "🔍 web_search_names_refill: {count} entit přidáno"
-    → Pokud tab 'urls' prázdný: WebSearch "{sport} {league} results OR stats OR fixtures 2025"
+    → Pokud tab 'urls' prázdný: WebSearch "{sport} {league} results OR stats OR fixtures {currentYear}"
       → append do tabu 'urls' v master spreadsheet {AgentName} (max 20 řádků), formát: URL|SourceTier=A|ReliabilityScore=70.000|EntityType|LastChecked=now()|Status=new
       → log: "🔍 web_search_urls_refill: {count} URL přidáno"
     → Pokud WebSearch nedostupný nebo nic nenajde: přeskočit, log warning, nepovažovat za chybu
@@ -696,7 +696,7 @@ Povinné kroky v tomto pořadí:
      UNION ALL ...) t — viz Baseline-25 Definition
 10. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.5.1)
+    b) ManagerPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi ({PromptVersion})
     c) ManagerPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat aktivní instrukce pro post-match pipeline, coverage, reporting
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", zahrnout do errors[]

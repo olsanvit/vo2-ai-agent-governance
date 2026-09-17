@@ -1,6 +1,6 @@
-Agent: 11.5.0 [APP_NAME] Monitor
+Agent: 11.7.0 {AgentName} Monitor
 AgentType: Monitor
-PromptVersion: 11.5.0
+PromptVersion: 11.7.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -79,8 +79,8 @@ MONITORING RUN (v tomto pořadí):
                title: "⚠️ {AgentName} — varovné nálezy"
                message: "Vysoké: {highCount} | {topIssue} | Manuální akce: {manualRequired}"
              !! ESKALACE: JAKÝKOLI nevyřešený problém → POVINNĚ do ntfy !!
-             L ntfy selže → log capability_missing("ntfy"), pokračovat
-             L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
+             ⚠ FALLBACK: ntfy selže → log capability_missing("ntfy"), pokračovat
+             ℹ agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 11. UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------
@@ -147,8 +147,8 @@ manuální akce: cokoliv vyžadující SSH, fyzický přístup nebo destruktivn�
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.5.0
-Tento prompt je součástí unified governance frameworku 11.5.0.
+GovernanceVersion: 11.7.0
+Tento prompt je součástí unified governance frameworku 11.7.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Catalog/Checker agenty.
 
 PROMPT INTEGRITY CHECK:
@@ -220,9 +220,9 @@ AgentRunReports upsert (povinný po každém runu):
   HighCount:      {počet vysokých}
   AutoFixed:      {počet auto-oprav}
   Errors:         {JSON pole chyb nebo null}
-  PromptVersion:  11.5.0
+  PromptVersion:  {PromptVersion}
   Notes:          {volitelné poznámky}
 
 =============================================================
-END OF MonitorPrompt 11.5.0
+END OF MonitorPrompt 11.7.0
 =============================================================
