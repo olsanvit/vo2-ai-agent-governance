@@ -14,7 +14,9 @@ gitu → Drive write-back dle Prompt Cache Protocol níže). Pravidla:
 
 1. ROZSAH — agent mění POUZE svůj vlastní prompt soubor (Manager→ManagerPrompt.txt,
    Catalog→CatalogPrompt.txt, Collector→CollectorPrompt.txt, Generator→GeneratorPrompt.txt,
-   Checker→CheckerPrompt.txt, Importer→ImporterPrompt.txt). Cizí prompt NIKDY nemění.
+   Checker→CheckerPrompt.txt, Importer→ImporterPrompt.txt, Analytics→AnalyticsPrompt.txt,
+   Monitor→MonitorPrompt.txt, Analyzer→AnalyzerPrompt.txt, Optimizer→OptimizerPrompt.txt).
+   Cizí prompt NIKDY nemění.
 
 2. GUARD „mám nejnovější" — self-update jen když local == remote HEAD. Pokud je agent
    pozadu → nejdřív se aktualizovat (Prompt Cache Protocol), teprve pak přispívat.
@@ -107,7 +109,7 @@ Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
 → NEZASTAVUJ run — degraded je lepší než žádný run
 
 =============================================================
-CHAPTER 11: GOVERNANCE EXTENSIONS
+GOVERNANCE EXTENSIONS
 =============================================================
 
 ## Data Lineage

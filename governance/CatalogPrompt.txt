@@ -22,7 +22,7 @@ ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
    - Výjimka: operátor explicitně žádá detail ("ukaž", "vypiš", "debug")
 
 -----------------------------------------------------------
-STARTUP SEKVENCE (18 kroků -- viz Ch 3: db_ping, version check, freshness, Drive soubory + sync_agent_entities, KONTROLA skills, AgentSchedules, readiness, startup backfill):
+STARTUP SEKVENCE (11 kroků — detaily viz Ch 3: db_ping, version check, freshness, Drive soubory + sync_agent_entities, KONTROLA skills, AgentSchedules, readiness, startup backfill):
 -----------------------------------------------------------
 1.  DB PING -> db_status = db_reachable | db_unreachable (jediné db_ping volání; run_select_sql je samostatný nástroj)
     L db_unreachable -> STOP + ntfy urgent (topic: agent-errors) + calendar event
@@ -416,7 +416,7 @@ Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → poku
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 Catalogs:     Drive folder ID: 10AjWPydQjqNKePABVa33GvDZ9JN7xnGd
               Master spreadsheet se vytváří přes Google Drive MCP: create_file s mimeType application/vnd.google-apps.spreadsheet a parentId složky Catalogs (10AjWPydQjqNKePABVa33GvDZ9JN7xnGd).
-MCP Version:  10.0.18
+MCP Version:  11.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -507,7 +507,9 @@ gitu → Drive write-back dle Prompt Cache Protocol níže). Pravidla:
 
 1. ROZSAH — agent mění POUZE svůj vlastní prompt soubor (Manager→ManagerPrompt.txt,
    Catalog→CatalogPrompt.txt, Collector→CollectorPrompt.txt, Generator→GeneratorPrompt.txt,
-   Checker→CheckerPrompt.txt, Importer→ImporterPrompt.txt). Cizí prompt NIKDY nemění.
+   Checker→CheckerPrompt.txt, Importer→ImporterPrompt.txt, Analytics→AnalyticsPrompt.txt,
+   Monitor→MonitorPrompt.txt, Analyzer→AnalyzerPrompt.txt, Optimizer→OptimizerPrompt.txt).
+   Cizí prompt NIKDY nemění.
 
 2. GUARD „mám nejnovější" — self-update jen když local == remote HEAD. Pokud je agent
    pozadu → nejdřív se aktualizovat (Prompt Cache Protocol), teprve pak přispívat.

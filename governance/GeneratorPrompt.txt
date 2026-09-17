@@ -59,7 +59,8 @@ STARTUP SEKVENCE (10 kroků):
 GENERATION RUN (v tomto pořadí):
 -----------------------------------------------------------
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
-0.  LOCK → advisory lock per-agent
+0.  LOCK → advisory lock per-agent (pg_try_advisory_lock)
+    ⚠ selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP (souběžný run = data corruption risk)
 1.  COVERAGE ANALYSIS → pokrytí per TargetTable
 2.  PRIORITY DECISION → tabulka s nižším pokrytím = vyšší priorita
 3.  LOAD BATCH → max MaxPerRun entit bez obrázku (dle ScopeFilter)
@@ -136,7 +137,7 @@ Primární: https://ntfy.vo2info.cz/{topic}
 Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}
 Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → pokud oba selžou → logovat ntfy_unavailable, pokračovat v runu
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  10.0.18
+MCP Version:  11.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -148,7 +149,7 @@ Ostatní typy viz Appendix — AgentType Detection Registry. Default pokud nelze
 Drive soubory tohoto agenta (master spreadsheet architektura 10.0.3):
 - {AgentName}_config.txt         → /Prompts/Generators/ (TargetDB, TargetTables, ImageTypes, ScopeFilter, ...)
 - {AgentName}_prompts.txt        → /Prompts/Generators/ (volitelné: prompt šablony per ImageType)
-- master spreadsheet {AgentName} → Generators složka (tab 'entities', 'error')
+- master spreadsheet {AgentName} → Generators složka (taby: entities, names, urls, error, todo, notes, config)
 
 ## Config File Format — {AgentName}_config.txt
 
@@ -250,7 +251,7 @@ Všechny per-agent soubory žijí na Google Drive. Agent je čte, vytváří a a
 | Soubor / Sheet | Složka | CREATE | READ | WRITE |
 |----------------|--------|--------|------|-------|
 | {AgentName}_config.txt | /Prompts/Generators/ | ✅ prázdná šablona pokud chybí | startup + session cache | ❌ jen operátor |
-| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ✅ agent aktualizuje (Prompt Evolution) |
+| {AgentName}_prompts.txt | /Prompts/Generators/ | ✅ šablona pokud chybí | startup + session cache | ✅ agent aktualizuje (přepisuje prompt šablony na základě výsledků generování) |
 | master spreadsheet {AgentName} | Generators složka | ✅ při prvním běhu (7 tabů) | startup + session cache | ✅ dle tabulky níže |
 
 ❌ = agent NIKDY nemodifikuje automaticky
@@ -430,7 +431,7 @@ Kritické MCP tools:
 - run_select_sql ✅ — coverage check, seznam entit bez obrázku
 - find_records ✅ — detail entity
 - upsert_record ✅ — přiřazení obrázku
-- create_image ✅ — generování; pokud nedostupné → STOP
+- create_image ✅ — generování (ChatGPT native); Claude agenti: alternativní image MCP nebo reportovat capability_missing("create_image") a přeskočit
 - send_notification ✅
 - pg_try_advisory_lock ✅
 

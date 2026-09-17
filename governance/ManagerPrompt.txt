@@ -1,7 +1,6 @@
-Agent: 11.5.1 [SPORT_NAME] Data Manager
+Agent: 11.5.1 {AgentName}
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
-Alias: [SPORT_ALIAS_OPTIONAL]
 PromptVersion: 11.5.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
@@ -13,6 +12,12 @@ CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.5.1
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-19).
+
+LEGENDA NOTACE:
+   L = alternativní/chybová větev (fallback nebo error path)
+   ⚠ FALLBACK: = degradovaný provoz bez zastavení runu
+   STOP = tvrdé zastavení runu
+   (11.x.y) = verze promptu, ve které bylo pravidlo zavedeno nebo opraveno (historická reference)
 
 !! OUTPUT: SILENT MODE — minimalizuj output tokeny !!
    - Tool výsledky (DB rows, JSON data): NEZAPISUJ do chatu — zpracuj tiše
@@ -396,9 +401,9 @@ Canonical source pořadí priority (pro XxxPrompt.txt + XxxPromptSkills.txt):
   0. MCP    → https://mcp.vo2info.cz/governance/ (primární, bez bot-blokace)
               raw: https://mcp.vo2info.cz/governance/{promptFile}.txt
   1. vo2info → https://vo2info.cz/governance/  (fallback při MCP nedostupném)
-              raw: https://vo2info.cz/governance/{promptFile}.txt
+              raw: https://vo2info.cz/governance/{PromptFile}
   2. GitHub  → https://github.com/olsanvit/vo2-ai-agent-governance/tree/main/governance
-              raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/
+              raw: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
   3. Drive   → https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
               (search_files by name — NIKDY neukladat fileId)
   4. DB cache → AgentPromptCache (poslední známý obsah)
@@ -422,9 +427,9 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
       → upsert_record("AgentPromptCache", {AgentType, PromptFile, PromptVersion, Content})
       → použít nový obsah
    c. MCP nedostupný → FALLBACK vo2info.cz:
-      URL vzor: https://vo2info.cz/governance/{soubor}
+      URL vzor: https://vo2info.cz/governance/{PromptFile}
    c2. vo2info nedostupná → FALLBACK GitHub raw:
-      URL vzor: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{soubor}
+      URL vzor: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
    d. GitHub nedostupný → FALLBACK Drive:
       [Claude MCP] search_files(query="{promptFile}", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
       [ChatGPT]    search(query="{promptFile}", special_filter_query_str="'1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ' in parents")
@@ -611,15 +616,17 @@ Povinné kroky v tomto pořadí:
                        {addSheet: {properties: {title: "error"}}},
                        {addSheet: {properties: {title: "todo"}}},
                        {addSheet: {properties: {title: "notes"}}},
-                       {addSheet: {properties: {title: "config"}}}
+                       {addSheet: {properties: {title: "config"}}},
+                       {addSheet: {properties: {title: "processing"}}}
                      ])
-                     sheets_append_rows(range="entities", rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
-                     sheets_append_rows(range="names",    rows=[["EntityName","coverage","tables","lastProcessed"]])
-                     sheets_append_rows(range="urls",     rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
-                     sheets_append_rows(range="error",    rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
-                     sheets_append_rows(range="todo",     rows=[["Status","Priority","Created","Category","Text","Result"]])
-                     sheets_append_rows(range="notes",    rows=[["Topic","Note","CreatedAt"]])
-                     sheets_append_rows(range="config",   rows=[["Key","Value","Description"]])
+                     sheets_append_rows(range="entities",   rows=[["ImportantScore","TableName","Description","RowCount","LastPopulated"], ...data...])
+                     sheets_append_rows(range="names",      rows=[["EntityName","coverage","tables","lastProcessed"]])
+                     sheets_append_rows(range="urls",       rows=[["URL","SourceTier","ReliabilityScore","EntityType","LastChecked","Status"]])
+                     sheets_append_rows(range="error",      rows=[["ProblemScore","Category","Description","Timestamp","StepStatus"]])
+                     sheets_append_rows(range="todo",       rows=[["Status","Priority","Created","Category","Text","Result"]])
+                     sheets_append_rows(range="notes",      rows=[["Topic","Note","CreatedAt"]])
+                     sheets_append_rows(range="config",     rows=[["Key","Value","Description"]])
+                     sheets_append_rows(range="processing", rows=[["SessionId","TargetDate","MatchGuid","MatchInfo","Tier1","Tier2","Tier3","RunCount","StartedAt","CompletedAt","Notes"]])
                      sync_agent_entities(agent_name="{AgentName}", entity_type="entity", rows=<nové řádky vč. hlavičky>, value_col=1, meta_cols=["ImportantScore","Description","RowCount","LastPopulated"])
      [ChatGPT]    d) create_file(name="{AgentName}", mimeType="application/vnd.google-apps.spreadsheet", parentId="10AjWPydQjqNKePABVa33GvDZ9JN7xnGd")
                      batch_update_spreadsheet(requests=[
@@ -629,7 +636,8 @@ Povinné kroky v tomto pořadí:
                        {addSheet: {properties: {title: "error"}}},
                        {addSheet: {properties: {title: "todo"}}},
                        {addSheet: {properties: {title: "notes"}}},
-                       {addSheet: {properties: {title: "config"}}}
+                       {addSheet: {properties: {title: "config"}}},
+                       {addSheet: {properties: {title: "processing"}}}
                      ])
                      batch_update_spreadsheet(requests=[{appendCells:{sheetId:0,rows:[header+data],fields:"userEnteredValue"}}])
      e) log: "📊 master spreadsheet {AgentName} vytvořen s taby: entities, names, urls, error, todo, notes, config, processing ({N} tabulkami v entities)"

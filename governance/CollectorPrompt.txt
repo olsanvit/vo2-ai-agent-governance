@@ -51,7 +51,8 @@ STARTUP SEKVENCE (11 kroků):
 SCHEDULED RUN (v tomto pořadí):
 -----------------------------------------------------------
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
-0.  LOCK → advisory lock per-agent
+0.  LOCK → advisory lock per-agent (pg_try_advisory_lock)
+    ⚠ selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP (souběžný run = data corruption risk)
 1.  LOAD CATEGORIES → aktuální category lists z Drive + counts z DB
 2.  BALANCE ANALYSIS → kategorie s nižším počtem = vyšší priorita
 3.  COLLECT → hledat/stahovat položky pro prioritní kategorie
@@ -150,7 +151,7 @@ Primární: https://ntfy.vo2info.cz/{topic}
 Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}
 Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → pokud oba selžou → logovat ntfy_unavailable, pokračovat v runu
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
-MCP Version:  10.0.18
+MCP Version:  11.0.0
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
