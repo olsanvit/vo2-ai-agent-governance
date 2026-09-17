@@ -450,7 +450,7 @@ CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
 BLOK 1 — DB ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze == 11.5.0
+BLOK 2 — Verze >= 11.7.0
 BLOK 2d — [ChatGPT only] Platform:
   Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 GA od 9. 7. 2026
   Context window: ~10K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)
