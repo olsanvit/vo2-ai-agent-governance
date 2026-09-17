@@ -3901,6 +3901,12 @@ Primární: https://ntfy.vo2info.cz/{topic}
 Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}
 Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → pokud oba selžou → logovat ntfy_unavailable, pokračovat v runu
 
+TELEGRAM RELAY (automatický, bez akce agenta):
+Infrastruktura na QNAPu automaticky přeposílá ntfy zprávy na Telegram každé 2 minuty:
+- agent-errors + agent-alerts → @MrziTortoBoudBot (chyby a problémy)
+- agent-runs + agent-digest  → @BausTortoBot (úspěšné runy)
+Agenti nemusí volat Telegram přímo — stačí použít standardní send_notification na ntfy.
+
 NTFY TOPIC MAPA:
 - agent-status: startup health report (všichni agenti)
 - agent-maintenance: chyby vyžadující zásah operátora (db_owner_mismatch, api_auth_failure, spreadsheet_tab_missing)

@@ -144,6 +144,7 @@ MCP TargetDB: konfigurováno v bootstrap promptu agenta
 MCP AI:       https://mcp.vo2info.cz/AI/ → VO2QNAPDBAI (systémové tabulky)
 ntfy:         https://ntfy.vo2info.cz
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+  Telegram relay (automatický): agent-errors/alerts → @MrziTortoBoudBot | agent-runs/digest → @BausTortoBot
 NTFY FALLBACK:
 Primární: https://ntfy.vo2info.cz/{topic}
 Fallback (pokud primární selže s timeout nebo 5xx): http://192.168.60.221:8225/{topic}

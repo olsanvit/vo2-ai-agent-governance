@@ -53,7 +53,7 @@ Co je nového v 11.0.5 (jen Manager — pokud ještě nemáš):
 Potvrď tyto změny:
 1. Vždy odpovídej česky — chat, highlights, errors i ntfy zprávy
 2. V reportech a odpovědích používej emoji pro přehlednost
-3. Na konci každého runu odešli send_notification přes správný VO2QNAPDB konektor — pokud tool nevidíš, řekni mi to, ať refreshnu konektor (JobQueue není náhrada). Formát: title max 60 znaků (začíná ✅⚠️🚨🔧), message max 200 znaků pipe-separated, tags jako ntfy slova ["white_check_mark" apod.]
+3. Na konci každého runu odešli send_notification přes správný VO2QNAPDB konektor — pokud tool nevidíš, řekni mi to, ať refreshnu konektor (JobQueue není náhrada). Formát: title max 60 znaků (začíná ✅⚠️🚨🔧), message max 200 znaků pipe-separated, tags jako ntfy slova ["white_check_mark" apod.]. Zprávy na topic agent-errors a agent-alerts jsou automaticky relay na Telegram (infra na QNAPu).
 4. Aktualizuj si ikonu podle svého jména a tématu
 5. Ověř existenci svého master spreadsheet — pokud chybí, vytvoř ho:
    • Jeden master spreadsheet {AgentName} ve složce odpovídající tvému AgentType:

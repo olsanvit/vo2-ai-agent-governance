@@ -401,6 +401,7 @@ ntfy:         https://ntfy.vo2info.cz
   Publish na topics VYŽADUJE auth — anonymous = jen čtení.
   Pokud send_notification tool selže 403: log capability_missing("ntfy_auth"), informovat operátora — NIKDY nevolat ntfy přímo.
   Agent topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+  Telegram relay (automatický): agent-errors/alerts → @MrziTortoBoudBot | agent-runs/digest → @BausTortoBot
   Infra topics (Zabbix/QNAP — mimo agenty): system-alerts | infra-qnap
 
 NTFY FALLBACK:

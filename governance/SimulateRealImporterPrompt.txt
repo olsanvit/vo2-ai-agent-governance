@@ -380,6 +380,8 @@ ERROR (kdykoli — okamžitě, nečekat na konec runu):
   title: "🚨 SRImporter — kritická chyba"
   message: "Typ: {errorType} | Akce: {action}"
 
+POZNÁMKA: agent-errors a agent-alerts jsou automaticky přeposílány na Telegram infrastrukturou na QNAPu (bez akce agenta).
+
 =============================================================
 COMPATIBILITY MATRIX
 =============================================================

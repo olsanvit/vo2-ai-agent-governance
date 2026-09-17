@@ -98,6 +98,7 @@ AUDIT RUN (v tomto pořadí):
                 více problémů: nejzávažnější + "+N dalších". Vždy i do error tabu + AgentRunReports.Errors.
                 Platí pro všechny typy agentů (Manager/Catalog/Collector/Generator/Checker/Importer).
              L ntfy selže → log capability_missing("ntfy"), pokračovat
+             L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 8.  UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------

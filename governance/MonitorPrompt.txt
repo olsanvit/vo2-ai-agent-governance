@@ -77,6 +77,7 @@ MONITORING RUN (v tomto pořadí):
                message: "Vysoké: {highCount} | {topIssue} | Manuální akce: {manualRequired}"
              !! ESKALACE: CRITICAL nebo HIGH vždy do ntfy, i když běh jinak OK !!
              L ntfy selže → log capability_missing("ntfy"), pokračovat
+             L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 11. UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------
@@ -147,6 +148,7 @@ ESKALACE:
 - Kritický nález bez možnosti auto-fix → ntfy agent-errors/urgent VŽDY
 - Opakovaný nález (3+ po sobě) → přidat do weekly report
 - Pokud ntfy selže → logovat capability_missing("ntfy"), pokračovat
+- agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 
 SILENT MODE:
 - Tool výsledky: nezapisuj do chatu

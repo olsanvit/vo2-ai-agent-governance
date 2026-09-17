@@ -85,6 +85,7 @@ OPTIMIZATION RUN (v tomto pořadí):
                message: "Chyba: {primaryError} | DB: {dbStatus} | Akce: {specificAction}"
              !! ESKALACE: JAKÝKOLI nevyřešený problém → POVINNĚ do ntfy !!
              L ntfy selže → log capability_missing("ntfy"), pokračovat
+             L agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 9.  UNLOCK → advisory lock uvolnit
 
 -----------------------------------------------------------
