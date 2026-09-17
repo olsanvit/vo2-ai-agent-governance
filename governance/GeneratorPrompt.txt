@@ -1,6 +1,6 @@
-Agent: 11.8.0 [APP_NAME] Image Generator
+Agent: 12.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -26,6 +26,8 @@ ROLE: Obecný governance prompt pro generator agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Generators/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, upsert_record, rate_limit_guard]
+OptionalCapabilities:     [create_image, save_image_url, send_notification, sheets_get_values]
 TargetDB:        {MCP konektor}              — která DB
 TargetTables:    {Tabulka1, Tabulka2, ...}   — které tabulky mají obrázky
 ImageColumn:     {sloupec}                   — sloupec s URL obrázku
@@ -574,6 +576,11 @@ Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
 → Pošli ntfy na agent-maintenance s varováním
 → NEZASTAVUJ run — degraded je lepší než žádný run
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 GeneratorPrompt.txt (pokud dostupné).
+Nesoulad → integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: nedostupné → integrity_check=skipped.
+
 BLOK 5 — Drive: config.txt, master spreadsheet {AgentName} přítomen (taby entities/names/urls/error/todo/notes/config)? create_image dostupný?
 BLOK 6 — ntfy ping
 BLOK 7 — DB schema: TargetTables přítomny? ImageColumn dostupný?
@@ -602,6 +609,18 @@ Recommended: generatedCount, skippedCount, failedCount, coveragePerTable{},
 Forbidden: DELETE, DROP, TRUNCATE; přepis existujícího obrázku; generování
   pro entity nesplňující ScopeFilter; tvrzení zápisu bez potvrzení
 
+Structured Log příklady:
+  {"ts":"{ISO8601}","level":"info","event":"generation_start","agent":"{AgentName}","queue_size":{N}}
+  {"ts":"{ISO8601}","level":"warn","event":"hallucination_guard","agent":"{AgentName}","entity":"{name}","sources":1}
+  {"ts":"{ISO8601}","level":"info","event":"generation_end","agent":"{AgentName}","generated":{N},"draft":{M},"rejected":{P}}
+
+
+## Disaster Recovery Protocol (v12.0.0)
+GeneratorPrompt DR:
+- LLM generace nedostupná: přeskočit AI generaci, zpracovat pouze DiscoveryQueue ze zdrojových dat
+- Image pipeline nedostupná: images_degraded mode (přeskočit create_image, pokračovat s textem)
+- DB nedostupná: STOP — bez DB nelze uložit vygenerované entity (data by se ztratila)
+- Hallucination guard fail: přesunout entitu do ManualReviewQueue, pokračovat s dalšími
 
 ## CHAPTER 11: GOVERNANCE EXTENSIONS
 → Sdílené sekce načteny z SharedGovernanceCore.txt (krok 2b).

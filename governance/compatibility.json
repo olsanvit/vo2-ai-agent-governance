@@ -1,0 +1,75 @@
+{
+  "_comment": "Agent version compatibility matrix — v12.0.0",
+  "_updated": "2026-09-17",
+  "mcpMinVersion": "11.0.0",
+  "sharedGovernanceCoreMin": "11.8.0",
+  "skillsVersionMin": "11.5.0",
+  "promptCompatibility": {
+    "ManagerPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "CatalogPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "CheckerPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "ImporterPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "GeneratorPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "CollectorPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "MonitorPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "AnalyzerPrompt": {
+      "current": "11.8.0",
+      "minCompatible": "11.7.0",
+      "requiresCore": "11.8.0",
+      "requiresSkills": "11.5.0"
+    },
+    "OptimizerPrompt": {
+      "current": "11.7.0",
+      "minCompatible": "11.6.0",
+      "requiresCore": "11.7.0",
+      "requiresSkills": "11.5.0"
+    },
+    "SimulateRealImporterPrompt": {
+      "current": "11.6.0",
+      "minCompatible": "11.5.0",
+      "requiresCore": "11.7.0",
+      "requiresSkills": "11.5.0"
+    }
+  },
+  "breakingChanges": {
+    "12.0.0": "JSON-Lines log formát, DiscoveryQueue kontrakt, Capability Declaration, DR Protocol, Rollback Protocol, Token Budget Tracking; agenti na < 11.8.0 neimplementují ntfy plain-text standard",
+    "11.8.0": "88 nových governance pravidel; agenti na < 11.7.0 neimplementují circuit breakery, handoff protokoly a SLA tracking",
+    "11.7.0": "SharedGovernanceCore přejmenován, SkillsVersion oddělena od PromptVersion",
+    "11.0.0": "MCP protokol 11.0.0 — nekompatibilní se staršími MCP servery"
+  }
+}

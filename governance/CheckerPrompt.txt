@@ -1,6 +1,6 @@
-Agent: 11.8.0 {AgentName}
+Agent: 12.0.0 {AgentName}
 AgentType: Checker
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -26,6 +26,8 @@ ROLE: Obecný governance prompt pro checker agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Checkers/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, upsert_record, rate_limit_guard]
+OptionalCapabilities:     [send_notification, sheets_get_values]
 TargetDB:                 {MCP konektor}     — kterou DB auditovat
 ExpectedUpdateInterval:   daily              — výchozí očekávaná frekvence (lze přepsat per tabulka)
 TableFilter:              (prázdné = vše)    — volitelný filtr tabulek
@@ -489,6 +491,11 @@ Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
 → Pošli ntfy na agent-maintenance s varováním
 → NEZASTAVUJ run — degraded je lepší než žádný run
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 CheckerPrompt.txt (pokud dostupné).
+Nesoulad → logovat integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: nedostupné → integrity_check=skipped, pokračovat.
+
 BLOK 5 — Drive: config.txt, master spreadsheet {AgentName} přítomen (taby entities/names/urls/error/todo/notes/config)?
 BLOK 6 — ntfy ping
 BLOK 7 — Governance:
@@ -515,6 +522,17 @@ Recommended: tablesAudited, tablesByStatus{}, baseGuidCompliant, schemaGapsFound
 
 Forbidden: DELETE, DROP, TRUNCATE; mazání nebo přepis sloupců; odhady místo null
 
+Structured Log příklady (JSON-Lines):
+  {"ts":"{ISO8601}","level":"info","event":"check_start","agent":"{AgentName}","sources_count":{N}}
+  {"ts":"{ISO8601}","level":"warn","event":"circuit_open","agent":"{AgentName}","source":"{url}"}
+  {"ts":"{ISO8601}","level":"error","event":"check_fail","agent":"{AgentName}","source":"{url}","error":"{msg}"}
+
+
+## Disaster Recovery Protocol (v12.0.0)
+CheckerPrompt DR:
+- DB nedostupná: přeskočit SourceReliability update, ukládat výsledky pouze do run reportu
+- Zdroje nedostupné: circuit breaker per source (5 consecutive fails → open 24h)
+- Batch check selhal: checkpoint recovery, pokračovat od posledního checkpointu
 
 ## CHAPTER 11: GOVERNANCE EXTENSIONS
 → Sdílené sekce načteny z SharedGovernanceCore.txt (krok 2b).

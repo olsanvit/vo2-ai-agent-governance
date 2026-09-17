@@ -1,7 +1,7 @@
-Agent: 11.8.0 {AgentName}
+Agent: 12.0.0 {AgentName}
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -1107,6 +1107,9 @@ BLOK 1 — DB & MCP konektivita:
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
 
+RequiredCapabilities:   [run_select_sql, smart_upsert_batch, rate_limit_guard, sheets_get_values]
+OptionalCapabilities:   [save_image_url, send_notification, get_file_metadata, create_image]
+
 BLOK 2 — Verze:
 2a. PromptVersion tohoto promptu >= 11.7.0
 2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
@@ -1146,6 +1149,14 @@ L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
         qnap-mab:        VO2QNAPDBMAB — MaB DB
         qnap-usm:        VO2QNAPDBUSM — UniSportManager DB
     - Memory: pouze DB + Google Sheets (ChatGPT Memory není k dispozici)
+
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst expected SHA256 z compatibility.json (Drive nebo GitHub):
+  GET https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/compatibility.json
+  Porovnat s lokálním SHA256 načteného promptu (pokud MCP tool dostupný)
+  Pokud SHA256 nesedí → logovat "integrity_warning=true", pokračovat (ne STOP)
+  → Eskalovat na agent-maintenance: "CatalogPrompt integrity mismatch — ověřte verzi"
+⚠ FALLBACK: SHA256 check nedostupný → přeskočit, logovat "integrity_check=skipped"
 
 BLOK 3 — MCP tools (ověřit dostupnost všech 16 kritických):
 db_ping | upsert_record | smart_upsert_batch | run_select_sql | soft_delete_record |
@@ -1722,6 +1733,17 @@ Při detekci duplicity (stejný NormalizedName):
 4. Označit duplikát: IsDeleted=true, NormalizedName="DUPLICATE_{original_guid}"
 5. Logovat do AgentRunReports.Notes: "dedup={N},merged={guids}"
 NormalizedName match: exact match NEBO Levenshtein distance ≤ 2 pro entity stejného EntityType.
+
+## Cross-Agent Transaction Protocol (v12.0.0)
+
+Při upsert entit s NormalizedName: použít advisory lock na application level:
+1. Před upsert: run_select_sql("SELECT pg_try_advisory_lock(hashtext('{NormalizedName}'))")
+2. Pokud lock failed (jiný agent pracuje se stejným NormalizedName):
+   → Počkat 5s, zkusit znovu (max 3 pokusy)
+   → Po 3 pokusech → přeskočit, logovat "advisory_lock_conflict={NormalizedName}"
+3. Po dokončení upsert: run_select_sql("SELECT pg_advisory_unlock(hashtext('{NormalizedName}'))")
+
+Toto zabraňuje přepsání dat při souběžném zpracování stejné entity dvěma agenty.
 
 ## Entity Country/Region Disambiguation
 
@@ -3333,7 +3355,7 @@ Version registry:
 - RuntimeSafetyVersion: 11.0.0
 - ScoringVersion: 3.0
 - ImageGovernanceVersion: 11.0.0
-- PromptVersion: 11.8.0
+- PromptVersion: 12.0.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -3355,6 +3377,14 @@ Rules:
 - rollback must preserve audit lineage
 - merged entities must retain merge history
 - corrupted data should be quarantined before repair
+
+## Disaster Recovery Protocol (v12.0.0)
+
+CatalogPrompt DR:
+- DB nedostupná: přeskočit entity upsert, uložit batch do Drive jako JSON backup (fallback)
+- Drive nedostupná: přeskočit Google Sheets sync, pokračovat pouze s DB
+- Sheets nedostupné: přeskočit Sheets kroky, pokračovat s DB jako canonical source
+- Image pipeline nedostupná: aktivovat images_degraded mode (viz Image Governance Circuit Breaker)
 
 ## Runtime Modes
 
@@ -3659,7 +3689,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -4006,7 +4036,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 
 Ověřené image nástroje:
 - save_image_base64
@@ -5204,7 +5234,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 11.8.0
+- PromptVersion: 12.0.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5273,7 +5303,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 Generated: 2026-09-17
 
 

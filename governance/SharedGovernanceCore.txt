@@ -1,5 +1,5 @@
 =============================================================
-SHARED GOVERNANCE CORE — v11.8.0
+SHARED GOVERNANCE CORE — v12.0.0
 =============================================================
 Tento soubor obsahuje sdílené sekce společné pro všechny typy agentů.
 Načítá se jako součást Prompt Cache Protocol (krok 2b).
@@ -254,3 +254,128 @@ ESKALACE — sdílené pravidlo (všechny typy agentů)
    ⚠ FALLBACK: ntfy selže → log capability_missing("ntfy"), pokračovat
    ℹ agent-errors/agent-alerts → automaticky přeposíláno na Telegram (infra na QNAPu, bez akce agenta)
 =============================================================
+
+## Ntfy Message Format — ZÁVAZNÝ STANDARD
+
+Při volání send_notification VŽDY:
+- title: plain text, max 60 znaků, začíná emoji (✅ ⚠️ 🚨 🔧)
+  Příklad: "✅ CatalogAgent — run complete"
+- message: plain text, max 200 znaků, pipe-separated hodnoty
+  Příklad: "Importováno: 150 | Doba: 45s | Chyby: 0"
+- tags: seznam ntfy tag slov (["white_check_mark", "agent"])
+- priority: 1-5 (1=min, 5=max/urgent)
+
+⚠ NIKDY neposílat JSON objekt jako message — vždy plain text string.
+⚠ NIKDY nezanořovat JSON do message pole — relay script čte raw .message.
+
+Telegram relay formát (automatický, QNAP infra):
+  [OK] → z topic: agent-runs, agent-digest
+  [ALERT] → z topic: agent-errors, agent-alerts, agent-maintenance
+  Relay konstruuje: "[OK] : {title} | {message}"
+  → Proto MUSÍ být title a message plain text, ne JSON!
+
+## Ntfy Topics
+
+| Topic            | Použití                          | Telegram relay |
+|------------------|----------------------------------|----------------|
+| agent-runs       | Normální run report              | [OK]           |
+| agent-digest     | Denní/týdenní souhrn             | [OK]           |
+| agent-errors     | Bloker, kritická chyba           | [ALERT]        |
+| agent-alerts     | Degradace, partial fail          | [ALERT]        |
+| agent-maintenance| Self-update, upgrade, rollback   | [ALERT]        |
+
+## Structured Log Format (JSON-Lines) — v12.0.0
+
+AgentRunReports.Notes MUSÍ používat JSON-Lines formát:
+Každý log entry = jedna řada JSON na nový řádek:
+  {"ts":"{ISO8601}","level":"info|warn|error|debug","key":"value",...}
+
+Klíčová pole:
+  ts:       ISO8601 timestamp (povinné)
+  level:    info | warn | error | debug (povinné)
+  event:    krátký identifikátor události (povinné)
+  agent:    {AgentName} (povinné)
+  Volitelná: duration_ms, count, table, source_url, reason
+
+Příklady:
+  {"ts":"2026-09-17T10:00:00Z","level":"info","event":"run_start","agent":"CatalogAgent"}
+  {"ts":"2026-09-17T10:02:30Z","level":"warn","event":"circuit_open","agent":"CatalogAgent","source":"example.com","consecutive_fails":5}
+  {"ts":"2026-09-17T10:05:00Z","level":"info","event":"run_end","agent":"CatalogAgent","duration_ms":300000,"imported":150,"errors":0}
+
+Starý prose formát (key=value) je DEPRECATED od v12.0.0.
+Parser (Analyzer, Monitor) musí podporovat oba formáty přechodně.
+
+## DiscoveryQueue — Formální Kontrakt (v12.0.0)
+
+Tabulka: DiscoveryQueue
+Povinná pole pro VŠECHNY záznamy:
+  Guid:           UUID v4 (auto)
+  SourceUrl:      URL nebo identifikátor zdroje (povinné, max 2000 znaků)
+  QueueType:      collector_handoff | checker_handoff | importer_discovery | regeneration | manual
+  Priority:       1-4 (1=Tier1/nejvyšší, 4=Tier4/nejnižší)
+  DiscoveredAt:   timestamp (povinné)
+  DiscoveredBy:   {AgentName} (povinné)
+  ProcessedAt:    null → zpracováno → timestamp
+  ProcessedBy:    null → zpracováno → {AgentName}
+  Status:         pending | processing | done | failed | skipped
+  TTL:            7 dní (záznamy starší než 7 dní bez ProcessedAt → stale, přeskočit)
+
+Agent SMĚLÉ číst pouze záznamy kde Status=pending AND ProcessedAt IS NULL.
+Agent při zpracování: nejprve Status=processing, po dokončení: Status=done/failed + ProcessedAt.
+
+## AgentRunReports upsert format — rozšíření v12.0.0
+
+Přidat do každého AgentRunReports záznamu:
+  TokensUsed:       {odhadovaný počet tokenů za run — pokud dostupné z MCP context}
+  EstimatedCostUSD: {odhadované náklady v USD — TokensUsed * 0.000003 pro Sonnet}
+
+TOKEN BUDGET ALERT:
+Pokud EstimatedCostUSD > 0.50 per run → eskalovat na agent-maintenance
+message: "{AgentName} ⚠️ vysoké náklady: ${cost:.2f} per run"
+
+## Agent Capability Declaration (v12.0.0)
+
+Každý agent MUSÍ deklarovat ve svém BLOK 1 tyto capability skupiny:
+  RequiredCapabilities: [seznam nástrojů které MUSÍ být dostupné pro run]
+  OptionalCapabilities: [seznam nástrojů pro enhanced mode — bez nich = degraded]
+
+Test v BLOK 1 (před advisory lock):
+  Pro každý nástroj v RequiredCapabilities: ověřit dostupnost (pokud MCP tool existuje)
+  Pokud required capability chybí → STOP s eskalací na agent-errors
+  Pokud optional capability chybí → logovat capability_missing(), pokračovat v degraded mode
+
+Standardní RequiredCapabilities pro DB agenty:
+  ["run_select_sql", "upsert_record", "rate_limit_guard"]
+Standardní OptionalCapabilities:
+  ["sheets_get_values", "send_notification", "get_file_metadata", "create_image"]
+
+## Rollback Protocol (v12.0.0)
+
+Aktivace: RunMode=rollback,targetVersion=X.Y.Z
+
+Kroky:
+1. Ověřit targetVersion existuje v Git history (GitHub API nebo lokální cache)
+2. Načíst prompt soubor z Git history pro targetVersion
+   URL pattern: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/{commitHash}/governance/{PromptFile}
+3. Validovat integritu (SHA256 z versions.json pro targetVersion pokud dostupné)
+4. Nahradit aktuální prompt a restartovat se starší verzí
+5. Logovat: {"event":"rollback","from":"{currentVersion}","to":"{targetVersion}"}
+6. Eskalovat na agent-maintenance: "{AgentName} rollback na {targetVersion}"
+
+NIKDY rollbackovat na verzi < 11.0.0 (nekompatibilní MCP protokol).
+
+## Disaster Recovery Protocol (v12.0.0)
+
+Aplikovat při: db_unreachable | drive_unreachable | mcp_timeout | ntfy_unreachable
+
+DR Pořadí priorit:
+1. DB nedostupná → přeskočit všechny DB operace, logovat lokálně do Notes
+   → Zkusit DB znovu každých 60s, max 3 pokusy, pak STOP + eskalace
+2. Drive nedostupná → přeskočit Drive operace (skills load, backup), pokračovat s cache
+   → Fallback: použít naposledy načtené skills z paměti
+3. MCP timeout (> 30s) → logovat capability_missing(), přeskočit daný krok, pokračovat
+4. Ntfy nedostupná → logovat do AgentRunReports.Notes, nepřerušovat run
+   → Telegram relay nebude fungovat — akceptovat, pokračovat
+
+Agent MUSÍ pokračovat v omezeném módu (degraded) dokud není explicitní STOP podmínka:
+  STOP podmínky: DB nedostupná > 3 pokusy | Advisory lock selhal | Integrity check failed

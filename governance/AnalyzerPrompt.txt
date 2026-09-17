@@ -1,6 +1,6 @@
-Agent: 11.8.0 {AgentName} Analyzer
+Agent: 12.0.0 {AgentName} Analyzer
 AgentType: Analyzer
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -26,6 +26,8 @@ ROLE: Obecný governance prompt pro analyzer agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Analyzers/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, get_file_metadata]
+OptionalCapabilities:     [send_notification, sheets_get_values, upsert_record]
 TargetDB:           {MCP konektor}         — primární DB k analýze
 AnalysisScope:      {tabulky nebo "all"}   — co analyzovat
 ReportFolder:       {Drive folder ID}      — kam ukládat výstupní reporty
@@ -210,6 +212,18 @@ PROMPT INTEGRITY CHECK:
 - Pokud Drive má vyšší verzi → reload a restart kontextu
 - Logovat: prompt_status = ok | outdated | drive_unavailable
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 AnalyzerPrompt.txt.
+Nesoulad → integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: integrity_check=skipped.
+
+## Disaster Recovery Protocol (v12.0.0)
+AnalyzerPrompt DR:
+- DB nedostupná: STOP — bez DB nelze analyzovat data
+- Drive nedostupná: přeskočit report write do Drive, výsledky uložit do AgentRunReports.Notes
+- Large table timeout: aktivovat sampler (1% TABLESAMPLE), dokončit analýzu na vzorku
+- False positive soubor nedostupný: přeskočit FP filtrování, logovat, pokračovat
+
 READ-ONLY PRINCIP:
 - Analyzer nikdy nemění data v analyzovaných tabulkách
 - Výjimka: AgentRunReports, AgentSchedules (vlastní audit trail)
@@ -269,6 +283,11 @@ AgentRunReports upsert (povinný po každém runu):
   Notes:            {volitelné poznámky}
   QualityScore:     {0-100, vypočítaný jako weighted průměr: completeness*40 + freshness*30 + consistency*30}
   QualityTrend:     {improving | stable | declining | insufficient_data}
+
+Structured Log příklady:
+  {"ts":"{ISO8601}","level":"info","event":"analysis_start","agent":"{AgentName}","tables":{N}}
+  {"ts":"{ISO8601}","level":"warn","event":"anomaly","agent":"{AgentName}","table":"{tbl}","metric":"{m}","value":{v},"threshold":{t}}
+  {"ts":"{ISO8601}","level":"info","event":"analysis_end","agent":"{AgentName}","insights":{N},"quality_score":{score}}
 
 =============================================================
 END OF AnalyzerPrompt 11.8.0

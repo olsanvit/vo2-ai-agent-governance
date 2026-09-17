@@ -1,7 +1,7 @@
-Agent: 11.8.0 {AgentName}
+Agent: 12.0.0 {AgentName}
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -394,6 +394,23 @@ gitu → Drive write-back dle Prompt Cache Protocol níže). Pravidla:
 7. Po úspěšném self-contribution → send_notification(topic="agent-maintenance",
    title="🔧 {AgentName} — prompt self-update {old}→{new}", message = stručně co a proč)
    a zapsat do AgentRunReports.
+
+## Canary Deployment Protocol (v12.0.0)
+
+Aktivace: RunMode=canary,targetVersion=X.Y.Z,sport={sportName}
+
+Postup:
+1. Načíst nový prompt z GitHub pro targetVersion
+2. Aplikovat POUZE na runs pro daný sport/entitu (ostatní zůstávají na staré verzi)
+3. Sledovat chybovost v canary skupině po 5 runech:
+   - Pokud error_rate <= 20%: canary PASS → doporučit full rollout operátorovi
+   - Pokud error_rate > 20%: canary FAIL → automaticky rollback + eskalovat na agent-alerts
+4. Logovat každý canary run: {"event":"canary_run","version":"{targetVersion}","sport":"{sport}","result":"ok|fail"}
+5. Výsledek sdělit operátorovi:
+   title: "🐤 Canary {targetVersion}: {PASS|FAIL}"
+   message: "Sport: {sport} | Runs: 5 | Error rate: {rate:.0%} | Doporučení: {rollout|rollback}"
+
+NIKDY nasadit canary bez explicitního RunMode=canary operátorského příkazu.
 
 ## Prompt Cache Protocol
 
@@ -1221,6 +1238,14 @@ BLOK 1 -- DB & MCP konektivita:
 1a. db_ping → db_status musí být db_reachable; přečíst MCP_VERSION z odpovědi → musí být >= 10.0.1
 1b. rate_limit_guard → zaznamenat maxBatchSize (reference pro smart_upsert_batch)
 1c. run_select_sql("SELECT current_database()") → ověřit že DB odpovídá aktivnímu VO2QNAPDBxx
+
+RequiredCapabilities:   [run_select_sql, upsert_record, rate_limit_guard, send_notification]
+OptionalCapabilities:   [sheets_get_values, get_file_metadata, sheets_update_row]
+
+BLOK 1c: CAPABILITY CHECK (v12.0.0)
+Ověřit RequiredCapabilities dostupnost před advisory lock.
+Chybějící required capability → STOP s eskalací na agent-errors.
+Chybějící optional capability → degraded mode, logovat capability_missing().
 
 BLOK 2 -- Verze:
 2a. PromptVersion tohoto promptu >= 11.7.0
@@ -4288,7 +4313,7 @@ Rules:
 GovernanceVersion: 11.7.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range
@@ -4326,6 +4351,13 @@ Pravidla:
 - Neznama licence blokuje primary media usage
 - OCR text musi zachovat source document provenance
 - Licensing uncertainty je warning_blocker
+
+## Disaster Recovery Protocol (viz SharedGovernanceCore DR Protocol v12.0.0)
+
+ManagerPrompt specifické DR pravidla:
+- DB nedostupná: přeskočit agent scheduling, poslat cached status report z posledního úspěšného runu
+- Drive nedostupná: pokračovat bez skills refresh, použít cached skills
+- Všechny agenti ticho > 6h: eskalovat na agent-errors (systémový výpadek)
 
 ## Betting and Odds Compliance
 
@@ -4788,6 +4820,33 @@ Pokud operátor spustí s RunMode=recovery:
 4. Označit záznamy: ImportedBy="recovery_{AgentName}", ImportedAt=NOW()
 5. Reportovat co bylo obnoveno vs. co chybí
 NIKDY nepoužívat recovery mode bez explicitního operátorského pokynu.
+
+## Governance Compliance Reporter (v12.0.0)
+
+Každých 20 runů (nebo RunMode=governance_report) provést governance audit:
+
+1. Načíst BLOK 2 výsledky všech agentů z AgentRunReports za posledních 7 dní:
+   run_select_sql("SELECT AgentName, MAX(RunAt) as LastRun,
+     SUM(CASE WHEN Notes LIKE '%blok2_pass=true%' THEN 1 ELSE 0 END) as PassCount,
+     COUNT(*) as TotalRuns
+   FROM AgentRunReports WHERE RunAt > NOW() - INTERVAL '7d' GROUP BY AgentName")
+
+2. Vypočítat Governance Score pro každý agent:
+   score = (PassCount / TotalRuns) * 100
+   → ≥ 90%: COMPLIANT
+   → 70–89%: WARNING
+   → < 70%: NON_COMPLIANT
+
+3. Celkový Governance Health Score = průměr všech agentů (0–100)
+
+4. Odeslat na agent-digest:
+   title: "📊 Governance Health: {overallScore}/100"
+   message: "Compliant: {N} | Warning: {M} | Non-compliant: {P} | Period: 7d"
+
+5. Uložit do AgentRunReports.Notes:
+   {"event":"governance_report","score":{overallScore},"compliant":{N},"warning":{M},"non_compliant":{P}}
+
+6. Pokud overallScore < 70 → eskalovat na agent-alerts (kritická governance degradace)
 
 ## Automatic Skills Refresh Protocol
 

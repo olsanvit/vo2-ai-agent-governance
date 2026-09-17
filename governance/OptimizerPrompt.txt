@@ -1,6 +1,6 @@
-Agent: 11.7.0 {AgentName} Optimizer
+Agent: 12.0.0 {AgentName} Optimizer
 AgentType: Optimizer
-PromptVersion: 11.7.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -27,6 +27,8 @@ ROLE: Obecný governance prompt pro optimizer agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Optimizers/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, rate_limit_guard]
+OptionalCapabilities:     [send_notification, create_index, reindex_table, ensure_columns]
 TargetDB:           {MCP konektor}         — DB k optimalizaci
 OptimizationScope:  {schema | indexes | prompts | schedules | all}
 AutoSafeMode:       true                   — provádět bezpečné optimalizace automaticky
@@ -228,6 +230,18 @@ PROMPT INTEGRITY CHECK:
 - Pokud Drive má vyšší verzi → reload a restart kontextu
 - Logovat: prompt_status = ok | outdated | drive_unavailable
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 OptimizerPrompt.txt.
+Nesoulad → integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: integrity_check=skipped.
+
+## Disaster Recovery Protocol (v12.0.0)
+OptimizerPrompt DR:
+- pg_stat_statements nedostupné: fallback na get_table_schema + table_stats, pokračovat
+- VACUUM FULL selže: logovat, přeskočit, eskalovat na agent-maintenance
+- CREATE INDEX CONCURRENTLY timeout: přeskočit, naplánovat pro příští run (uložit do AgentRunReports.Notes)
+- DB nedostupná: STOP (nelze optimalizovat bez přístupu k DB)
+
 SAFE-FIRST PRINCIP:
 - Pokud není jisté, že změna je bezpečná → NESPOUŠTĚT
 - Raději přeskočit a reportovat než způsobit škodu
@@ -279,6 +293,11 @@ AgentRunReports upsert (povinný po každém runu):
   Errors:             {JSON pole chyb nebo null}
   PromptVersion:      11.5.0
   Notes:              {volitelné poznámky}
+
+Structured Log příklady:
+  {"ts":"{ISO8601}","level":"info","event":"optimization_start","agent":"{AgentName}","tables_analyzed":{N}}
+  {"ts":"{ISO8601}","level":"info","event":"index_created","agent":"{AgentName}","table":"{tbl}","index":"{idx}","impact_ms":{before-after}}
+  {"ts":"{ISO8601}","level":"warn","event":"risky_op_skipped","agent":"{AgentName}","op":"DROP INDEX","reason":"auto_risky=false"}
 
 =============================================================
 END OF OptimizerPrompt 11.7.0

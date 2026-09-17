@@ -1,6 +1,6 @@
-Agent: 11.8.0 [COLLECTION_NAME] Collector
+Agent: 12.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -26,6 +26,8 @@ ROLE: Obecný governance prompt pro collector agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Collectors/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, upsert_record, rate_limit_guard]
+OptionalCapabilities:     [send_notification, get_file_metadata, sheets_get_values]
 TargetDB:          {MCP konektor}        — do které DB ukládat
 TargetTable:       {název tabulky}       — do které tabulky ukládat
 CollectionTypes:   {typ1, typ2, ...}     — co sbírat (např. Mobile, Desktop)
@@ -618,6 +620,11 @@ Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
 → Pošli ntfy na agent-maintenance s varováním
 → NEZASTAVUJ run — degraded je lepší než žádný run
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 CollectorPrompt.txt.
+Nesoulad → integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: integrity_check=skipped.
+
 BLOK 5 — Drive soubory: config.txt, master spreadsheet {AgentName} (taby entities/names/urls/error/todo/notes/config), categories_*.txt přítomny?
 BLOK 6 — ntfy ping
 BLOK 7 — DB schema: systémové tabulky přítomny?
@@ -646,6 +653,18 @@ Recommended: runMode, dbStatus, itemsSaved, itemsSkipped, itemsRejected,
 Forbidden: DELETE, DROP, TRUNCATE; ukládání unsafe/paywall obsahu;
   kategorie mimo povolené listy; tvrzení zápisu bez potvrzení
 
+Structured Log příklady:
+  {"ts":"{ISO8601}","level":"info","event":"collection_start","agent":"{AgentName}","sources_total":{N}}
+  {"ts":"{ISO8601}","level":"warn","event":"circuit_open","agent":"{AgentName}","source":"{domain}","fails":5}
+  {"ts":"{ISO8601}","level":"info","event":"collection_end","agent":"{AgentName}","collected":{N},"skipped":{M},"circuit_open":{P}}
+
+
+## Disaster Recovery Protocol (v12.0.0)
+CollectorPrompt DR:
+- Zdroj nedostupný: circuit breaker per source (5 fails → open 24h)
+- Robots.txt blokuje: označit zdroj jako robots_blocked, přeskočit, eskalovat na agent-maintenance
+- JS-rendered page: označit requires_browser, přeskočit, eskalovat na agent-maintenance
+- DB nedostupná: DiscoveryQueue handoff selže → uložit collected data jako lokální cache v AgentRunReports.Notes
 
 ## CHAPTER 11: GOVERNANCE EXTENSIONS
 → Sdílené sekce načteny z SharedGovernanceCore.txt (krok 2b).

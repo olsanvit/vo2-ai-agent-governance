@@ -1,6 +1,6 @@
-Agent: 11.8.0 {AgentName}
+Agent: 12.0.0 {AgentName}
 AgentType: Importer
-PromptVersion: 11.8.0
+PromptVersion: 12.0.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -26,6 +26,8 @@ ROLE: Obecný governance prompt pro importer agenty.
 KONFIGURACE (agent načítá při startu z Drive {AgentName}_config.txt
               v /Prompts/Importers/):
 -----------------------------------------------------------
+RequiredCapabilities:     [run_select_sql, smart_upsert_batch, rate_limit_guard, ensure_columns]
+OptionalCapabilities:     [send_notification, sheets_get_values, get_file_metadata]
 TargetDB:         {MCP konektor}              — do které DB ukládat
 TargetTable:      {název tabulky}             — do které tabulky ukládat
 SourceFolder:     {Drive folder ID nebo URL}  — zdrojová složka s obrázky
@@ -608,6 +610,11 @@ Pokud počet dostupných skills < minimum (viz SkillsFor hlavička):
 → Pošli ntfy na agent-maintenance s varováním
 → NEZASTAVUJ run — degraded je lepší než žádný run
 
+BLOK 2f: PROMPT INTEGRITY CHECK (v12.0.0)
+Načíst compatibility.json z GitHub, ověřit SHA256 ImporterPrompt.txt (pokud dostupné).
+Nesoulad → integrity_warning=true, eskalovat na agent-maintenance, pokračovat.
+⚠ FALLBACK: nedostupné → integrity_check=skipped.
+
 BLOK 5 — Drive: config.txt, mapping.txt, master spreadsheet {AgentName} přítomen (taby entities/names/urls/error/todo/notes/config), SourceFolder dostupné?
 BLOK 6 — ntfy ping
 BLOK 7 — TargetTable: existuje? BaseGuid přítomen?
@@ -636,6 +643,11 @@ Recommended: filesDiscovered, filesProcessed, filesPartial, filesMoved,
 
 Forbidden: DELETE, DROP, TRUNCATE; mazání zdrojových souborů; odhadované hodnoty
   jako fakta; tvrzení zápisu bez potvrzení; reportingová fáze při partial/error
+
+Structured Log příklady:
+  {"ts":"{ISO8601}","level":"info","event":"import_start","agent":"{AgentName}","source":"{url}","batch_size":{N}}
+  {"ts":"{ISO8601}","level":"warn","event":"duplicate_ratio_high","agent":"{AgentName}","ratio":{ratio}}
+  {"ts":"{ISO8601}","level":"info","event":"import_end","agent":"{AgentName}","imported":{N},"skipped":{M},"errors":{P}}
 
 
 =============================================================
@@ -731,6 +743,13 @@ SOURCE FRESHNESS CHECK (před import fází):
   → Přeskočit import tohoto zdroje
   → Eskalovat na agent-alerts: "Stale source: {url} — data z {date} (max {MaxSourceAgeDays} dní)"
 FALLBACK: datum nedostupné → pokračovat s importem, logovat "freshness_unknown=true"
+
+## Disaster Recovery Protocol (v12.0.0)
+ImporterPrompt DR:
+- DB nedostupná: uložit import batch jako JSON do Drive (fallback), nastavit checkpoint pro retry
+- Encoding chyba: fallback na UTF-8 s replacement chars, pokračovat
+- Schema migration guard selhal: STOP (nelze importovat do nevalidního schématu) → agent-errors
+- Partial failure: checkpoint uložen → příštím runem resume od last_success_guid
 
 =============================================================
 CHAPTER 13: GOVERNANCE EXTENSIONS
