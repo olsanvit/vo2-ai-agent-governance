@@ -7,7 +7,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 11.8.0
+CHAPTER 1: QUICK REFERENCE CARD — CheckerPrompt 12.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro checker agenty.
@@ -468,8 +468,8 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — DB ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze >= 11.7.0
+BLOK 1 — DB ping (TargetDB) + MCP_VERSION >= 11.0.0
+BLOK 2 — Verze >= 12.0.0
 BLOK 2d — [ChatGPT only] Platform:
   Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 GA od 9. 7. 2026
   Context window: ~10K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)

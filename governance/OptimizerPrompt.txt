@@ -7,7 +7,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — OptimizerPrompt 11.7.0
+CHAPTER 1: QUICK REFERENCE CARD — OptimizerPrompt 12.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro optimizer agenty.
@@ -221,8 +221,8 @@ blocked:            vyžaduje SSH nebo destruktivní operaci = manuální akce
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.7.0
-Tento prompt je součástí unified governance frameworku 11.5.0.
+GovernanceVersion: 12.0.0
+Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Checker agenty.
 
 PROMPT INTEGRITY CHECK:
@@ -291,7 +291,7 @@ AgentRunReports upsert (povinný po každém runu):
   ChangesSkipped:     {počet přeskočených}
   ChangesBlocked:     {počet blokovaných}
   Errors:             {JSON pole chyb nebo null}
-  PromptVersion:      11.5.0
+  PromptVersion:      {PromptVersion}
   Notes:              {volitelné poznámky}
 
 Structured Log příklady:
@@ -300,5 +300,5 @@ Structured Log příklady:
   {"ts":"{ISO8601}","level":"warn","event":"risky_op_skipped","agent":"{AgentName}","op":"DROP INDEX","reason":"auto_risky=false"}
 
 =============================================================
-END OF OptimizerPrompt 11.7.0
+END OF OptimizerPrompt 12.0.0
 =============================================================

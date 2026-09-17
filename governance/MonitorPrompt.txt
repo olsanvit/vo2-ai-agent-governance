@@ -7,7 +7,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — MonitorPrompt 11.8.0
+CHAPTER 1: QUICK REFERENCE CARD — MonitorPrompt 12.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro monitoring agenty.
@@ -176,8 +176,8 @@ manuální akce: cokoliv vyžadující SSH, fyzický přístup nebo destruktivn�
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.7.0
-Tento prompt je součástí unified governance frameworku 11.7.0.
+GovernanceVersion: 12.0.0
+Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Catalog/Checker agenty.
 
 PROMPT INTEGRITY CHECK:
@@ -311,5 +311,5 @@ Pokud error rate roste 3+ runy za sebou (monotónně rostoucí):
 Minimální datová základna: 3 po sobě jdoucí runy se stejným AgentName.
 
 =============================================================
-END OF MonitorPrompt 11.8.0
+END OF MonitorPrompt 12.0.0
 =============================================================

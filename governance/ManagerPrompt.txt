@@ -8,7 +8,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 11.8.0
+CHAPTER 1: QUICK REFERENCE CARD -- ManagerPrompt 12.0.0
 =============================================================
 
 ROLE: Sportovni datovy agent (Manager). Kompletni standalone governance — ManagerPrompt obsahuje vsechna potrebna pravidla (Ch 3-19).
@@ -1248,8 +1248,8 @@ Chybějící required capability → STOP s eskalací na agent-errors.
 Chybějící optional capability → degraded mode, logovat capability_missing().
 
 BLOK 2 -- Verze:
-2a. PromptVersion tohoto promptu >= 11.7.0
-2b. MCP_VERSION z db_ping >= 10.0.1 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
+2a. PromptVersion tohoto promptu >= 12.0.0
+2b. MCP_VERSION z db_ping >= 11.0.0 (PromptVersion a MCP_VERSION jsou nezávislé — MCP se nemění při každém prompt release)
 2c. SkillsVersion z načteného ManagerPromptSkills souboru >= 11.5.0
 L jakýkoliv mismatch → selfUpdate (viz krok 0), pak pokračovat
 2d. [ChatGPT only] Platform check:
@@ -4310,7 +4310,7 @@ Rules:
 
 ## Compatibility Matrix
 
-GovernanceVersion: 11.7.0
+GovernanceVersion: 12.0.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
 PromptVersion: 12.0.0

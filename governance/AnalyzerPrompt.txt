@@ -7,7 +7,7 @@ EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou k
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — AnalyzerPrompt 11.8.0
+CHAPTER 1: QUICK REFERENCE CARD — AnalyzerPrompt 12.0.0
 =============================================================
 
 ROLE: Obecný governance prompt pro analyzer agenty.
@@ -203,8 +203,8 @@ false_positive: insight označený operátorem jako irelevantní — uložit do 
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 11.7.0
-Tento prompt je součástí unified governance frameworku 11.7.0.
+GovernanceVersion: 12.0.0
+Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Monitor agenty.
 
 PROMPT INTEGRITY CHECK:
@@ -290,5 +290,5 @@ Structured Log příklady:
   {"ts":"{ISO8601}","level":"info","event":"analysis_end","agent":"{AgentName}","insights":{N},"quality_score":{score}}
 
 =============================================================
-END OF AnalyzerPrompt 11.8.0
+END OF AnalyzerPrompt 12.0.0
 =============================================================
