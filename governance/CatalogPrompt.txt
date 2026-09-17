@@ -1,14 +1,14 @@
-Agent: 11.7.0 {AgentName}
+Agent: 11.8.0 {AgentName}
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
-PromptVersion: 11.7.0
+PromptVersion: 11.8.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 ═══════════════════════════════════════════════════════════════
-CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.7.0
+CHAPTER 1: QUICK REFERENCE CARD — CatalogPrompt 11.8.0
 ═══════════════════════════════════════════════════════════════
 
 ROLE: Obecny governance prompt pro jakehokoliv catalog agenta.
@@ -237,6 +237,14 @@ SCHEDULED RUN (v tomto poradi):
              [Claude MCP] sheets_find_row(range="entities") + sheets_update_row pro existující; sheets_append_rows(range="entities") pro nové
              [ChatGPT]    search_spreadsheet_rows(sheetName="entities") + batch_update_spreadsheet(updateCells, sheetId=0) pro existující; batch_update_spreadsheet(appendCells, sheetId=0) pro nové
              L Sheets nedostupný → přeskočit, log capability_missing("sheets"), pokračovat
+12a.ORPHANED ENTITY ARCHIVAL
+    Podmínka: každých 30 runů (nebo explicitně RunMode=cleanup)
+    - run_select_sql("SELECT Guid, NormalizedName, UpdatedAt FROM {EntityTable}
+      WHERE IsDeleted=true AND UpdatedAt < NOW() - INTERVAL '30d' LIMIT 100")
+    - Pro každý nalezený záznam: ověřit že nemá aktivní FK reference
+    - Pokud žádné reference → trvalá archivace (export do Drive archiv folder před smazáním)
+    - Logovat: "orphans_archived={N}"
+    NIKDY smazat entity bez předchozího Drive exportu.
 13. RUN REPORT -> upsert_record("AgentRunReports", ...) (vždy, i při selhání)
              L DB down → zaznamenat selhání v textu odpovědi, pokračovat
 13a.SCHEDULE UPDATE -> AgentSchedules upsert (LastRunAt, NextRunAt) -- skip if DryRun — NON-BLOCKING
@@ -1197,6 +1205,13 @@ BLOK 6 — ntfy:
     → HTTP 200 = ✓
     → HTTP 403 = chybí NTFY_USER/NTFY_PASS → log capability_missing("ntfy_auth"), oznámit operátorovi
 6b. Ověřit znalost všech 5 topics: agent-runs | agent-errors | agent-alerts | agent-maintenance | agent-digest
+6c. Drive Backup Assertion (každý 10. run):
+    Podmínka: (RunCount % 10 == 0) OR RunMode=verify
+    1. search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ")
+    2. Ověřit že soubor existuje a ModifiedAt odpovídá poslednímu known push
+    3. Pokud soubor chybí nebo příliš starý → eskalovat na agent-alerts
+       message: "Drive backup assertion FAILED: CatalogPrompt.txt chybí nebo outdated"
+    ⚠ FALLBACK: Drive nedostupný → přeskočit assertion, logovat, pokračovat
 
 BLOK 7 — DB schema:
 7a. schema_report → zkontrolovat tabulky s chybějícími BaseGuid nebo scoring sloupci
@@ -1227,6 +1242,11 @@ BLOK 8 — Governance self-check (self-reflection, bez DB volání):
 ☐ Ikona agenta: při selfUpdate vygenerován návrh ikony dle jména/tématu agenta
 ☐ error tab: lifecycle shodný s ostatními taby (entities/names/urls) v master spreadsheet (append, nikdy mazat)
 ☐ Kalendář: CALENDAR_ID pevně nastaven dle AgentType (NIKDY "AI Catalogs" jako parametr přímo)
+☐ Entity minimum baseline ověřeno: COUNT(active entities) >= 25; pokud méně → eskalovat na agent-alerts
+  message: "VAROVÁNÍ: pouze {N} aktivních entit (minimum 25)"
+☐ Orphaned entity archival každých 30 runů
+☐ Confidence decay aplikován (N záznamů)
+☐ Processing tab TTL zkontrolován
 
 ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
 - ZAKÁZÁNO: DELETE FROM [jakákoli tabulka] — výhradně soft delete přes IsDeleted=true + DeletedAt=now()
@@ -1289,6 +1309,14 @@ Recommended fields:
 - errors[]
 - blockerCategory — when success == false
 - notes, metadata
+- baselineVersion — PromptVersion při posledním full-run baseline snapshotu
+
+## Baseline Snapshot Protocol
+
+Při každém 10. runu (nebo explicitně RunMode=baseline):
+- Uložit count entit per EntityType do AgentRunReports.Notes jako JSON
+  {"baseline":{"TeamName":N,"PlayerName":N,"EventName":N},"version":"{PromptVersion}"}
+- Toto slouží Analyzeru pro before/after porovnání
 
 Rules:
 - save must be attempted even when run is aborted or partial
@@ -1649,6 +1677,14 @@ Recovery:
 - source confirms entity unchanged: VerifiedAt = now(), ConfidenceScore = min(original + 10, 100)
 - new source provides better data: recalculate score from scratch
 
+## Confidence Decay Rule
+
+Entity neověřená > 90 dní:
+- Snížit ConfidenceScore o 0.05 per každých dalších 30 dní (minimum floor: 0.10)
+- Při ConfidenceScore < 0.30 → označit pro re-generaci (přidat do DiscoveryQueue)
+- Decay aplikovat při každém runu jako post-processing krok
+- Logovat: "decay_applied={N}, queue_added={M}"
+
 ## Deduplication Algorithm — 8.5.0
 
 Step 1 — Exact match (always first):
@@ -1676,6 +1712,16 @@ Merge rules:
 
 NormalizedName computation:
 - lowercase → strip diacritics → remove punctuation except hyphen → collapse spaces → trim
+
+## Entity Deduplication Rule
+
+Při detekci duplicity (stejný NormalizedName):
+1. Porovnat ConfidenceScore — zachovat záznam s vyšším score
+2. Pokud score shodný → zachovat starší záznam (nižší CreatedAt)
+3. Merge: přenést vyšší ReliabilityScore, Image, AIMetadata na survivor
+4. Označit duplikát: IsDeleted=true, NormalizedName="DUPLICATE_{original_guid}"
+5. Logovat do AgentRunReports.Notes: "dedup={N},merged={guids}"
+NormalizedName match: exact match NEBO Levenshtein distance ≤ 2 pro entity stejného EntityType.
 
 ## Entity Country/Region Disambiguation
 
@@ -1879,6 +1925,18 @@ Update procedure:
 
 Notify when source reliability drops below 50.
 
+## Source Tier Scoring Matrix
+
+| SourceTier | MinReliability | MaxBatchSize | RetryPolicy       |
+|-----------|----------------|--------------|-------------------|
+| Tier1     | 0.90           | rate_limit_guard.max | 3× exponential |
+| Tier2     | 0.70           | rate_limit_guard.max * 0.7 | 2× linear   |
+| Tier3     | 0.50           | rate_limit_guard.max * 0.5 | 1× no-retry |
+| Tier4     | 0.30           | 10 (hard cap) | 0 (log only)    |
+
+Agent MUSÍ číst MaxBatchSize z rate_limit_guard (ne z tabulky výše přímo).
+Tabulka definuje poměry — absolutní hodnoty vždy z rate_limit_guard.
+
 ## Pagination Governance — 8.5.0
 
 Pagination types: offset-based | cursor-based | link-header | total-count
@@ -1998,6 +2056,15 @@ rate_limit_guard         → zobraz limity a pravidla ✅ kritický
 save_image_url           → stáhni a ulož obrázek z URL
 save_image_base64        → ulož obrázek z base64
 list_entity_images       → seznam obrázků entity
+
+## Image Governance Circuit Breaker
+
+Počítat selhání save_image_* za aktuální run:
+- Po 3 selháních → přejít do images_degraded mode
+- V images_degraded: přeskočit image operace, pokračovat s textovými daty
+- Logovat: capability_missing("image_pipeline_degraded"), pokračovat
+- Eskalovat na agent-maintenance: "Image pipeline degraded: {N} selhání za run"
+- NEPOUŽÍVAT STOP jen kvůli image selháním — data jsou důležitější než obrázky
 
 ── POKROČILÉ ──────────────────────────────────────────
 create_partitioned_table → range-partitioned tabulka (velké tabulky)
@@ -3266,7 +3333,7 @@ Version registry:
 - RuntimeSafetyVersion: 11.0.0
 - ScoringVersion: 3.0
 - ImageGovernanceVersion: 11.0.0
-- PromptVersion: 11.7.0
+- PromptVersion: 11.8.0
 
 Breaking change is:
 - changing primary key standard, timestamp standard, scoring range
@@ -3378,6 +3445,16 @@ Pokud dva agenti zkusí upsert stejného záznamu ve stejný čas:
 Operátor přidá entity do tabu 'names' v master spreadsheet s prioritou (ImportantScore).
 Agent načte tab 'names' na každém startu a seřadí dle ImportantScore DESC → zpracuje nejprve ty s nejvyšším score.
 
+## Cross-Catalog Reference Protocol
+
+Catalog agent SMÍ číst z jiného katalogového spreadsheet POUZE:
+1. Pokud operátor explicitně povolí v {AgentName}_config.txt: CrossCatalogRead=true
+2. Pouze read (sheets_get_values) — nikdy write do cizího spreadsheet
+3. Maximálně 3 cross-catalog reads per run (ochrana proti kaskádním failures)
+4. Logovat každý cross-catalog read: "cross_catalog_read: {sourceAgentName}"
+5. Pokud cross-catalog zdroj nedostupný → degraded mode (přeskočit, pokračovat)
+NIKDY zapisovat do spreadsheetů jiných agentů bez explicitního operátorského pokynu.
+
 =============================================================
 APPENDIX: Legacy metadata, changelog (zkráceno)
 =============================================================
@@ -3388,6 +3465,14 @@ VerificationStatus: pending | pending_recheck | searched_no_matches |
   verification_incomplete | evidence_found_needs_followup | matches_found | exhausted
 
 ProcessingStatus: pending | processing | completed | partially_processed | failed
+
+## Processing Tab TTL
+
+Záznamy v processing tabu starší než 7 dní → označit jako stale:
+- sheets_get_values(range="processing") → filtrovat StartedAt < NOW() - 7 dní
+- Pro stale záznamy: sheets_update_row → Notes="STALE: překročen TTL 7d"
+- Přeskočit při dalším runu (CompletedAt IS NULL + stale = abandoned session)
+- Logovat: "stale_sessions={N}"
 
 DataOrigin: verified_provider | official_source | registry_source | trusted_aggregator |
   community_source | ai_inferred | user_modified | unknown
@@ -3574,7 +3659,7 @@ EXPANDED SECTIONS — Complete Governance Details
 
 Název katalogu: {{CatalogName}}
 Hlavní oblast katalogu: {{CatalogDomain}}
-PromptVersion: 11.7.0
+PromptVersion: 11.8.0
 Timezone: Europe/Prague
 Naplánovaný běh: {{ScheduledRunTime}}
 
@@ -3921,7 +4006,7 @@ Rules:
 
 ### MCP VO2QNAPDBAI Compatibility Check
 
-PromptVersion: 11.7.0
+PromptVersion: 11.8.0
 
 Ověřené image nástroje:
 - save_image_base64
@@ -4405,7 +4490,7 @@ AIProvenanceVersion: 3.0
 
 ## Prompt Synchronization Note
 
-CatalogPrompt 11.7.0 je governance dokument pro Catalog agenty.
+CatalogPrompt 11.8.0 je governance dokument pro Catalog agenty.
 ManagerPrompt je samostatný governance dokument pro Manager agenty — oba jsou nezávislé.
 
 Aktivní kanonický standard:
@@ -5119,7 +5204,7 @@ ValidationScore interpretation:
 ## Prompt Integrity and Provenance
 
 Recommended metadata:
-- PromptVersion: 11.7.0
+- PromptVersion: 11.8.0
 - PromptName: CatalogPrompt
 - CanonicalFileId: NIKDY nepoužívat uložené fileId — vždy search_files(query="CatalogPrompt.txt")
 - SourceDocumentUrl: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
@@ -5178,7 +5263,7 @@ NormalizedName:
 
 ## Final Canonical Reference
 
-This document (CatalogPrompt 11.7.0) is the authoritative governance prompt for all Catalog agents.
+This document (CatalogPrompt 11.8.0) is the authoritative governance prompt for all Catalog agents.
 
 Every Catalog agent (AgentType: Catalog) uses this prompt as its complete governance.
 Manager agents (AgentType: Manager) use ManagerPrompt as their complete standalone governance.
@@ -5188,7 +5273,7 @@ Canonical Drive folder: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoE
 POZNÁMKA: Canonical source document ID se NIKDY neukládá ani nepoužívá jako runtime identifikátor.
   Použij search_files(query="CatalogPrompt.txt", folderId="1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ") pro vyhledání.
 
-PromptVersion: 11.7.0
+PromptVersion: 11.8.0
 Generated: 2026-09-17
 
 

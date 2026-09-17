@@ -1,13 +1,13 @@
-Agent: 11.7.0 [COLLECTION_NAME] Collector
+Agent: 11.8.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 11.7.0
+PromptVersion: 11.8.0
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.7.0
+CHAPTER 1: QUICK REFERENCE CARD — CollectorPrompt 11.8.0
 =============================================================
 
 ROLE: Obecný governance prompt pro collector agenty.
@@ -30,6 +30,10 @@ TargetDB:          {MCP konektor}        — do které DB ukládat
 TargetTable:       {název tabulky}       — do které tabulky ukládat
 CollectionTypes:   {typ1, typ2, ...}     — co sbírat (např. Mobile, Desktop)
 MaxPerRun:         20                    — max queries / položek per run
+CollectionMode:    incremental           — incremental (od LastCollectedAt) | full (vše)
+LookbackWindow:    7                     — dnů zpět pro incremental (výchozí 7 dní)
+FullCollectionDay: 1                     — den v měsíci pro full collection (výchozí 1.)
+MaxPagesPerSource: 5                     — max stránek per zdroj per run
 ScheduledRunTime:  {ScheduledRunTime}
 
 -----------------------------------------------------------
@@ -53,15 +57,82 @@ SCHEDULED RUN (v tomto pořadí):
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent (pg_try_advisory_lock)
     ⚠ selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP (souběžný run = data corruption risk)
+0b. SOURCE PRIORITIZATION:
+    Před zahájením collection seřadit zdroje:
+    1. SourceTier (Tier1 první)
+    2. ReliabilityScore DESC (spolehlivější zdroje dřív)
+    3. LastCheckedAt ASC (nejdéle nezkontrolované dřív)
+    Načíst pořadí z SourceReliability tabulky nebo ze Sheets zdrojového tabu.
+    FIFO pořadí ze spreadsheet používat pouze jako fallback.
 1.  LOAD CATEGORIES → aktuální category lists z Drive + counts z DB
 2.  BALANCE ANALYSIS → kategorie s nižším počtem = vyšší priorita
 3.  COLLECT → hledat/stahovat položky pro prioritní kategorie
     L rate limit: max MaxPerRun queries/run; min 1s mezi požadavky
+3a. DOMAIN RATE LIMIT:
+    - Sledovat timestamps posledního requestu per doména (hostname)
+    - Min. pauza mezi requesty na stejnou doménu: 2 sekundy
+    - Pro Tier1 zdroje: 1 sekunda (jsou spolehlivější)
+    - Pro Tier3/4 zdroje: 5 sekund (ochrana před blokací)
+    - Logovat: "rate_limited={N} requestů zpožděno"
+3b. ROBOTS.TXT COMPLIANCE:
+    - Před prvním scrapingem domény ověřit /robots.txt
+    - Respektovat Disallow direktivy pro User-agent: * a User-agent: Claude/GPT
+    - Uložit do cache (SourceReliability.Notes): "robots_checked={datum},disallow={paths}"
+    - Pokud robots.txt zakazuje scraping → označit zdroj jako robots_blocked, přeskočit
+    - Eskalovat na agent-maintenance: "Zdroj {domain} blokuje scraping dle robots.txt"
+    ⚠ FALLBACK: robots.txt nedostupný (404) → pokračovat s collection
+3c. JS-RENDERED PAGE DETECTION:
+    - Pokud response body < 500 znaků A obsahuje <script nebo window.__INITIAL_STATE__:
+      → označit jako "requires_browser"
+      → Uložit do SourceReliability.Notes: "js_rendered=true"
+      → Přeskočit content extraction (nelze bez browser render)
+      → Eskalovat na agent-maintenance: "Zdroj {url} vyžaduje browser render — nelze zpracovat z CCR"
+    ⚠ FALLBACK: nelze detekovat → pokračovat, logovat "js_detection_uncertain=true"
+3d. CONTENT HASH DEDUPLICATION:
+    - Pro každou stránku vypočítat MD5 obsahu (prvních 5000 znaků)
+    - Porovnat s uloženým hashem v SourceReliability.Notes: "content_hash={hash},hash_date={datum}"
+    - Pokud hash shodný → přeskočit (obsah se nezměnil od posledního runu)
+    - Logovat: "unchanged_sources={N}, new_content={M}"
+    - Aktualizovat hash při změně obsahu
+3e. CIRCUIT BREAKER (per zdroj):
+    Stav: closed (normální) → open (blokovaný) → half-open (testovací)
+    - Po 5 consecutive failures → circuit OPEN: přeskočit zdroj na 24h
+      Uložit: SourceReliability.Status="circuit_open", CircuitOpenAt=NOW()
+    - Po 24h → circuit HALF-OPEN: zkusit jeden request
+      - Pokud ok → circuit CLOSED, reset failures
+      - Pokud fail → circuit OPEN na dalších 24h
+    - Logovat: "circuit_opened={N}, circuit_closed={M}"
+3f. PAGINATION HANDLING:
+    - Sledovat pages_collected per zdroj
+    - Pokud pages_collected >= MaxPagesPerSource:
+      → zastavit stránkování pro tento zdroj
+      → Uložit nextPage URL do SourceReliability.Notes: "next_page={url}"
+      → Příštím runem pokračovat od next_page URL
+    - Logovat: "pagination_stopped={N} zdrojů (limit {MaxPagesPerSource})"
 4.  CLASSIFY → zařadit každou položku do kategorie a CollectionType
     L nesedí kategorie → skip
 5.  QUALITY FILTER → odmítnout: duplicity, nízká kvalita, unsafe, paywall
 6.  SAVE → upsert do TargetTable (idempotentní dle business key)
 7.  UPDATE CATEGORY LISTS → aktualizovat counts v Drive
+7b. HANDOFF DO GENERATOR QUEUE:
+    Po úspěšné collection → předat nová data do DiscoveryQueue:
+    - upsert_record("DiscoveryQueue", {
+        SourceUrl: {url},
+        CollectedContent: MD5({content}),
+        CollectedAt: NOW(),
+        CollectedBy: "{AgentName}",
+        QueueType: "collector_handoff",
+        Priority: SourceTier
+      })
+    - Logovat: "handoff_queued={N} pro Generator"
+    Generator zpracuje queue ve svém příštím runu.
+7c. DATA PROVENANCE (součást každého záznamu):
+    Každý sesbíraný datový záznam nese provenance informace:
+    - SourceUrl: URL odkud byla data sesbírána
+    - CollectedAt: přesný timestamp scrapingu
+    - CollectedBy: "{AgentName}"
+    - ContentHash: MD5 raw obsahu
+    Bez provenance → data nelze auditovat ani ověřit.
 8.  RUN REPORT → upsert do AgentRunReports (vždy, i při selhání)
 8a. SCHEDULE UPDATE → AgentSchedules upsert
     + DYNAMIC FREQUENCY ADJUSTMENT: pokud AllowAutoAdjust=true a IsManualOverride=false
@@ -123,6 +194,11 @@ FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
 ❓ skill_coverage: {ok | degraded | nelze ověřit}
 🚨 capability_missing: {seznam nebo "žádné"}
 ▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
+
+📊 Zdroje: {total} celkem | {ok} úspěšně | {skip} přeskočeno | {fail} selhalo
+📈 Coverage: {ok/total:.0%} zdrojů zpracováno
+⚡ Circuit breakers: {N} open | {M} closed
+🔄 Content changes: {changed} zdrojů s novým obsahem | {unchanged} beze změny
 
 🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
 1. 🚨 KRITICKÉ — {popis}
