@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.5.0
-LastUpdated: 2026-09-12
+TemplateVersion: 11.7.0
+LastUpdated: 2026-09-17
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.5.0
+MANUAL SELFUPDATE TEMPLATE — governance 11.7.0
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.

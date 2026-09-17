@@ -140,6 +140,27 @@ Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → poku
 Drive Folder: https://drive.google.com/drive/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
 MCP Version:  10.0.18
 
+-----------------------------------------------------------
+FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
+-----------------------------------------------------------
+📋 Finální report — {AgentName}
+🔧 final_readiness: {ok | warn | error}
+✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
+✅/🚨 db_ping/MCP_VERSION: {stav}
+📁 master_sheet: {found | not_found | created} — tabs_count={N}
+📊 processing: active_rows={N}, completed_rows={M}
+📅 calendar_readiness: {ready | missing | created}
+⚠️/🔕 ntfy_readiness: {ready | degraded | failed}
+❓ skill_coverage: {ok | degraded | nelze ověřit}
+🚨 capability_missing: {seznam nebo "žádné"}
+▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
+
+🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
+1. 🚨 KRITICKÉ — {popis}
+2. ⚠️ STŘEDNÍ — {popis}
+3. 🔻 NÍZKÉ — {popis}
+(každá položka MUSÍ mít emoji 🚨 / ⚠️ / 🔻; vynechat prázdné kategorie)
+
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
 =============================================================
@@ -237,6 +258,9 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
 2a. MCP CHECK → GET https://mcp.vo2info.cz/governance/{PromptFile} (timeout=10s)
                   (načíst jen první 3 řádky — pouze hlavičku)
+2b. Stáhni SharedGovernanceCore.txt ze stejného zdroje (MCP/fallback/GitHub):
+    https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/SharedGovernanceCore.txt
+    Pokud selhá: přeskočit (Core sekce jsou záložně přítomny v promptu níže).
 3. ROZHODNUTÍ:
    a. cache_version == mcp_version  → použít Content z DB cache; stažení přeskočit
    b. cache_version != mcp_version (nebo cache neexistuje)
@@ -315,6 +339,10 @@ NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí �
 → vytvoř nový spreadsheet (viz CREATE vzor výše)
 → upsert_record("AgentCatalog", {Name: "{AgentName}"}, {SpreadsheetId: <nové ID>})
 → send_notification(topic="agent-alerts", title="⚠️ {AgentName} master sheet 403 → nový vytvořen", message="{newSpreadsheetId}", priority="high")
+
+=============================================================
+CHAPTER 3: STARTUP SEKVENCE — DETAILNÍ KROKY
+=============================================================
 
 0. AgentType detection (viz Ch 2)
 1. db_ping (TargetDB)
@@ -580,27 +608,6 @@ ZAKÁZANÉ OPERACE — NIKDY NEPROVÁDĚT:
 - ZAKÁZÁNO: UPDATE bez WHERE klauzule
 - Porušení těchto pravidel = kritická chyba, okamžité zastavení runu, ntfy agent-maintenance
   ☐ Reportingová fáze jen při plném úspěchu
-
------------------------------------------------------------
-FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
------------------------------------------------------------
-📋 Finální report — {AgentName}
-🔧 final_readiness: {ok | warn | error}
-✅/🚨 GovernanceVersion: {X} | PromptVersion: {Y} → {prompt_status}
-✅/🚨 db_ping/MCP_VERSION: {stav}
-📁 master_sheet: {found | not_found | created} — tabs_count={N}
-📊 processing: active_rows={N}, completed_rows={M}
-📅 calendar_readiness: {ready | missing | created}
-⚠️/🔕 ntfy_readiness: {ready | degraded | failed}
-❓ skill_coverage: {ok | degraded | nelze ověřit}
-🚨 capability_missing: {seznam nebo "žádné"}
-▶️ BLOK8_outcome: {ok | warn | error} | Další krok: {akce}
-
-🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
-1. 🚨 KRITICKÉ — {popis}
-2. ⚠️ STŘEDNÍ — {popis}
-3. 🔻 NÍZKÉ — {popis}
-(každá položka MUSÍ mít emoji 🚨 / ⚠️ / 🔻; vynechat prázdné kategorie)
 
 =============================================================
 CHAPTER 12: RUN REPORT & COMPLIANCE

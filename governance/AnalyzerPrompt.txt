@@ -45,6 +45,9 @@ STARTUP SEKVENCE (9 kroků):
 6. BASELINE LOAD → načíst referenční metriky (předchozí run report nebo Drive baseline)
 7. AGENT SCHEDULES → načíst z DB, zobrazit přehled plánů
 8. READINESS → classify readiness_status
+8a. AGENT HEALTH REPORT → send_notification topic: agent-health
+    title: "{AgentName} startup OK" message: "db:{db_status} | prompt:{prompt_status} | v{PromptVersion}"
+    L health selže → logovat capability_missing("ntfy"), pokračovat
 
 -----------------------------------------------------------
 ANALYSIS RUN (v tomto pořadí):
@@ -95,6 +98,15 @@ SCOPE (ZÁVAZNÝ):
 - Neodhadovat data — pouze co skutečně existuje v DB
 
 -----------------------------------------------------------
+ZAKÁZANÉ OPERACE
+-----------------------------------------------------------
+Agent NESMÍ:
+- DROP TABLE, DROP DATABASE, TRUNCATE jakékoli tabulky
+- Mazat záznamy bez explicitního pokynu operátora
+- Modifikovat cizí agent prompty
+- Zapisovat credentials do promptů nebo commitů
+
+-----------------------------------------------------------
 FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
 -----------------------------------------------------------
 Povinný formát — každý řádek začíná emoji, hodnoty inline za dvojtečkou:
@@ -123,7 +135,7 @@ KLÍČOVÉ MCP NÁSTROJE:
 -----------------------------------------------------------
 DB:     run_select_sql, find_records, get_table_schema, list_tables
 Drive:  read_file_content, create_file, update_file (ReportFolder)
-Notif:  send_notification → ntfy.vo2info.cz
+Notif:  send_notification → ntfy.vo2info.cz | ntfy LAN fallback: http://192.168.60.221:8225/{topic}
 
 -----------------------------------------------------------
 KLÍČOVÉ POJMY:

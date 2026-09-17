@@ -225,6 +225,9 @@ Při každém startu agent NEčte vždy celý soubor z Drive — nejprve porovn�
               WHERE AgentType='{AgentType}' AND PromptFile='{PromptFile}'
 2a. MCP CHECK → GET https://mcp.vo2info.cz/governance/{PromptFile} (timeout=10s)
                   (načíst jen první 3 řádky — pouze hlavičku)
+2b. Stáhni SharedGovernanceCore.txt ze stejného zdroje (MCP/fallback/GitHub):
+    https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/SharedGovernanceCore.txt
+    Pokud selhá: přeskočit (Core sekce jsou záložně přítomny v promptu níže).
 3. ROZHODNUTÍ:
    a. cache_version == mcp_version  → použít Content z DB cache; stažení přeskočit
    b. cache_version != mcp_version (nebo cache neexistuje)
@@ -568,114 +571,12 @@ Forbidden: DELETE, DROP, TRUNCATE; ukládání unsafe/paywall obsahu;
   kategorie mimo povolené listy; tvrzení zápisu bez potvrzení
 
 
-=============================================================
-CHAPTER 11: GOVERNANCE EXTENSIONS
-=============================================================
-
-## Data Lineage
-
-Každý záznam musí mít sloupce pro sledování původu dat (rozšířený BaseGuid standard 9.0.0):
-
-| Sloupec | Typ | Výchozí | Pravidlo |
-|---------|-----|---------|---------|
-| CreatedByAgent | text | '' | Nastavit při insertu; nikdy neměnit |
-| LastUpdatedByAgent | text | '' | Aktualizovat při každém UPDATE |
-| DataSource | text | '' | Původní zdroj (URL, cesta k souboru, název screenshotu) |
-
-Agent VŽDY nastavuje tyto tři sloupce. Umožňuje zpětně dohledat, kdo co zapsal.
-
-## Environment Support
-
-Agent čte prostředí z {AgentName}_config.txt (pole Environment: prod | dev | staging).
-
-| Environment | DB | Drive | Notifikace | Calendar |
-|-------------|----|----- |-----------|---------|
-| prod | TargetDB | /Prompts/{AgentType}s/ | agent-runs / agent-errors | ✅ |
-| dev | TargetDB nebo dev prefix | /Prompts/Dev/{AgentType}s/ | agent-dev | ❌ |
-| staging | staging DB | /Prompts/Staging/{AgentType}s/ | agent-staging | ❌ |
-
-Dev prostředí: všechny DB zápisy jsou automaticky DryRun.
-Bootstrap hodnota je výchozí pokud _config.txt neexistuje nebo pole chybí: prod.
-
-DRY RUN AKTIVACE:
-Operátor aktivuje dry run dvěma způsoby:
-1. Config záložka: přidej řádek `DryRun: true`
-2. Todo záložka: přidej řádek `YYYY-MM-DD | dry_run | pending`
-
-Dry run chování:
-- Všechny DB write operace se PŘESKOČÍ (ensure_table, upsert, ensure_columns)
-- Všechny Drive write operace se PŘESKOČÍ
-- Agent pouze čte, analyzuje a reportuje co BY udělal
-- Run report se označí jako dry_run: true
-- Ntfy zpráva obsahuje prefix [DRY RUN]
-
-## Agent Health Reporting
-
-Na konci každého běhu agent upsertuje záznam do AgentHealthReport (AIData):
-
-```
-AgentHealthReport: AgentName, AgentType, Status (healthy/degraded/error),
-  PromptVersion, Environment, DBStatus, LastRunAt, LastRunSuccess,
-  RunDurationMs, ErrorCount, Metadata jsonb
-```
-
-Agent vytvoří tabulku pokud neexistuje. Slouží jako centrální dashboard zdraví agentů.
-
-## Prompt Version Pinning
-
-Operátor může pinovat verzi promptu pro konkrétního agenta zápisem do PromptVersionPin (AIData):
-
-```
-PromptVersionPin: AgentType, PinnedVersion ("9.0.0" nebo "latest"), PinnedBy, Reason
-```
-
-Agent na startu zkontroluje pin PŘED Prompt Cache Protocol (viz Ch 3):
-- Pin existuje a PinnedVersion != "latest" → načíst pinnutou verzi z cache nebo Drive archivu
-- Pin neexistuje nebo PinnedVersion = "latest" → standardní cache protokol
-- Prevent: automatické upgrady s breaking changes; agent zůstane na stabilní verzi
-
-## Agent Deprecation Lifecycle
-
-Operátor nastaví v {AgentName}_config.txt:
-
-| status | Chování |
-|--------|---------|
-| active (default) | Normální běh |
-| deprecated | Agent běží, loguje každý run jako deprecated; ntfy agent-alerts |
-| disabled | Agent okamžitě ukončí startup s "Agent disabled by operator" |
-
-Při archivaci: Drive soubory přesunout do /Archive/{AgentName}/.
-Data v DB nikdy nemazat.
-
-
-## Source Discovery Protocol
-
-Agent aktivně hledá nové zdroje a navrhuje je operátorovi:
-1. Každých 10 runů: web search pro nové zdroje dle CollectionTypes
-2. Nový zdroj → zapsat do tab 'urls' v master spreadsheet {AgentName} s Status=proposed
-3. Agent NIKDY automaticky neaktivuje nový zdroj (jen operátor změní na Status=active)
-
-## Quality Trend Tracking
-
-SourceReliability tabulka rozšířena o trend:
-- TrendDirection: improving | stable | declining (porovnání posledních 7 dnů)
-- Pokles ReliabilityScore >10 bodů za 7 dnů → ntfy agent-alerts "source declining: {source}"
-- Zdroj pod ReliabilityScore 30 → automaticky do circuit breaker open stavu
-
-## Retention Policy
-
-Starší obsah archivován, nikdy hard-deleted:
-- IsArchived boolean DEFAULT false
-- ArchivedAt timestamptz
-- RetentionDays z _config.txt (default 365); záznam starší → IsArchived=true, IsDeleted=false
-- Archivace se provede při každém 30. běhu (batch scan)
-
-## Cross-agent Deduplication
-
-SharedSourceRegistry (AIData) — sdílená tabulka pro všechny Collector agenty:
-- SourceUrl, ContentHash, FirstSeenByAgent, FirstSeenAt
-- Před zápisem zkontrolovat: existuje ContentHash v SharedSourceRegistry?
-- Pokud ano → skip; pokud ne → zapsat + uložit do SharedSourceRegistry
+## CHAPTER 11: GOVERNANCE EXTENSIONS
+→ Sdílené sekce načteny z SharedGovernanceCore.txt (krok 2b).
+  Zahrnuje: Data Lineage, Environment Support, DryRun, Agent Health Reporting,
+  Prompt Version Pinning, Agent Deprecation Lifecycle, Source Discovery Protocol,
+  Quality Trend Tracking, Retention Policy, Cross-agent Deduplication.
+→ Pokud SharedGovernanceCore.txt nebyl načten: níže následuje záložní obsah.
 
 =============================================================
 APPENDIX — AgentType Detection Registry

@@ -546,6 +546,9 @@ Při každém startu agent NEčte vždy celý soubor — nejprve porovná verze:
 2. MCP CHECK → WebFetch prvních 5 řádků z MCP (pouze hlavičku):
    CatalogPrompt:       https://mcp.vo2info.cz/governance/CatalogPrompt.txt
    CatalogPromptSkills: https://mcp.vo2info.cz/governance/CatalogPromptSkills.txt
+2b. Stáhni SharedGovernanceCore.txt ze stejného zdroje (MCP/fallback/GitHub):
+    https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/SharedGovernanceCore.txt
+    Pokud selhá: přeskočit (Core sekce jsou záložně přítomny v promptu níže).
 3. ROZHODNUTÍ:
    a. cache_version == mcp_version  → použít Content z DB cache; stažení přeskočit
    b. cache_version != mcp_version (nebo cache neexistuje)
