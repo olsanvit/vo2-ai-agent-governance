@@ -509,10 +509,12 @@ function createMcpServer() {
     click:    z.string().optional(),
   }, async ({ topic, title, message, priority = "default", tags = [], markdown = true, click }) => {
     const ntfyUrl = `${NTFY_BASE_URL}/${topic}`;
-    const payload = { title, message, priority, tags, markdown };
-    if (click) payload.click = click;
-    const body = JSON.stringify(payload);
-    const headers = { "Content-Type": "application/json" };
+    const body = message;
+    const headers = { "Content-Type": "text/plain", "X-Title": title };
+    if (priority !== "default") headers["X-Priority"] = priority;
+    if (tags?.length) headers["X-Tags"] = tags.join(",");
+    if (click) headers["X-Click"] = click;
+    if (markdown) headers["X-Markdown"] = "true";
     if (NTFY_USER && NTFY_PASS) {
       headers["Authorization"] = "Basic " + Buffer.from(`${NTFY_USER}:${NTFY_PASS}`).toString("base64");
     }
