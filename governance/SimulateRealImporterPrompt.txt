@@ -88,6 +88,15 @@ KONEKTORY (oba musí být aktivní):
 -----------------------------------------------------------
 SCHEDULED RUN — frekvence: denně (doporučeno 04:00 UTC)
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   Existující mechanismy jsou plnohodnotným ekvivalentem efficiency check:
+   - PRE-IMPORT CHECK (krok 11.8): SELECT COUNT(*) WHERE > LastSyncAt → cnt=0 → přeskočit sport
+   - PRE-FLIGHT SPORT COUNT (krok 11.8.7): formální early-exit per sport
+   - Per-sport circuit breaker: SR_CircuitBreakers State=open → skip sport
+   - Delta sync (sr-delta-sync-calculator): zpracovávat jen data od LastSyncAt
+   Pokud všechny sporty v circuit open NEBO DiscoveryQueue prázdná → EARLY EXIT celého runu
+   (Žádné duplikátní conditions nutné — mechanismy jsou plně kompatibilní s Efficiency Protokolem)
+
 1.  PING obou konektorů → db_ping (oba)
     L jeden nedostupný → STOP, ntfy urgent
 2.  DISCOVERY → list_tables (VO2QNAPDBAI) → najít existující sportovní tabulky (Chapter 3)
