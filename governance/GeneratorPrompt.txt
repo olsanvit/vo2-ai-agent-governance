@@ -61,6 +61,14 @@ STARTUP SEKVENCE (10 kroků):
 -----------------------------------------------------------
 GENERATION RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
+     AND QueueType IN ('collector_handoff','checker_handoff')
+   Pokud = 0 pending entit A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Výjimka: RunMode=forced_regeneration NEBO 0b REGENERATION QUEUE obsahuje záznamy → pokračovat
+   Incremental scope: generovat jen pro pending v DiscoveryQueue (nikdy přegenerovat existující)
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0b. REGENERATION QUEUE CHECK (na začátku každého runu):
     - Načíst z DiscoveryQueue kde QueueType="regeneration" ORDER BY Priority DESC LIMIT 20

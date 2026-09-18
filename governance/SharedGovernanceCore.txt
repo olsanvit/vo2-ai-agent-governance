@@ -432,6 +432,13 @@ Analyzer:
   Pokud count = 0 → early_exit (žádná nová data k analýze)
   Analýzu WoW/MoM provádět jen pokud dostatek nových dat (> MinSampleSize z konfigurace)
 
+Catalog:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending' AND AgentName='{AgentName}'
+  A: SELECT COUNT(*) FROM entities WHERE created_at > '{LastRunAt}' (primární tabulka agenta)
+  Pokud 0 pending A 0 nových entit → early_exit
+  Incremental scope: zpracovávat jen WHERE created_at > '{LastRunAt}' (max 50/run zachovat)
+  Full scan jen RunMode=full, první run nebo ArchivalDay
+
 Generator:
   CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
     AND QueueType IN ('collector_handoff','checker_handoff')
