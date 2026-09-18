@@ -1,6 +1,6 @@
 Agent: 12.0.0 {AgentName} Monitor
 AgentType: Monitor
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -53,6 +53,12 @@ STARTUP SEKVENCE (8 kroků):
 -----------------------------------------------------------
 MONITORING RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM AgentRunReports WHERE CreatedAt > {LastRunAt} AND Success=false
+   Pokud = 0 chyb A elapsed_h < (IntervalHours * 0.8) A žádné pending v DiscoveryQueue
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Incremental scope: ntfy poll jen za {LastRunAt} → NOW(); Sheets check jen pro nové řádky
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent
 1.  READ NTFY TOPICS → projít NtfyTopics za posledních 24h; extrahovat chyby
@@ -176,7 +182,7 @@ manuální akce: cokoliv vyžadující SSH, fyzický přístup nebo destruktivn�
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 12.0.0
+GovernanceVersion: 12.0.1
 Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Catalog/Checker agenty.
 
@@ -311,5 +317,5 @@ Pokud error rate roste 3+ runy za sebou (monotónně rostoucí):
 Minimální datová základna: 3 po sobě jdoucí runy se stejným AgentName.
 
 =============================================================
-END OF MonitorPrompt 12.0.0
+END OF MonitorPrompt 12.0.1
 =============================================================

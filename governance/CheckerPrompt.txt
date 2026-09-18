@@ -1,6 +1,6 @@
 Agent: 12.0.0 {AgentName}
 AgentType: Checker
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -60,6 +60,12 @@ STARTUP SEKVENCE (10 kroků):
 -----------------------------------------------------------
 AUDIT RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending' AND QueueType='checker_handoff'
+   Pokud = 0 A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Per-entity skip: přeskočit entity WHERE LastCheckedAt > NOW() - INTERVAL '24h' AND IsManualCheck=false
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0b. CHECKPOINT RECOVERY → načíst checkpoint z AgentRunReports; pokračovat od posledního bodu (viz 11.5.2)
 0.  LOCK → advisory lock per-agent (pg_try_advisory_lock)

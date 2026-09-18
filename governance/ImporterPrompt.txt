@@ -1,6 +1,6 @@
 Agent: 12.0.0 {AgentName}
 AgentType: Importer
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -67,6 +67,12 @@ STARTUP SEKVENCE (11 kroků):
 -----------------------------------------------------------
 IMPORT RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending' AND TargetAgentType='Importer'
+   Pokud = 0 A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Incremental: zpracovávat POUZE pending záznamy z DiscoveryQueue; full import jen RunMode=full nebo první run
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0b. DRY RUN CHECK → pokud DryRun=true: přeskočit všechny write operace, logovat jako DRY RUN (viz 11.5.3)
 0c. IDEMPOTENCY CHECK → ověřit idempotency klíč v AgentRunReports; přeskočit již importované batche (viz 11.5.1)

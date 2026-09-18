@@ -1,7 +1,7 @@
 Agent: 12.0.0 {AgentName}
 AgentType: Manager
 PromptScope: Manager agents only — Catalog agents use CatalogPrompt
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -40,6 +40,12 @@ STARTUP (13 kroků -- viz Ch 3: db_ping + db_status, version check MCP→vo2info
 -----------------------------------------------------------
 SCHEDULED RUN (cca 20 kroků, v tomto poradi):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
+   Pokud = 0 A žádné chyby v posledních N runech (N = TriggerThreshold z config) A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Downstream agenty NESPOUŠTĚT pokud nemají pending work (orchestrační šetření zdrojů)
+
 0a. SELF-AUDIT → spustit POUZE pokud platí alespoň jedna podmínka:
              a) operator explicitně žádá audit (klíčová slova: "self-audit", "zkontroluj se", "audit")
              b) první run (AgentRunReports COUNT = 0)
@@ -4310,10 +4316,10 @@ Rules:
 
 ## Compatibility Matrix
 
-GovernanceVersion: 12.0.0
+GovernanceVersion: 12.0.1
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 
 Breaking change:
 - změna primary key standard, timestamp standard, scoring range

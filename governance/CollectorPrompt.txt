@@ -1,6 +1,6 @@
 Agent: 12.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -56,6 +56,12 @@ STARTUP SEKVENCE (11 kroků):
 -----------------------------------------------------------
 SCHEDULED RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT MAX(created_at) FROM primární zdrojová tabulka (porovnat s LastRunAt)
+   Pokud žádné nové záznamy A elapsed_h < (IntervalHours * 0.8) A žádné pending v DiscoveryQueue
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   CollectionMode=incremental je DEFAULT; full scan jen FullCollectionDay nebo RunMode=full
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent (pg_try_advisory_lock)
     ⚠ selhání → retry 3× s backoffem 2s/4s/8s; pokud stále selhává → STOP (souběžný run = data corruption risk)

@@ -1,6 +1,6 @@
 Agent: 12.0.0 {AgentName} Analyzer
 AgentType: Analyzer
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -57,6 +57,12 @@ STARTUP SEKVENCE (9 kroků):
 -----------------------------------------------------------
 ANALYSIS RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM primární datová tabulka WHERE created_at > '{LastRunAt}'
+   Pokud count = 0 A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Incremental scope: WHERE created_at > '{LastRunAt}'; WoW/MoM jen pokud > MinSampleSize nových dat
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0b. ANALYSIS TIMER START: zaznamenat START = NOW()
     Po každém datovém kroku ověřit: elapsed = NOW() - START
@@ -203,7 +209,7 @@ false_positive: insight označený operátorem jako irelevantní — uložit do 
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 12.0.0
+GovernanceVersion: 12.0.1
 Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Monitor agenty.
 
@@ -290,5 +296,5 @@ Structured Log příklady:
   {"ts":"{ISO8601}","level":"info","event":"analysis_end","agent":"{AgentName}","insights":{N},"quality_score":{score}}
 
 =============================================================
-END OF AnalyzerPrompt 12.0.0
+END OF AnalyzerPrompt 12.0.1
 =============================================================

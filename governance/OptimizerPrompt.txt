@@ -1,6 +1,6 @@
 Agent: 12.0.0 {AgentName} Optimizer
 AgentType: Optimizer
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -53,6 +53,13 @@ STARTUP SEKVENCE (9 kroků):
 -----------------------------------------------------------
 OPTIMIZATION RUN (v tomto pořadí):
 -----------------------------------------------------------
+⚡ EFFICIENCY CHECK (Resource-Efficiency Protocol — viz SharedGovernanceCore v12.0.1):
+   CHECK: SELECT COUNT(*) FROM pg_stat_statements WHERE mean_exec_time > {SlowQueryMs}
+     AND calls > {MinCallThreshold} AND last_call > '{LastRunAt}'
+   Pokud = 0 slow queries A elapsed_h < (IntervalHours * 0.8)
+   → EARLY EXIT: success=true, change_detected=false (upsert run report, pak stop)
+   Výjimka: RunMode=full_scan přepíše early exit (SAFE-FIRST a batch sequencing zachovat)
+
 0a. SELF-AUDIT → podmínky (explicitní žádost | první run | každých 30 runů)
 0.  LOCK → advisory lock per-agent
 1.  ANALYZE → identifikovat optimalizační příležitosti dle OptimizationScope:
@@ -221,7 +228,7 @@ blocked:            vyžaduje SSH nebo destruktivní operaci = manuální akce
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 12.0.0
+GovernanceVersion: 12.0.1
 Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Checker agenty.
 
@@ -300,5 +307,5 @@ Structured Log příklady:
   {"ts":"{ISO8601}","level":"warn","event":"risky_op_skipped","agent":"{AgentName}","op":"DROP INDEX","reason":"auto_risky=false"}
 
 =============================================================
-END OF OptimizerPrompt 12.0.0
+END OF OptimizerPrompt 12.0.1
 =============================================================

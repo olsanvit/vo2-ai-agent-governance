@@ -1,5 +1,5 @@
 =============================================================
-SHARED GOVERNANCE CORE — v12.0.0
+SHARED GOVERNANCE CORE — v12.0.1
 =============================================================
 Tento soubor obsahuje sdílené sekce společné pro všechny typy agentů.
 Načítá se jako součást Prompt Cache Protocol (krok 2b).
@@ -363,6 +363,91 @@ Kroky:
 6. Eskalovat na agent-maintenance: "{AgentName} rollback na {targetVersion}"
 
 NIKDY rollbackovat na verzi < 11.0.0 (nekompatibilní MCP protokol).
+
+## Resource-Efficiency Protocol — Scheduled Run Optimization (v12.0.1)
+
+Každý agent MUSÍ před zahájením drahých operací provést nejlevnější možný check stavu.
+Vzor (povinný pro všechny scheduled runy): CHECK → CHANGE? → PROCESS → VALIDATE → REPORT
+
+### Universální pravidla
+
+1. CHECK fáze (POVINNÁ jako první krok každého scheduled runu):
+   - Načíst LastRunAt z AgentRunReports WHERE AgentName = {ThisAgent} ORDER BY CreatedAt DESC LIMIT 1
+   - Spočítat nejlevnější dostupný signál změny pro daný typ agenta (viz role-specifická guidance níže)
+   - elapsed_h = (NOW() - LastRunAt) / 3600
+
+2. CHANGE? — Early Exit (POVINNÝ před zpracováním):
+   Ukončit s success=true, change_detected=false, pokud VŠECHNY platí:
+   - elapsed_h < (IntervalHours * 0.8)  [ochrana před double-run]
+   - žádné záznamy kde Status='pending' v DiscoveryQueue pro tento AgentType
+   - COUNT nových záznamů v primární cílové tabulce od LastRunAt = 0
+   Log: {"level":"info","event":"early_exit","reason":"no_change","elapsed_h":{N},"agent":"{AgentName}"}
+   Ntfy: NEposílat (no_change není chyba; výjimka: > 3 consecutive early_exit → 1× ntfy warning)
+
+3. PROCESS — Incremental scope (POVINNÝ pokud prošel CHANGE?):
+   - Zpracovávat POUZE záznamy/entity/zdroje přidané/změněné od LastRunAt
+   - Full scan (CollectionMode=full nebo RunMode=full) POUZE:
+     a) první run (LastRunAt = NULL)
+     b) explicitní RunMode=full v konfiguraci
+     c) FullCollectionDay (typicky 1× týdně, definuje každý prompt)
+   - SQL vzor: WHERE created_at > '{LastRunAt}' OR updated_at > '{LastRunAt}'
+   - DiscoveryQueue vzor: WHERE Status = 'pending' AND TargetAgentType = '{ThisAgentType}'
+
+4. VALIDATE — validovat jen výstupy vzniklé v aktuálním runu, ne celý dataset
+
+5. REPORT — vždy, i při early exit:
+   - Upsert AgentRunReports: duration_ms, success=true/false, change_detected={bool}
+   - Early exit run: duration_ms < 5000 je normální a žádoucí
+   - Pole change_detected=false musí být explicitně nastaveno (ne NULL)
+
+### Role-specifická guidance (doplňuje universální pravidla; nepřepisovat, jen rozšiřovat)
+
+Manager:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
+  Pokud = 0 A žádné chyby v posledních N runech (N = TriggerThreshold) → přeskočit downstream pipeline
+  Downstream agenty NESPOUŠTĚT pokud nemají pending work
+
+Monitor:
+  CHECK signál — nejlevnější: SELECT COUNT(*) FROM AgentRunReports WHERE CreatedAt > {LastRunAt} AND Success=false
+  Alternativa bez DB: ntfy poll za posledních {IntervalHours*2}h
+  Pokud 0 chyb a 0 silence events → early_exit PŘED čtením Sheets nebo CI/CD
+
+Collector:
+  CHECK signál — SELECT MAX(created_at) FROM primární zdrojová tabulka
+  CollectionMode=incremental je DEFAULT; full scan jen na FullCollectionDay nebo RunMode=full
+  Content hash deduplication PŘED zápisem (existující krok 3c v promptu — zachovat)
+
+Checker:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending' AND QueueType='checker_handoff'
+  Per-entity skip: přeskočit entity kde LastCheckedAt > NOW() - INTERVAL '24h' a IsManualCheck=false
+  Full check jen pokud RunMode=full nebo entity.NeedsRecheck=true
+
+Importer:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending' AND TargetAgentType='Importer'
+  Zpracovávat POUZE pending záznamy z DiscoveryQueue; full import jen RunMode=full nebo první run
+  Po importu: nastavit DiscoveryQueue.Status='imported' pro zpracované záznamy
+
+Analyzer:
+  CHECK signál — SELECT COUNT(*) FROM primární datová tabulka WHERE created_at > '{LastRunAt}'
+  Pokud count = 0 → early_exit (žádná nová data k analýze)
+  Analýzu WoW/MoM provádět jen pokud dostatek nových dat (> MinSampleSize z konfigurace)
+
+Generator:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
+    AND QueueType IN ('collector_handoff','checker_handoff')
+  Pokud = 0 → early_exit s success=true
+  Generovat obsah jen pro záznamy kde DiscoveryQueue.Status='pending', nikdy přegenerovat existující
+
+Optimizer:
+  CHECK signál — SELECT COUNT(*) FROM pg_stat_statements WHERE calls > {MinCallThreshold}
+    AND mean_exec_time > {SlowQueryMs} AND last_call > '{LastRunAt}'
+  Pokud = 0 slow queries → early_exit
+  SAFE-FIRST a Batch sequencing zachovat beze změny (existující logika)
+
+SimulateRealImporter:
+  CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
+    AND TargetAgentType='SimulateRealImporter'
+  Per-sport circuit breaker zachovat (existující logika); early_exit pokud všechny sporty v OPEN stavu
 
 ## Disaster Recovery Protocol (v12.0.0)
 
