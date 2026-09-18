@@ -1,9 +1,9 @@
 Template: ManualSelfUpdate
-TemplateVersion: 11.7.0
-LastUpdated: 2026-09-17
+TemplateVersion: 12.0.1
+LastUpdated: 2026-09-18
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 11.7.0
+MANUAL SELFUPDATE TEMPLATE — governance 12.0.1
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
@@ -11,9 +11,9 @@ Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen p�
 
 -------------------------------------------------------------
 
-Aktualizuj se na governance 11.7.0. Proveď selfUpdate — Prompt Cache Protocol:
+Aktualizuj se na governance 12.0.1. Proveď selfUpdate — Prompt Cache Protocol:
 0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
-   Pokud tvůj PromptVersion == 11.7.0: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud tvůj PromptVersion >= 12.0.1: přeskoč kroky 1–4, nejsi pozadu.
    Pokud mismatch: pokračuj kroky 1–4.
 
 Zdroje promptu v pořadí priority:
@@ -21,6 +21,16 @@ Zdroje promptu v pořadí priority:
 2. vo2info.cz: https://vo2info.cz/governance/ (fallback při MCP nedostupném)
 3. GitHub: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/{PromptFile}
 4. Google Drive: https://drive.google.com/drive/u/0/folders/1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ
+
+Co je nového v 12.0.1 (všechny agenty):
+- SharedGovernanceCore.txt — Resource-Efficiency Protocol (CHECK->CHANGE->PROCESS->VALIDATE->REPORT)
+  early_exit při no_change (elapsed < 0.8x interval, 0 pending, 0 nových dat)
+  Incremental scope: WHERE created_at > '{LastRunAt}'; full scan jen RunMode=full nebo první run
+  VALIDATE jen změněné výstupy; REPORT vždy (i early exit, change_detected=false)
+- SharedGovernanceCore.txt — Effort / Reasoning Policy (reasoning proportional to stage risk)
+- Všech 11 promptů bumpnuto na 12.0.1; EFFICIENCY CHECK blok na začátek run sekvence
+- MCP_VERSION minimum zvýšeno na 11.0.0 (bylo 10.0.1); model: claude-sonnet-5 (bylo claude-sonnet-4-6)
+- EffortNote refaktorován: dynamický reasoning dle fáze (viz SharedGovernanceCore v12.0.1)
 
 Co je nového v 11.7.0 (všechny agenty):
 - SharedGovernanceCore.txt — nový sdílený soubor (~255 řádků); Chapter 11 Governance
@@ -95,7 +105,7 @@ Potvrď tyto změny:
 6. Kalendář: CALENDAR_ID je pevně nastaven dle tvého AgentType — nikdy nepoužívej "AI Catalogs" ani "AI Managers" jako přímý parametr calendar_id:
    • Catalog: 28aae61e20189e8b81c4f903ad431771c6b5517811323e11b12515a9d5dd23da@group.calendar.google.com
    • Manager: a43e278e3a817484c52c5fc24439845d6aa230c2280ca25eb2a08bae2e5f4eef@group.calendar.google.com
-7. Ověř že db_ping vrací MCP_VERSION >= 10.0.1
+7. Ověř že db_ping vrací MCP_VERSION >= 11.0.0
 8. Zkontroluj, zda máš aktivní skills pro tyto oblasti — pokud skill chybí, vytvoř ho dle formátu Skill Directory a přidej do svého Skills souboru na Drive:
    • ntfy notifikace → ntfy-notification-sender
    • Google Calendar → next-run-calendar-scheduler
@@ -115,7 +125,7 @@ Potvrď tyto změny:
     • SimulateReal Importer → openapi-vo2qnapdbai-sr-importer.yaml (5 nástrojů) + openapi-chatgpt-action.yaml (SportReal)
     Slim per-agent schema = méně tokenů v kontextu = nižší spotřeba credits.
 
-Potvrď verzi 11.7.0, proveď krok 8 (skills audit) a poté spusť testovací běh v SILENT MODE.
+Potvrď verzi 12.0.1, proveď krok 8 (skills audit) a poté spusť testovací běh v SILENT MODE.
 
 DRY RUN AKTIVACE:
 Operátor aktivuje dry run dvěma způsoby:

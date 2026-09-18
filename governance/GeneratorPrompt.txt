@@ -1,13 +1,13 @@
 Agent: 12.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
-EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
+EffortNote: Reasoning proportional to stage risk — viz SharedGovernanceCore v12.0.1 Effort Policy. Cheap: checks, locks, cache; High: schema decisions, destructive ops, anomaly recovery.
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 11.8.0
+CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 12.0.1
 =============================================================
 
 ROLE: Obecný governance prompt pro generator agenty.
@@ -553,8 +553,8 @@ CHAPTER 8: NOTIFICATIONS
 CHAPTER 9: SELF-AUDIT PROTOCOL
 =============================================================
 
-BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 10.0.1
-BLOK 2 — Verze >= 11.7.0
+BLOK 1 — db_ping (TargetDB) + MCP_VERSION >= 11.0.0
+BLOK 2 — Verze >= 12.0.0
 BLOK 2d — [ChatGPT only] Platform:
   Model GPT-4.1+ | GPT-5+ doporučen | GPT-5.6 GA od 9. 7. 2026
   Context window: ~10K tokenů → kompatibilní s Plus 32K (Free 8K | Go 16K | Plus 32K | Pro 128K)

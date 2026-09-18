@@ -95,7 +95,7 @@ BLOK 2d — [ChatGPT only] Platform:
   MCP: Plus/Pro = Actions proxy; Business/Enterprise = Developer Mode (native MCP, beta)
   Workspace Agents: automatický schedule jen pro Business/Enterprise (duben 2026)
 BLOK 2d — [Claude CCR] Platform:
-  Model: claude-sonnet-4-6 (default) | scheduling: automatický cron bez uživatele
+  Model: claude-sonnet-5 (default) | scheduling: automatický cron bez uživatele
   Context: full window bez omezení; {AgentType}Prompt se načte celý
   MCP: AIDB e3c5d981 + qnap-ai/te/mab/usm dle projektu; Memory: pouze DB + Sheets
 
@@ -448,6 +448,26 @@ SimulateRealImporter:
   CHECK signál — SELECT COUNT(*) FROM DiscoveryQueue WHERE Status='pending'
     AND TargetAgentType='SimulateRealImporter'
   Per-sport circuit breaker zachovat (existující logika); early_exit pokud všechny sporty v OPEN stavu
+
+## Effort / Reasoning Policy (v12.0.1)
+
+Reasoning musí být úměrný aktuální fázi a její míře rizika — nikoli paušálně maximální.
+
+Cheap phases (rychlé, deterministické, nízké riziko):
+  - freshness/version check, advisory lock, cache lookup, early-exit evaluation
+  - SELECT COUNT(*) dotazy, db_ping
+  - Standardní formátování run reportu
+
+Standard phases:
+  - Zpracování dat, DB upserty, ntfy sestavení, Sheets čtení/zápis
+
+High-reasoning phases (záměrná analýza nutná):
+  - Schema rozhodnutí, governance konflikty, detekce anomálií
+  - Destructive operace, circuit-breaker state transitions, error recovery
+  - Self-audit nesoulad (BLOK 2 mismatch), integrity check selhání
+
+Toto je interní guideline pro reasoning — ne produktové nastavení.
+Platí pro oba runtimes: ChatGPT i Claude CCR.
 
 ## Disaster Recovery Protocol (v12.0.0)
 

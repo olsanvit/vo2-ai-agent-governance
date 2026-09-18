@@ -1,10 +1,10 @@
 Agent: 1.4.0 SimulateReal Data Importer
 AgentType: Importer
 PromptScope: SimulateReal Importer only — reads SportReal DB, writes to VO2QNAPDBAI
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
-EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
+EffortNote: Reasoning proportional to stage risk — viz SharedGovernanceCore v12.0.1 Effort Policy. Cheap: checks, locks, cache; High: schema decisions, destructive ops, anomaly recovery.
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 !! OUTPUT: SILENT MODE — minimalizuj output tokeny !!
@@ -561,7 +561,7 @@ Po obnovení:
 =============================================================
 COMPATIBILITY MATRIX
 =============================================================
-PromptVersion: 12.0.0
+PromptVersion: 12.0.1
 MCP_SR_VERSION: 1.0.0  (mcp-sportreal)
 MCP_AI_VERSION: 10.1.0 (VO2QNAPDBAI)
 
