@@ -215,24 +215,32 @@ def build_html(entries: list[dict]) -> str:
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 *{{box-sizing:border-box;margin:0;padding:0}}
+/* Stránka má výšku okna a sama neroluje — posouvá se jen .table-wrap, aby nadpis,
+   záložky, statistiky a filtry zůstaly vždy vidět. dvh kvůli lištám mobilních prohlížečů. */
+html,body{{height:100%}}
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-     background:#0d1117;color:#c9d1d9;min-height:100vh;padding:24px}}
+     background:#0d1117;color:#c9d1d9;height:100vh;height:100dvh;overflow:hidden;
+     padding:24px;display:flex;flex-direction:column}}
 h1{{font-size:22px;font-weight:700;margin-bottom:4px;color:#e6edf3}}
 .sub{{font-size:12px;color:#666;margin-bottom:24px}}
-.tabs{{display:flex;gap:4px;margin-bottom:16px}}
+.tabs{{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:16px}}
 .tab{{padding:7px 18px;border-radius:6px 6px 0 0;cursor:pointer;font-size:13px;
       font-weight:600;border:1px solid #30363d;border-bottom:none;
       background:#161b22;color:#8b949e;transition:all .15s}}
 .tab.active{{background:#21262d;color:#e6edf3;border-color:#58a6ff}}
-.panel{{display:none}}.panel.active{{display:block}}
+/* min-height:0 — bez něj flex potomek neumí být menší než obsah a tabulka by
+   přetekla pod okno místo toho, aby rolovala uvnitř .table-wrap */
+.panel{{display:none}}.panel.active{{display:flex;flex-direction:column;flex:1;min-height:0}}
 .stats{{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}}
 .filters{{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}}
 select,input{{background:#161b22;border:1px solid #30363d;color:#c9d1d9;
-             padding:6px 10px;border-radius:6px;font-size:12px;outline:none}}
+             padding:6px 10px;border-radius:6px;font-size:12px;outline:none;max-width:100%}}
 select:focus,input:focus{{border-color:#58a6ff}}
-table{{width:100%;border-collapse:collapse;font-size:12px}}
+/* Jediný rolovací prostor stránky; vodorovně roluje jen tabulka, ne celé tělo */
+.table-wrap{{flex:1;min-height:0;overflow:auto;border:1px solid #21262d;border-radius:6px}}
+table{{width:100%;min-width:640px;border-collapse:collapse;font-size:12px}}
 th{{background:#161b22;border-bottom:2px solid #30363d;padding:8px 10px;
-    text-align:left;color:#8b949e;font-weight:600;position:sticky;top:0}}
+    text-align:left;color:#8b949e;font-weight:600;position:sticky;top:0;z-index:1}}
 td{{padding:7px 10px;border-bottom:1px solid #21262d;vertical-align:middle}}
 tr:hover td{{background:#161b22}}
 tr[data-status="CRITICAL"] td:first-child{{border-left:3px solid #FF4444}}
@@ -242,7 +250,16 @@ tr[data-status="OK"]       td:first-child{{border-left:3px solid #22AA44}}
 .hidden{{display:none!important}}
 .cnt{{font-size:11px;color:#8b949e;margin-left:8px}}
 @media(max-width:600px){{
-  .stats{{gap:8px}} td,th{{padding:5px 6px;font-size:11px}}
+  body{{padding:12px 16px}}
+  h1{{font-size:18px}} .sub{{margin-bottom:12px}}
+  .stats{{gap:8px;margin-bottom:12px;flex-wrap:nowrap}}
+  /* dlaždice mají inline min-width — na telefonu je stáhnout do jednoho řádku, ať zbyde místo tabulce */
+  .stats>div{{flex:1 1 0;min-width:0!important;padding:8px 4px!important}}
+  .stats>div>div:first-child{{font-size:20px!important}}
+  .tabs{{flex-wrap:nowrap;margin-bottom:12px}}
+  .tab{{flex:1 1 0;text-align:center;padding:7px 6px;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}}
+  .filters select,.filters input{{flex:1 1 140px}}
+  td,th{{padding:5px 6px;font-size:11px}}
 }}
 </style>
 </head>
@@ -286,6 +303,7 @@ tr[data-status="OK"]       td:first-child{{border-left:3px solid #22AA44}}
     </select>
     <input placeholder="🔍 Hledat..." oninput="filter('pages')" id="pages-search">
   </div>
+  <div class="table-wrap">
   <table id="pages-table">
     <thead><tr>
       <th>Projekt</th><th>Soubor / Route</th><th>Stav</th>
@@ -293,6 +311,7 @@ tr[data-status="OK"]       td:first-child{{border-left:3px solid #22AA44}}
     </tr></thead>
     <tbody>{page_rows}</tbody>
   </table>
+  </div>
 </div>
 
 <!-- SERVICES -->
@@ -320,6 +339,7 @@ tr[data-status="OK"]       td:first-child{{border-left:3px solid #22AA44}}
     </select>
     <input placeholder="🔍 Hledat..." oninput="filter('services')" id="services-search">
   </div>
+  <div class="table-wrap">
   <table id="services-table">
     <thead><tr>
       <th>Projekt</th><th>Soubor / Metoda</th><th>Stav</th>
@@ -327,6 +347,7 @@ tr[data-status="OK"]       td:first-child{{border-left:3px solid #22AA44}}
     </tr></thead>
     <tbody>{service_rows}</tbody>
   </table>
+  </div>
 </div>
 
 <script>
