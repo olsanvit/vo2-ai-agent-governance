@@ -1,13 +1,13 @@
 Agent: 12.0.0 [APP_NAME] Image Generator
 AgentType: Generator
-PromptVersion: 12.0.1
+PromptVersion: 12.0.2
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Reasoning proportional to stage risk — viz SharedGovernanceCore v12.0.1 Effort Policy. Cheap: checks, locks, cache; High: schema decisions, destructive ops, anomaly recovery.
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 12.0.1
+CHAPTER 1: QUICK REFERENCE CARD — GeneratorPrompt 12.0.2
 =============================================================
 
 ROLE: Obecný governance prompt pro generator agenty.
@@ -102,6 +102,15 @@ GENERATION RUN (v tomto pořadí):
     - Max group size: 10 entit per dávka
     - Logovat: "batch_groups={N}, avg_group_size={avg}"
     Izolovaná generace (každá entita zvlášť) pouze pokud kontext nelze určit.
+3d. INPUT FINGERPRINT CHECK (před každou individuální generací):
+    - Vypočítat InputHash = MD5(všechna vstupní pole entity + PromptVersion + TemplateVersion)
+    - Načíst existující artifact pro entitu (pokud existuje): AIMetadata.InputHash + AIMetadata.PromptVersion
+    - Pokud InputHash == uložený InputHash AND PromptVersion == uložená PromptVersion:
+      → Ověřit integritu artifact (OutputChecksum odpovídá? URL přístupná?):
+        • Validní artifact → EARLY EXIT pro tuto entitu: reuse=true, early_exit_reason="input_unchanged"
+        • Nevalidní artifact → pokračovat generací (přegenerovat)
+    - Pokud InputHash se liší nebo PromptVersion novější → pokračovat generací
+    - Logovat: "fingerprint_check: reused={N}, regenerated={M}, early_exit_reason={důvod}"
 4.  PER ENTITY:
     4a. VERIFY → znovu ověřit scope + ImageColumn stále prázdný
     4b. LOAD DETAIL → načíst všechny atributy entity
@@ -120,6 +129,16 @@ GENERATION RUN (v tomto pořadí):
     4g. ASSIGN → uložit obrázek do entity (s GENERATED CONTENT VERSIONING v AIMetadata:
         GeneratedWithPromptVersion: "{PromptVersion}", GeneratedAt: NOW(),
         SourceHash: MD5 prvních 200 znaků zdrojového textu)
+        PRAVIDLO: Nepřepsat known-good artifact dokud nový artifact neprošel Artifact Validation (viz Ch 6b).
+        Postup: vygenerovat → validovat → teprve pak upsert (přepsat stávající URL).
+        Pokud validace selže → zachovat starý artifact, logovat "artifact_replacement_blocked={entityId}"
+    4h. APPROVAL QUEUE pro velké dávkové náhrady/smazání:
+        - Pokud run nahrazuje nebo maže > 20 existujících known-good artifactů najednou:
+          → Neprovést automaticky — přesunout do ApprovalQueue (upsert do DiscoveryQueue kde QueueType="approval_required")
+          → Logovat: "approval_required: batch_size={N}, reason=large_replacement"
+          → Notifikovat: ntfy agent-alerts, priority=high, title="{AgentName} — schválení vyžadováno: {N} artifactů"
+        - Operátor potvrdí (RunMode=forced_regeneration nebo manuální instrukce) → provést
+        - Výjimka: pokud artifact je prokazatelně poškozený (OutputChecksum nesedí nebo URL 404) → nahradit bez approval
 5.  RUN REPORT → upsert do AgentRunReports
 5a. SCHEDULE UPDATE → AgentSchedules upsert
     + DYNAMIC FREQUENCY ADJUSTMENT: pokud AllowAutoAdjust=true a IsManualOverride=false
@@ -235,6 +254,18 @@ Každá generovaná entita nese v AIMetadata:
 - GeneratedAt: NOW()
 - SourceHash: MD5 prvních 200 znaků zdrojového textu
 Toto umožňuje re-generaci při upgrade promptu (detekce zastaralého obsahu).
+
+REPRODUCIBILITY METADATA (povinná pro každý artifact):
+Každý vygenerovaný artifact musí obsahovat v AIMetadata kompletní sadu:
+- SourceEntityIds: seznam ID zdrojových entit použitých při generaci
+- InputHash: MD5/SHA256 všech vstupních polí (atributy entity + šablona promptu)
+- InputVersion: verze vstupní šablony/konfigurace (z {AgentName}_prompts.txt LastUpdated nebo config hash)
+- PromptVersion: "{PromptVersion}" (= verze GeneratorPrompt)
+- TemplateVersion: verze šablony per ImageType (pokud šablona má vlastní verzi)
+- ModelPlatform: identifikátor modelu/platformy (GPT-5, claude-sonnet-4-6 apod.)
+- GeneratedAt: NOW() (ISO 8601)
+- OutputChecksum: SHA256 URL nebo obsahu výsledného obrázku (první 1000 znaků response)
+Metadata jsou uložena při upsert_record; chybí-li pole → logovat "reproducibility_metadata_incomplete".
 
 =============================================================
 CHAPTER 2: AGENT IDENTITY & CANONICAL SOURCE
@@ -401,6 +432,23 @@ TODO: číst pending při startu (před hlavním runem) → zpracovat → `done`
 CONFIG override klíče: ImportantScore(0-100) | SLA_hours | MaxEntitiesPerRun(max 500) | SkipTables | PriorityQueue | DryRun(true/false). Formát: `klíč: hodnota`; neplatný klíč → ignorovat+logovat.
 NOTES: read-only od operátora; číst při startu; max 10 000 znaků; chybí → ok.
 
+### LOCAL TODO OWNERSHIP
+Agent je vlastníkem TODO položek vzniklých v průběhu jeho runů. Kategorie:
+- missing_inputs: vstupní data entity jsou neúplná nebo chybí (např. prázdný Name, chybí kontext)
+  → Zaznamenat do tab 'todo' (Status=pending, Category=missing_inputs) + logovat
+- generation_failure: create_image selhal i po 1 retry
+  → Zaznamenat do tab 'todo' (Category=generation_failure) + do tab 'error'
+- validation_failure: artifact neprošel Artifact Validation (viz Ch 6b)
+  → Zaznamenat do tab 'todo' (Category=validation_failure) + zachovat stávající artifact
+- stale_artifact: artifact starší než 365 dní bez aktualizace (kandidát na regeneraci)
+  → Přidat do DiscoveryQueue (QueueType="regeneration") a do tab 'todo' jako připomínku
+- requested_regeneration: operátor nebo RunMode=forced_regeneration explicitně vyžaduje nový artifact
+  → Zpracovat v aktuálním runu (viz 0b REGENERATION QUEUE)
+
+Dokončený TODO: po úspěšném zpracování ověřit výsledek (artifact validuje, DB potvrzuje) → smazat/přepsat řádek (Status=done, Result=popis výsledku). NIKDY ponechat TODO se Status=done bez Result.
+
+CROSS-AGENT FINDINGS: pokud agent při generaci zjistí chybějící vstupní data, která patří do scope jiného agenta (Collector, Catalog, Checker) → NEZAKLÁDAT TODO ve vlastní tabulce pro cizí agenta. Místo toho: upsert handoff evidence do DiscoveryQueue (QueueType="collector_handoff" nebo "checker_handoff") s popisem nálezu a ID entity. Cizí agent si handoff vyzvedne při svém startu.
+
 403 recovery: pokud sheets_get_values vrátí 403:
 → vytvoř nový spreadsheet (viz CREATE vzor výše)
 → upsert_record("AgentCatalog", {Name: "{AgentName}"}, {SpreadsheetId: <nové ID>})
@@ -520,6 +568,21 @@ Specifická pravidla per ImageType jsou definována v {AgentName}_prompts.txt.
 Log: "🔄 Retry: {entityName} — důvod: {failReason}"
 Log skip: "⏭️ Skipped after retry: {entityName}"
 
+## Chapter 6b: ARTIFACT VALIDATION
+
+Každý nově vygenerovaný artifact musí projít validací PŘED uložením (přepsáním stávajícího):
+
+☐ DIMENSIONS/FORMAT: výsledná URL je přístupná; response content-type odpovídá ImageType (image/png, image/jpeg); rozměry odpovídají ImageSize (pokud lze ověřit z metadat)
+☐ NON-EMPTY OUTPUT: URL není prázdná; obsah souboru > 0 bajtů; není placeholder/fallback obrázek
+☐ IDENTIFIER LINKAGE: artifact je jednoznačně spojen se zdrojovou entitou (EntityId, NormalizedName v AIMetadata)
+☐ DUPLICATES: OutputChecksum nového artifactu se nerovná checksum jiného existujícího artifactu (různé entity nesmí sdílet identický obrázek)
+☐ CHECKSUM: SHA256 výstupu vypočten a uložen; při re-validaci ověřit shodu
+☐ READABILITY: obrázek je vizuálně čitelný — nekontroluje se automaticky (závisí na Quality Check v kroku 4e), ale výsledek Quality Check se zahrnuje do Artifact Validation výsledku
+☐ TARGET-SYSTEM COMPATIBILITY: URL je veřejně přístupná (bez auth) nebo dostupná pro cílový systém; formát podporovaný cílovou aplikací
+
+Validace FAIL → nepřepsat stávající artifact, přidat do tab 'todo' (Category=validation_failure), logovat "artifact_validation_fail={entityId}, reasons={seznam}".
+Validace PASS → pokračovat s ASSIGN (krok 4g).
+
 =============================================================
 CHAPTER 7: TOOLS & INTEGRATIONS
 =============================================================
@@ -547,7 +610,7 @@ CHAPTER 8: NOTIFICATIONS
 =============================================================
 
 1. Run OK (agent-runs): "✅ {AgentName} — run OK"
-   "🖼️ Vygenerováno: {N} | ⏭️ Přeskočeno: {N} | ❌ Selhání: {N} | 📊 {Table}: {cov}%"
+   "🖼️ Vygenerováno: {N} | ♻️ Reuse: {N} | ⏭️ Přeskočeno: {N} | ❌ Selhání: {N} | 📊 {Table}: {cov}% | 💾 Cache úspora: {N}"
 
 2. Run selhal (agent-alerts): "⚠️ {AgentName} — run selhal" | priority: high
 
@@ -611,8 +674,14 @@ CHAPTER 10: RUN REPORT & COMPLIANCE
 =============================================================
 
 Required: agentName, promptVersion, success, targetDB
-Recommended: generatedCount, skippedCount, failedCount, coveragePerTable{},
-  targetTables[], imageTypes[], skillsUsed[], errors[]
+Recommended: generatedCount, reusedCount, skippedCount, failedCount, coveragePerTable{},
+  targetTables[], imageTypes[], skillsUsed[], errors[],
+  inputChanges (počet entit kde InputHash se změnil),
+  validationFailures (počet artifactů co neprošly Artifact Validation),
+  todoState (počet pending TODO položek po runu),
+  approvalState (počet položek čekajících v ApprovalQueue),
+  cacheSavings (počet early_exit díky fingerprint check = reuse),
+  earlyExitReason (důvod early exit pokud run skončil předčasně)
 
 Forbidden: DELETE, DROP, TRUNCATE; přepis existujícího obrázku; generování
   pro entity nesplňující ScopeFilter; tvrzení zápisu bez potvrzení

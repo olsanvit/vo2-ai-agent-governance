@@ -1,0 +1,79 @@
+=============================================================
+PLATFORM ADDENDUM — Claude CCR
+AddendumVersion: 1.0.0
+CompatibleGovernanceMin: 12.1.0
+CompatibleGovernanceMax: *
+Platform: Claude (Cloud Routine / CCR)
+=============================================================
+
+Tento soubor obsahuje POUZE platform-specifické fakty pro Claude CCR runtime.
+Obecná governance pravidla jsou v SharedGovernanceCore.txt a jednotlivých AgentType promptech.
+
+## SupportedCapabilities
+
+- Automatic cron scheduling (CCR — bez uživatele)
+- Full context window bez omezení tokenů
+- High-effort reasoning (claude-sonnet-5 default; claude-opus-5 pro komplexní rozhodnutí)
+- MCP native: AIDB e3c5d981 + qnap-ai / qnap-te / qnap-mab / qnap-usm dle projektu
+- Memory: pouze DB + Sheets (žádná persistent cross-session memory)
+- Tool set: Bash, Read, Write, Edit, Glob, Grep + project-specific MCP tools
+- Git access: gh CLI pro repository operations
+
+## UnsupportedCapabilities
+
+- Interactive user session (CCR běží bez uživatele)
+- Browser/Selenium (není v CCR sandbox)
+- Local file system mimo git checkout
+- OAuth flows (vyžadují interaktivní session)
+
+## ToolMap
+
+| Funkce              | Tool                          |
+|---------------------|-------------------------------|
+| DB read             | run_select_sql                |
+| DB write            | upsert_record, smart_upsert_batch |
+| DB schema           | ensure_table, ensure_columns  |
+| Sheets read         | sheets_get_values             |
+| Sheets write        | sheets_append_rows, sheets_update_row |
+| Sheets find         | sheets_find_row               |
+| Notifikace          | send_notification             |
+| Run log             | log_run                       |
+| Agent catalog       | get_agent_catalog, upsert_agent_catalog |
+| Schedule            | schedule_run                  |
+| Rate limit          | rate_limit_guard              |
+
+## SchedulingNotes
+
+- Cron expression je UTC; Prague = UTC+1 (zima) / UTC+2 (léto)
+- Minimum interval: 1 hodina (platforma omezení)
+- CCR nemá přístup k interaktivnímu uživateli — všechny akce musí být autonomní
+- Restart po chybě: CCR restartuje automaticky na dalším cron triggeru
+- Advisory lock: použít DB-based lock (upsert_record s TTL) pro prevenci dvojitého runu
+
+## FileWriteNotes
+
+- Git checkout: read/write k souborům v git working tree
+- Drive: přes MCP drive tools (read_file_content, sheets_*)
+- Lokální soubory mimo checkout: nedostupné
+
+## NotificationNotes
+
+- send_notification → ntfy (MCP tool)
+- Telegram relay funguje automaticky přes ntfy → relay skript na QNAPu
+- Message musí být plain text (viz Ntfy Message Format v SharedGovernanceCore)
+- Max 3 ntfy zprávy per run (kromě kritického alertu)
+
+## TokenEfficiencyNotes
+
+- claude-sonnet-5: default pro většinu runů
+- claude-opus-5: doporučen pro: self-audit, governance konflikty, schema rozhodnutí, error recovery
+- Cheap phases (version check, early-exit, db_ping): automaticky nízký reasoning effort
+- High-reasoning phases (anomaly detection, destructive actions): vždy vysoký effort
+- EstimatedCostUSD per run reportovat do AgentRunReports
+
+## KnownLimitations
+
+- Žádná cross-session memory — veškerý stav musí být v DB nebo Sheets
+- CCR context window se na startu naplní načtením promptu + skills → velké prompty zvyšují token cost
+- GitHub Actions CI může selhat při expiraci GH_PAT tokenu (viz project_ci_gh_pat_expired memory)
+- Sheets API rate limit: max ~300 req/min; při burstu použít rate_limit_guard

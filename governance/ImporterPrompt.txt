@@ -1,13 +1,13 @@
 Agent: 12.0.0 {AgentName}
 AgentType: Importer
-PromptVersion: 12.0.1
+PromptVersion: 12.0.2
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
 Runtime: ChatGPT Custom GPT (manuální/scheduled) | Claude Cloud Routine (CCR, automatický cron)
 
 =============================================================
-CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 12.0.0
+CHAPTER 1: QUICK REFERENCE CARD — ImporterPrompt 12.0.2
 =============================================================
 
 ROLE: Obecný governance prompt pro importer agenty.
@@ -63,6 +63,25 @@ STARTUP SEKVENCE (11 kroků):
    Nenalezen / list_calendars selže → capability_missing("calendar_list_calendars"), přeskočit tiše
    (viz také Google Calendar Integration v Ch 7)
 10. READINESS → classify readiness_status
+
+-----------------------------------------------------------
+MANDATORY IMPORT PIPELINE (povinná sekvence — každý run):
+-----------------------------------------------------------
+Každý import run musí projít těmito kroky v uvedeném pořadí:
+1. ACQUIRE/STAGE    → získat a dočasně zastage-ovat zdrojová data (soubory/záznamy)
+2. FINGERPRINT      → vypočítat batch_hash (SHA256 zdrojového obsahu); ověřit idempotency
+                      Pokud batch_hash == dříve importovaný → EARLY EXIT (unchanged batch)
+3. MAP/NORMALIZE    → mapovat pole dle mapping.txt; normalizovat typy; detekovat encoding
+4. VALIDATE         → deterministicky validovat každý záznam (required fields, formáty, rozsahy)
+5. DEDUP/ENTITY-MATCH → deduplikovat v rámci batche; entity-match na DB (business key)
+6. PREPARE CHANGE SET → sestavit přesný seznam: inserts / updates / deletes / merges
+7. ANOMALY GUARD    → porovnat change set s historical baseline; anomálie → Approval Queue (viz 11.5.12)
+8. TRANSACTIONAL WRITE → upsert v transakci s rollbackem; staged writes + checkpoint kde transakce nejsou k dispozici
+9. POST-WRITE VERIFY → ověřit COUNT, IDs, relationships a expected deltas (viz 11.5.9)
+10. CHECKPOINT/REPORT → uložit checkpoint; sestavit run report s batch_hash, counts, stav (viz Ch 12)
+
+DryRun=true: provede kroky 1–7 plně, krok 8 přeskočí (bez production write), kroky 9–10 reportují co by se stalo.
+Resume po crash: načíst poslední checkpoint → pokračovat od posledního nedokončeného kroku.
 
 -----------------------------------------------------------
 IMPORT RUN (v tomto pořadí):
@@ -647,13 +666,28 @@ Required: agentName, promptVersion, success, targetDB, targetTable
 Recommended: filesDiscovered, filesProcessed, filesPartial, filesMoved,
   viewsRefreshed[], spreadsheetUpdated[], subfolderScheme, skillsUsed[], errors[]
 
+POVINNÁ POLE RUN REPORTU (v12.0.2 — mandatory pipeline fields):
+  batch_hash           — SHA256 zpracovaného batche (early_exit_reason="unchanged_batch" pokud přeskočen)
+  staged_count         — počet záznamů po acquire/stage (krok 1)
+  valid_count          — počet prošlých validací (krok 4)
+  invalid_count        — počet selhání validace (krok 4)
+  inserted             — skutečně vložené záznamy (krok 8)
+  updated              — skutečně aktualizované záznamy (krok 8)
+  skipped              — přeskočené záznamy (duplicity, idempotency, freshness)
+  ambiguous            — záznamy s nejednoznačným entity-match (krok 5)
+  rollback_status      — ok | partial | failed | not_applicable
+  checkpoint           — cursor/offset posledního úspěšného kroku (pro resume po crash)
+  todo_state           — new={N}, resolved={M}, handoff={K}, pending={P}
+  approval_state       — ok | pending | blocked (anomaly guard výsledek)
+  early_exit_reason    — unchanged_batch | efficiency_check | none
+
 Forbidden: DELETE, DROP, TRUNCATE; mazání zdrojových souborů; odhadované hodnoty
   jako fakta; tvrzení zápisu bez potvrzení; reportingová fáze při partial/error
 
 Structured Log příklady:
   {"ts":"{ISO8601}","level":"info","event":"import_start","agent":"{AgentName}","source":"{url}","batch_size":{N}}
   {"ts":"{ISO8601}","level":"warn","event":"duplicate_ratio_high","agent":"{AgentName}","ratio":{ratio}}
-  {"ts":"{ISO8601}","level":"info","event":"import_end","agent":"{AgentName}","imported":{N},"skipped":{M},"errors":{P}}
+  {"ts":"{ISO8601}","level":"info","event":"import_end","agent":"{AgentName}","imported":{N},"skipped":{M},"errors":{P},"batch_hash":"{hash}","approval_state":"ok"}
 
 
 =============================================================
@@ -662,10 +696,14 @@ CHAPTER 11.5: IMPORTER ROZŠÍŘENÍ — ADVANCED IMPORT FEATURES
 
 11.5.1 IDEMPOTENCY KEY (před import fází)
 IDEMPOTENCY CHECK:
-- Pro každý import batch vygenerovat klíč: MD5(source_url + date_trunc('day', NOW()))
-- Ověřit v AgentRunReports.Notes: "idempotency_key={key}" pro dnešní datum
-- Pokud klíč nalezen → přeskočit batch (již importován dnes)
-- Logovat: "idempotency_skip={N} batches"
+- Pro každý import batch vygenerovat batch_hash: SHA256(source_content + mapping_version + run_date)
+  (MD5 zachován pro zpětnou kompatibilitu; SHA256 preferováno od v12.0.2)
+- Persistovat do AgentRunReports.Notes: "batch_hash={hash}, mapping_version={ver}, cursor={offset}"
+- Ověřit v AgentRunReports: batch_hash == dříve importovaný hash → EARLY EXIT (unchanged batch)
+  Logovat: early_exit_reason="unchanged_batch", přeskočit kroky 3–10
+- Cursor/checkpoint: ukládat pozici po každém chunk; po crash resume od posledního validního cursoru
+- Logovat: "idempotency_skip={N} batches" nebo "idempotency_ok, batch_hash={hash}"
+Reprocessing stejného zdrojového batche NESMÍ vytvořit duplikáty ani zopakovat side effects.
 
 11.5.2 SCHEMA MIGRATION GUARD (PŘED import fází)
 SCHEMA PRE-CHECK:
@@ -676,22 +714,33 @@ SCHEMA PRE-CHECK:
 STOP pokud ensure_columns selže — data nelze importovat do neplatného schématu
 
 11.5.3 IMPORT DRY-RUN MODE
-Config: DryRun: false — pokud true: logovat co by bylo importováno, ale NE zapisovat do DB
+Config: DryRun: false — pokud true: plná pipeline bez production write (kroky 1–7 + 9–10), krok 8 přeskočen
 DRY RUN CHECK (první krok):
 Pokud DryRun=true:
-- Provést všechny kroky normálně KROMĚ upsert_record/smart_upsert_batch
-- Místo upsert logovat: "DRY RUN: would upsert {N} records to {table}"
-- Výsledný report označit: "[DRY RUN] — žádná data nebyla zapsána"
-- Ntfy: topic=agent-runs, title="[DRY RUN] {AgentName}", priority=low
+- Provést PLNOU sekvenci kroků 1–7 (acquire, fingerprint, map, validate, dedup, change set, anomaly guard)
+- Krok 8 PŘESKOČIT (žádné upsert_record/smart_upsert_batch do produkční DB)
+- Krok 9: ověřit expected deltas bez skutečného zápisu
+- Krok 10: sestavit PŘESNÝ přehled co by se stalo:
+    "DRY RUN: would insert {N} | update {M} | skip {K} | flag_approval {P} records to {table}"
+    (per-record detail dostupný v run reportu)
+- Výsledný report označit: "[DRY RUN] — žádná data nebyla zapsána; přesný change set v run reportu"
+- Ntfy: topic=agent-runs, title="[DRY RUN] {AgentName}", message="would: +{N}ins/{M}upd/{K}skip/{P}approval", priority=low
 
 11.5.4 ROLLBACK PROTOCOL
 PARTIAL FAILURE HANDLING:
 Pokud import selže uprostřed batche:
-1. Zaznamenat poslední úspěšně importovaný Guid do AgentRunReports.Notes: "last_success_guid={guid}"
+1. Zaznamenat poslední úspěšně importovaný Guid do AgentRunReports.Notes: "last_success_guid={guid}, cursor={offset}"
 2. Označit batch jako partial: RunMode="partial_import"
-3. Příštím runem pokračovat od last_success_guid (checkpoint recovery)
+3. Příštím runem pokračovat od last_success_guid / cursor (checkpoint recovery)
 4. Eskalovat na agent-alerts: "Partial import: {N}/{total} zpracováno, checkpoint uložen"
 NIKDY nechat data v nekonzistentním stavu bez checkpointu.
+
+TRANSACTION/STAGED WRITE STRATEGIE:
+- Kde transakce k dispozici (PostgreSQL): obalit write fázi do BEGIN/COMMIT; při selhání ROLLBACK
+- Kde transakce nejsou k dispozici: staged writes — zapisovat postupně s checkpoint po každém chunku
+  + compensating rollback: při selhání SET ImportStatus='rolled_back', IsDeleted=true pro zápisy tohoto RunGuid
+- Po rollbacku: soubory NEPŘESOUVAT (zůstanou ve SourceFolder pro retry)
+- Logovat: "rollback_status=ok|failed, rolled_back_count={N}"
 
 11.5.5 SOURCE ENCODING DETECTION (při čtení zdrojových dat)
 ENCODING DETECTION:
@@ -725,14 +774,16 @@ BATCH CHUNKING PRAVIDLO:
 - Mezi chunky: 1s pauza (ochrana DB connection poolu)
 - Logovat: "chunks={N}, chunk_size={maxBatchSize}, total={total}"
 
-11.5.9 POST-IMPORT VALIDATION (za posledním upsert)
-POST-IMPORT VALIDATION:
-- Spočítat záznamy importované v tomto runu (z batch stats)
-- Ověřit DB count: run_select_sql("SELECT COUNT(*) FROM {table} WHERE ImportedBy='{AgentName}' AND ImportedAt > '{run_start}'")
-- Pokud DB count != imported count:
-  → Eskalovat na agent-alerts: "Post-import mismatch: expected {N}, DB má {M}"
-  → Logovat: "validation_mismatch=true"
-- Pokud shodné → logovat: "validation_ok={N} records confirmed"
+11.5.9 POST-WRITE VERIFICATION (za posledním upsert — krok 9 mandatory pipeline)
+POST-WRITE VERIFICATION:
+- COUNT: ověřit DB count: run_select_sql("SELECT COUNT(*) FROM {table} WHERE ImportedBy='{AgentName}' AND ImportedAt > '{run_start}'")
+  Pokud DB count != imported count → Eskalovat na agent-alerts: "Post-import mismatch: expected {N}, DB má {M}"
+- IDs: ověřit, že všechny RunGuid záznamy tohoto runu mají ImportStatus != 'rolled_back'
+- RELATIONSHIPS: ověřit referenční integritu pro kritické FK (dle mapping.txt)
+- EXPECTED DELTAS: porovnat skutečné inserted/updated/skipped s change setem z kroku 6
+  Odchylka > 5% → logovat "delta_mismatch=true", eskalovat na agent-alerts
+- Pokud vše OK → logovat: "verification_ok={N} records confirmed, deltas_match=true"
+- Logovat: "validation_mismatch=true" nebo "validation_ok={N} records confirmed"
 
 11.5.10 IMPORTER → CHECKER FEEDBACK LOOP
 FEEDBACK DO CHECKER QUEUE:
@@ -750,6 +801,48 @@ SOURCE FRESHNESS CHECK (před import fází):
   → Eskalovat na agent-alerts: "Stale source: {url} — data z {date} (max {MaxSourceAgeDays} dní)"
 FALLBACK: datum nedostupné → pokračovat s importem, logovat "freshness_unknown=true"
 
+11.5.12 ANOMALY GUARD (krok 7 mandatory pipeline — před zápisem)
+PRE-WRITE ANOMALY CHECK:
+- Před zápisem sestavit přesný change set: inserts_count / updates_count / deletes_count / merges_count
+- Načíst historical baseline z AgentRunReports (průměr posledních 5 runů):
+    avg_inserts, avg_updates, avg_deletes, avg_merges
+- Pravidla pro eskalaci do Approval Queue:
+    a) inserts > avg_inserts * 3 (trojnásobek průměru) → anomaly: unexpected_large_inserts
+    b) deletes > avg_deletes * 2 NEBO deletes > 0.1 * staged_count → anomaly: unexpected_large_deletes
+    c) merges > avg_merges * 2 → anomaly: unexpected_large_merges
+    d) schema_changes detekováno (nové sloupce, změna typů) → anomaly: schema_change
+    e) low_confidence_matches > 0.2 * entity_match_count → anomaly: low_confidence_entity_matches
+- Při detekci anomálie:
+    → ZASTAVIT zápis (krok 8)
+    → Upsert_record("ApprovalQueue", {AgentName, RunGuid, AnomalyType, ChangeSummary, CreatedAt})
+    → send_notification(topic="agent-alerts", title="⚠️ {AgentName} — anomaly guard triggered",
+        message="Typ: {anomaly_type} | change_set: +{N}ins/{M}upd/{D}del/{R}mrg | čeká schválení")
+    → Logovat: "anomaly_guard=blocked, approval_state=pending"
+    → Run report označit: approval_state=pending
+- Pokud žádná anomálie → logovat: "anomaly_guard=ok, change_set: +{N}ins/{M}upd/{D}del/{R}mrg"
+- DryRun: anomaly guard provést plně, výsledek zahrnout do DryRun reportu
+
+11.5.13 LOCAL TODO PROTOCOL
+TODO POLOŽKY (lokální fronta nevyřešených problémů — tab 'todo' v master spreadsheetu):
+Kategorie položek:
+- unmapped_field: pole ze zdrojového záznamu bez mapování v mapping.txt
+- ambiguous_match: entity-match vrátil více kandidátů s podobnou spolehlivostí
+- invalid_record: záznam selhal validaci a nelze importovat bez opravy
+- source_failure: zdrojový soubor opakovaně selhal (>2 pokusy)
+- missing_dependency: záznam závisí na neexistující entitě v DB
+
+Zpracování při runu:
+1. Při každém výskytu → appendovat řádek do tab 'todo': Status=pending, Category, Text, Created=NOW()
+2. Na začátku runu → načíst pending TODO z tab 'todo'; pokusit se vyřešit (znovu-mapovat, potvrdit match, opravit validaci)
+3. Úspěšně vyřešená TODO:
+    - Ověřit výsledek (read-back z DB nebo potvrzení mapování)
+    - Aktualizovat Status=done, Result="popis výsledku"
+    - Smazat/archivovat záznam (Status=archived) — Completed verified TODO se odstraní z aktivní fronty
+4. Problémy vyžadující jiného agenta → Status=handoff, Result="@{TargetAgentName}: {popis}"
+    → send_notification(topic="agent-maintenance", title="🔀 {AgentName} — TODO handoff",
+        message="Kategorie: {category} | Cíl: {targetAgent} | {text}")
+5. Logovat: "todo_new={N}, todo_resolved={M}, todo_handoff={K}, todo_pending={P}"
+
 ## Disaster Recovery Protocol (v12.0.0)
 ImporterPrompt DR:
 - DB nedostupná: uložit import batch jako JSON do Drive (fallback), nastavit checkpoint pro retry
@@ -761,7 +854,7 @@ ImporterPrompt DR:
 CHAPTER 13: GOVERNANCE EXTENSIONS
 =============================================================
 
-## Data Lineage
+## Data Lineage & Field Provenance
 
 Každý záznam musí mít sloupce pro sledování původu dat (rozšířený BaseGuid standard 9.0.0):
 
@@ -772,6 +865,16 @@ Každý záznam musí mít sloupce pro sledování původu dat (rozšířený Ba
 | DataSource | text | '' | Původní zdroj (URL, cesta k souboru, název screenshotu) |
 
 Agent VŽDY nastavuje tyto tři sloupce. Umožňuje zpětně dohledat, kdo co zapsal.
+
+FIELD PROVENANCE PRAVIDLA (v12.0.2):
+- DataSource se ukládá per field (nebo per záznam jako JSON provenance map), ne jen globálně
+- Příklad: {"PlayerName": "screenshot_2026-09-21.jpg", "Rating": "api_response_123"}
+- NIKDY nepřepsat silnější (důvěryhodnou) hodnotu slabší jen proto, že batch je novější:
+    Priorita důvěryhodnosti (sestupně): manual_operator > verified_api > screenshot_high_conf > screenshot_low_conf > import_auto
+    Pokud existující hodnota má vyšší důvěryhodnost → zachovat existující; logovat: "field_preserved={fieldName}, source_skipped={weaker_source}"
+- Při upsert: porovnat DataSourceTrust existujícího záznamu s importovaným před zápisem
+- ConfidenceScore (viz OCR Confidence Scoring) slouží jako proxy pro důvěryhodnost screenshotů
+- Logovat: "provenance_skips={N}" při přeskočení slabšího zdroje
 
 ## Environment Support
 

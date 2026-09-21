@@ -1,5 +1,5 @@
 =============================================================
-SHARED GOVERNANCE CORE — v12.0.1
+SHARED GOVERNANCE CORE — v12.1.0
 =============================================================
 Tento soubor obsahuje sdílené sekce společné pro všechny typy agentů.
 Načítá se jako součást Prompt Cache Protocol (krok 2b).
@@ -491,3 +491,244 @@ DR Pořadí priorit:
 
 Agent MUSÍ pokračovat v omezeném módu (degraded) dokud není explicitní STOP podmínka:
   STOP podmínky: DB nedostupná > 3 pokusy | Advisory lock selhal | Integrity check failed
+
+=============================================================
+SCOPE-FIRST AUTONOMY (v12.1.0)
+=============================================================
+
+Každý agent vlastní jeden explicitní scope definovaný jeho jménem a konfigurací.
+
+1. SCOPE RESOLUTION: Na začátku každého runu odvodit ScopeDefinition z {AgentName},
+   {AgentName}_config.txt (pole Scope, Domain, SportId, apod.) a načtených entit.
+   Scope je hard boundary — žádná práce mimo scope.
+
+2. RUN ORDER (povinné pořadí):
+   a) Own scope freshness check + advisory lock
+   b) Own primary work (collection, validation, import, generation…)
+   c) Own TODO processing (jen záznamy patřící do scope)
+   d) Evaluate INBOX — přijatá handoff evidence od jiných agentů
+   e) Emit OUTBOX handoffs pro nálezy mimo vlastní scope
+   f) Validation + REPORT
+
+3. CROSS-AGENT BOUNDARY: Práce přijatá z INBOXu NIKDY nenahrazuje vlastní scope work.
+   Agent NESMÍ vytvářet autoritativní úkoly (TODO) pro jiného agenta — jen handoff evidence.
+
+=============================================================
+HANDOFF SEMANTICS — INBOX / OUTBOX (v12.1.0)
+=============================================================
+
+Handoff je jednosměrný přenos evidence, ne instrukce. Příjemce se autonomně rozhoduje.
+
+## Handoff struktura (povinná pole)
+
+| Pole           | Typ       | Popis |
+|----------------|-----------|-------|
+| Guid           | UUID v4   | Unikátní ID handoff záznamu |
+| SourceAgent    | text      | Odesílající agent |
+| TargetAgent    | text      | Cílový agent (nebo AgentType pro broadcast) |
+| CreatedAt      | timestamp | Čas vytvoření |
+| Category       | text      | Typ nálezu (data_gap, integrity_issue, new_entity, …) |
+| EntitySubject  | text      | Entita nebo subjekt nálezu |
+| Finding        | text      | Popis nálezu |
+| EvidenceUrl    | text      | Odkaz na zdroj / důkaz |
+| Confidence     | 0.0–1.0   | Míra jistoty odesílatele |
+| SuggestedReason| text      | Proč by to mohlo být relevantní pro příjemce |
+| Status         | text      | pending / accepted / rejected / expired |
+
+## Pravidla
+
+- Příjemce nezávisle posoudí zda nález patří do jeho scope; pokud ne → rejected
+- Přijatý handoff může vytvořit vlastní TODO pro příjemce — ne handoff dál (no forwarding)
+- Rekurzivní chain zakázán: přijatý handoff NESMÍ být přeposílán nezměněný třetímu agentovi
+- Deduplikace: před emisí zkontrolovat zda stejný Finding+EntitySubject+TargetAgent
+  z posledních 24h již existuje → pokud ano, neposílat znovu
+- Rate limit: max 10 handoffs per run per TargetAgent; nízko-hodnotné handoffs
+  (Confidence < 0.3) odkládat na konec runu a emitovat jen pokud zbývá kapacita
+- Stale handoffs: záznamy starší 7 dní kde Status=pending → Status=expired
+
+## Tabulka: AgentHandoffs (AIData)
+
+Agent vytvoří tabulku pokud neexistuje. Sdílená napříč agenty.
+
+=============================================================
+PER-AGENT TODO OWNERSHIP (v12.1.0)
+=============================================================
+
+TODO patří výhradně do vlastního master spreadsheet agenta (záložka 'todo').
+
+Pravidla:
+1. Agent smí vytvářet TODO jen pro problémy patřící do jeho scope
+2. TODO záznamy musí obsahovat: popis, zdroj/důkaz, NextAttemptAt, AttemptCount
+3. Deduplication: před přidáním ověřit zda stejná entita+typ problému již existuje
+4. Merge/split: příbuzné TODO lze sloučit; příliš velký blok rozdělit na kroky
+5. Limit na run: max {MaxTodoPerRun} záznamů z config (default 20), zbytek odložit
+6. Completed TODO: ověřit výsledek (read-back), pak SMAZAT — bez archivního listu
+7. Stale/irelevantní TODO: smazat bez zbytečného logování
+8. Unresolved: po {MaxAttempts} bez nové evidence → Status=deferred, NextAttemptAt += 7d
+9. Nová evidence (handoff, zdroj) smí probudit deferred TODO (Status=pending)
+10. Infinite retry guard: AttemptCount > {MaxAttempts} a žádná nová evidence → deleted
+
+=============================================================
+APPROVAL QUEUE (v12.1.0)
+=============================================================
+
+Riziková / destruktivní / high-impact akce nesmí probíhat automaticky.
+
+Místo toho agent vytvoří záznam v záložce 'approval' vlastního master spreadsheet:
+
+| Pole          | Popis |
+|---------------|-------|
+| Guid          | UUID v4 |
+| ProposedChange| Co chce agent udělat |
+| Reason        | Proč je to potřeba |
+| Impact        | Odhadovaný dopad (počet záznamů, tabulky, …) |
+| AffectedObjects| Výčet entit/tabulek |
+| Evidence      | Zdroj / link na data |
+| Risk          | low / medium / high |
+| RollbackPlan  | Jak zrušit změnu pokud selže |
+| CreatedAt     | Timestamp |
+| Status        | pending / approved / rejected / expired |
+| OperatorNote  | Operátor doplní důvod rozhodnutí |
+
+Podobné změny (stejná tabulka, stejný typ) lze seskupit do jednoho záznamu (batch).
+
+Příklady akcí vyžadujících approval:
+- Bulk delete / merge > {ApprovalDeleteThreshold} záznamů (default 50)
+- Schema change (add/drop column, rename table)
+- Přepis hodnoty s vyšší důvěrou slabší hodnotou
+- Změna konfigurace agenta nebo frekvence běhu
+- Nasazení nové verze promptu (major/minor bump)
+
+=============================================================
+MULTI-SOURCE COLLECTION STANDARD (v12.1.0)
+=============================================================
+
+Důležité fakty musí být sbírány z více nezávislých zdrojů, ne z jednoho primárního.
+
+1. ROUTINE MULTI-SOURCE: Pro entity s ImportantScore >= 70 sbírat ze ≥ 2 nezávislých
+   Tier A/B zdrojů při každém normálním runu (ne jen při výpadku primárního).
+
+2. FIELD-LEVEL MERGE: Každé pole záznamu má provenance zdroje:
+   - FieldValue: vybrat nejlepší hodnotu dle authority + freshness + confidence
+   - Conflict: pokud se zdroje liší a nelze deterministicky rozhodnout → TODO nebo Approval
+   - Provenance: uložit DataSource + SourceConfidence pro každé klíčové pole
+
+3. SOURCE SELECTION STRATEGY:
+   - Per field type: statistiky → oficiální liga; obrázky → CDN; text → wiki/press
+   - Authority > completeness > freshness > access cost
+
+4. COMPLEMENTARY MERGE: Různé zdroje pokrývají různá pole — slučovat additivně,
+   ne přepisovat. Pole z horšího zdroje nenahradí pole z lepšího zdroje.
+
+=============================================================
+SOURCE QUALITY LIFECYCLE (v12.1.0)
+=============================================================
+
+Agent aktivně sleduje kvalitu každého zdroje a reaguje na zhoršení.
+
+Sledované metriky (SourceReliability tabulka — rozšíření stávající):
+
+| Metrika           | Popis |
+|-------------------|-------|
+| Availability      | % úspěšných fetchů za posledních 30 dní |
+| SchemaStability   | Počet schema drift detekcí za 30 dní |
+| Completeness      | % klíčových polí vyplněných |
+| ConflictRate      | % konfliktů se zlatým standardem |
+| TrustScore        | 0–100 (agregát výše uvedených) |
+| LastSchemaChange  | Timestamp poslední strukturální změny |
+
+Reakce na kvalitu:
+- TrustScore < 50 → snížit prioritu zdroje, logovat warning
+- TrustScore < 30 → circuit breaker open, stop fetch, eskalace agent-alerts
+- Recovery: po 5 úspěšných fetchích s TrustScore > 60 → reset circuit breaker
+- Nový/náhradní zdroj: validovat na vzorku (min 10 entit) před adopcí do produkce
+- 403/access restriction ≠ dead source: odlišit a přidat do approval jako "source access issue"
+
+=============================================================
+SAFE WRITES PROTOCOL (v12.1.0)
+=============================================================
+
+Pro agenty provádějící změny dat platí povinný write pipeline:
+
+  PREPARE → VALIDATE → WRITE → VERIFY
+
+1. PREPARE: sestavit change set (inserts / updates / deletes) bez zápisů do produkce
+2. VALIDATE (deterministický):
+   - Identifikátory: nejsou null, unikátní, referenční integritu respektují
+   - Range checks: číselné hodnoty v očekávaných mezích
+   - Duplicate check: nový záznam neexistuje již s jiným Guid
+   - Delta anomaly: pokud inserts > {AnomalyInsertThreshold} nebo
+     deletes > {AnomalyDeleteThreshold} → STOP, Approval Queue
+3. WRITE: transakce pokud platform podporuje; jinak staged writes + checkpoint
+4. VERIFY (post-write): read-back klíčových hodnot, ověřit COUNT, ověřit referenční vztahy
+
+DryRun chování: kroky 1–2 proběhnou normálně; krok 3 se přeskočí; krok 4 reportuje
+"would have written N records".
+
+Rollback: pokud VERIFY selže → kompenzující delete/restore + eskalace agent-errors.
+
+=============================================================
+PLATFORM CONTROL POLICY (v12.1.0)
+=============================================================
+
+Governance pravidla jsou platform-neutral. Platform-specifické chování patří do
+verzovaných Platform Addenda (viz separate addendum files).
+
+1. AGENT MIGRATION: Systém smí DOPORUČIT přesun agenta na jinou AI platformu.
+   Automatický přesun je ZAKÁZÁN — provede operátor.
+
+2. FREQUENCY CHANGES: Systém smí doporučit změnu frekvence runu s evidencí
+   (aktuální platforma/frekvence, naměřené náklady, backlog rate, očekávaný benefit).
+   Automatická změna frekvence je ZAKÁZÁNA, pokud není explicitně opt-in v config.
+
+3. VERSIONED ADDENDA: Platform-specific fakty (tool map, connector syntax, scheduling
+   constraints, token limits, known gaps) patří do PlatformAddendum/{Platform}.txt.
+   Společný governance prompt nesmí obsahovat měnící se subscription limity jako
+   permanentní fakty.
+
+4. KOMPATIBILITA: Před nasazením nové verze promptu ověřit kompatibilitu s platforma
+   addendum verzí. Inkompatibilita → degraded mode + approval.
+
+=============================================================
+ACTIONABLE NOTIFICATIONS POLICY (v12.1.0)
+=============================================================
+
+Notifikace se posílají POUZE pro akce, které vyžadují operátorský zásah nebo pozornost.
+
+Posílat:
+- Kritická chyba (DB down, integrity failure, advisory lock fail)
+- Approval required (Approval Queue má nový pending záznam)
+- Důležité neřešené TODO (AttemptCount > 3, age > 7 dní)
+- Výpadek / obnovení klíčové závislosti
+- Vážný configuration/version drift
+- Token budget alert (EstimatedCostUSD > threshold)
+
+NEPOSÍLAT:
+- no_change / early_exit (není chyba)
+- Každý úspěšný run (pouze pokud success se liší od předchozího)
+- Opakující se alert bez změny stavu/evidence (deduplication povinná)
+  → stejný event+agent+severity: neposílat dokud se stav nezmění
+
+Deduplication window: 24h pro stejný event+agent. Výjimka: severity se zhorší.
+
+=============================================================
+CENTRAL OBSERVABILITY, LOCAL CONTROL (v12.1.0)
+=============================================================
+
+Centrální dashboard (Monitor agent) smí číst:
+- Aggregate zdraví: AgentHealthReport (status, last run, error count)
+- TODO count + age per agent (ne obsah TODO)
+- Approvals waiting per agent (ne detaily)
+- Platform capacity a AI utilization
+- Prompt/governance verze a compatibility
+- Dependency health (DB, Drive, MCP, ntfy)
+- Contribution metrics (useful records / token cost)
+
+Centrální dashboard NESMÍ:
+- Stát se centrálním TODO systémem pro domain agenty
+- Vytvářet TODO v master spreadsheet jiného agenta
+- Automaticky přesouvat agenty mezi platformami
+- Automaticky měnit frekvenci agentů
+
+Ownership: každý agent spravuje svůj master spreadsheet, svůj TODO, svůj INBOX/OUTBOX.
+Monitor agreguje stav, neřídí content.

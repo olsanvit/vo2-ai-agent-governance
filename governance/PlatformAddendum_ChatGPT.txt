@@ -1,0 +1,78 @@
+=============================================================
+PLATFORM ADDENDUM — ChatGPT
+AddendumVersion: 1.0.0
+CompatibleGovernanceMin: 12.1.0
+CompatibleGovernanceMax: *
+Platform: ChatGPT (Custom GPT / Tasks)
+=============================================================
+
+Tento soubor obsahuje POUZE platform-specifické fakty pro ChatGPT runtime.
+Obecná governance pravidla jsou v SharedGovernanceCore.txt a jednotlivých AgentType promptech.
+
+## SupportedCapabilities
+
+- Custom GPT Actions (proxy pro MCP tools)
+- Manuální spouštění (Plus/Pro uživatel)
+- Context window: Free 8K | Go 16K | Plus 32K | Pro 128K tokenů
+- Model: GPT-4.1+ doporučen; GPT-5+ preferován pro komplexní agenty; GPT-5.6 GA od 9. 7. 2026
+- Workspace Agents (scheduled): jen Business/Enterprise (od dubna 2026)
+- Memory: pouze DB + Sheets (Custom GPT memory je best-effort, nespoléhat)
+- Web browsing (Plus/Pro): dostupné ale nespoléhejte na stabilní výsledky
+- Image generation (DALL-E): dostupné pro Generator agenty
+
+## UnsupportedCapabilities
+
+- Native MCP: jen Business/Enterprise Developer Mode (beta); Plus/Pro = Actions proxy
+- Automatic cron scheduling: jen Business/Enterprise; jinak manuální spuštění
+- Direct file system access
+- Git CLI (jen přes GitHub Actions nebo API)
+- Advisory lock via DB: implementovat přes Sheets nebo DB upsert s TTL
+
+## ToolMap
+
+| Funkce              | ChatGPT Action / API               |
+|---------------------|------------------------------------|
+| DB read             | run_select_sql Action              |
+| DB write            | upsert_record Action               |
+| Sheets read         | sheets_get_values Action           |
+| Sheets write        | sheets_append_rows Action          |
+| Notifikace          | send_notification Action           |
+| Web browse          | browser tool (vestavěný)           |
+| Image gen           | DALL-E (vestavěný)                 |
+| Code execution      | Code Interpreter (vestavěný)       |
+
+## SchedulingNotes
+
+- Plus/Pro: MANUÁLNÍ spouštění pouze; Tasks beta má omezená triggery
+- Business/Enterprise: Workspace Agents s cron podporou
+- Minimální interval pro Tasks: 1 hodina
+- Při manuálním spuštění: agent nesmí předpokládat předchozí kontext session
+
+## FileWriteNotes
+
+- Žádný přímý přístup k souborům — vše přes Actions nebo Code Interpreter sandbox
+- Code Interpreter sandbox je dočasný — nespoléhat na perzistenci souborů
+- Drive operace přes Actions (read_file_content, sheets_*)
+
+## NotificationNotes
+
+- send_notification přes Action → ntfy
+- Context window: ~11K tokenů efektivní pro typický run (Plus 32K raw, ale prompt + tools)
+- Ušetřit tokeny: nereprodukovat velké JSON výstupy do chatu
+
+## TokenEfficiencyNotes
+
+- Context window je limitující faktor — velké prompty komprimovat
+- Při Plus (32K): načítat jen potřebné sekce promptu, ne celý dokument
+- SharedGovernanceCore načítat selektivně — jen relevantní sekce pro daný run
+- Výstup minimalizovat (Silent Mode povinný)
+- EstimatedCostUSD není přímo dostupné — odhadovat z počtu zpráv
+
+## KnownLimitations
+
+- Context window limity: Free 8K nestačí pro plný run; doporučeno Plus 32K+
+- Actions proxy přidává latenci vs native MCP
+- Custom GPT memory je unreliable — veškerý stav musí být v DB/Sheets
+- Subscription limity NESMÍ být hardkódovány v promptu (mění se); čerpat z tohoto addenda
+- Web browsing výsledky jsou nestabilní — verifikovat přes Actions/DB
+- Manus, Gemini, Copilot, Perplexity: viz jejich vlastní addenda

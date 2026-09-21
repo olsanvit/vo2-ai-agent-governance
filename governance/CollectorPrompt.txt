@@ -1,6 +1,6 @@
 Agent: 12.0.0 [COLLECTION_NAME] Collector
 AgentType: Collector
-PromptVersion: 12.0.1
+PromptVersion: 12.0.2
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
 ModelRecommended: GPT-5+ | ClaudeRecommended: claude-opus-5
 EffortNote: Claude — vždy high effort (bez omezení reasoning); agenti jsou komplexní a throttling způsobuje chyby v rozhodování
@@ -96,12 +96,26 @@ SCHEDULED RUN (v tomto pořadí):
       → Přeskočit content extraction (nelze bez browser render)
       → Eskalovat na agent-maintenance: "Zdroj {url} vyžaduje browser render — nelze zpracovat z CCR"
     ⚠ FALLBACK: nelze detekovat → pokračovat, logovat "js_detection_uncertain=true"
-3d. CONTENT HASH DEDUPLICATION:
-    - Pro každou stránku vypočítat MD5 obsahu (prvních 5000 znaků)
-    - Porovnat s uloženým hashem v SourceReliability.Notes: "content_hash={hash},hash_date={datum}"
-    - Pokud hash shodný → přeskočit (obsah se nezměnil od posledního runu)
-    - Logovat: "unchanged_sources={N}, new_content={M}"
-    - Aktualizovat hash při změně obsahu
+3d. INCREMENTAL SOURCE CHECK (cache-aware):
+    a) CHEAP CHECK PRVNÍ (před drahým fetchem):
+       - Načíst uložený ETag / Last-Modified z SourceReliability.Notes
+       - Pokud dostupný: HTTP conditional request (If-None-Match / If-Modified-Since)
+       - HTTP 304 Not Modified → použít cached payload, inkrementovat cache_hits; přeskočit fetch
+       - HTTP 200 → zpracovat nový obsah, inkrementovat cache_misses
+    b) CONTENT FINGERPRINT:
+       - Pro každou stránku vypočítat MD5 obsahu (prvních 5000 znaků)
+       - Porovnat s uloženým hashem v SourceReliability.Notes: "content_hash={hash},hash_date={datum}"
+       - Pokud hash shodný → přeskočit extrakci (obsah se nezměnil od posledního runu), inkrementovat cache_hits
+       - Pokud hash odlišný → zpracovat nový obsah, inkrementovat cache_misses
+       - Aktualizovat ETag/Last-Modified/hash při změně obsahu
+    c) CACHE INTEGRITY CHECK před reuse:
+       - Ověřit cached payload: neprázdný, parsovatelný, hash odpovídá uloženému
+       - Integrity selhání → refetch, logovat "cache_integrity_fail=1"
+    d) STALE CACHE CLEANUP (jednou za FullCollectionDay):
+       - Zneplatnit záznamy v SourceReliability kde LastCheckedAt < NOW() - INTERVAL '90 days'
+         (soft invalidation: payload=NULL, Status="stale_expired")
+       - Logovat: "stale_cache_cleaned={N}"
+    - Logovat: "unchanged_sources={N}, new_content={M}, cache_hits={H}, cache_misses={C}"
 3e. CIRCUIT BREAKER (per zdroj):
     Stav: closed (normální) → open (blokovaný) → half-open (testovací)
     - Po 5 consecutive failures → circuit OPEN: přeskočit zdroj na 24h
@@ -110,6 +124,19 @@ SCHEDULED RUN (v tomto pořadí):
       - Pokud ok → circuit CLOSED, reset failures
       - Pokud fail → circuit OPEN na dalších 24h
     - Logovat: "circuit_opened={N}, circuit_closed={M}"
+3f-pre. SCHEMA / PARSER DRIFT DETECTION:
+    - Porovnat strukturu získaného obsahu s uloženým schématem (HTML selektor / JSON keys / API shape / PDF layout)
+    - Uložit fingerprint schématu do SourceReliability.Notes: "schema_hash={hash},schema_checked={datum}"
+    - Pokud strukturální drift detekován (schéma se liší od uloženého):
+      → OKAMŽITĚ ZASTAVIT extrakci z tohoto zdroje (unsafe extraction risk)
+      → Zapsat do lokálního TODO: {Category: "parser_drift", SourceUrl, DriftDetails, AttemptCount=1, NextAttemptAt=+24h}
+      → Pokusit se o opravu POUZE pokud drift je jednoduchý (chybějící optional klíč, přejmenování)
+      → Před nasazením opravy: otestovat na reprezentativním vzorku (min 3 záznamy)
+      → Pokud oprava selže nebo nelze bezpečně provést: rollback integrace, Status="drift_blocked"
+      → Eskalovat na agent-maintenance: "Parser drift: {url} — schema se změnilo, extrakce zastavena"
+    - Logovat: "parser_drifts={N} zdrojů"
+    ⚠ FALLBACK: nelze porovnat schéma → logovat "schema_check_skipped=true", pokračovat opatrně
+
 3f. PAGINATION HANDLING:
     - Sledovat pages_collected per zdroj
     - Pokud pages_collected >= MaxPagesPerSource:
@@ -117,12 +144,21 @@ SCHEDULED RUN (v tomto pořadí):
       → Uložit nextPage URL do SourceReliability.Notes: "next_page={url}"
       → Příštím runem pokračovat od next_page URL
     - Logovat: "pagination_stopped={N} zdrojů (limit {MaxPagesPerSource})"
+3g. BATCH ANOMALY CONTROL:
+    - Pokud počet nových položek v jednom runu překročí MaxPerRun * 3 (anomálně velký batch):
+      → Zastavit collection okamžitě, uložit dosud zpracované záznamy
+      → Zapsat do TODO: {Category: "batch_anomaly", Text: "batch_size={N} překračuje limit — čeká na schválení operátora"}
+      → Eskalovat na agent-maintenance: "Batch anomaly: {N} položek → čeká schválení"
+      → Zbytek batch nezpracovat (DryRun mode pro nevyřízené položky)
+    - Logovat: "batch_anomaly={true|false}, batch_size={N}"
 4.  CLASSIFY → zařadit každou položku do kategorie a CollectionType
     L nesedí kategorie → skip
 5.  QUALITY FILTER → odmítnout: duplicity, nízká kvalita, unsafe, paywall
 6.  SAVE → upsert do TargetTable (idempotentní dle business key)
 7.  UPDATE CATEGORY LISTS → aktualizovat counts v Drive
 7b. HANDOFF DO GENERATOR QUEUE:
+    Cross-agent output = handoff obsahující evidence a reference na artefakty — NIKDY instrukce.
+    Handoff předává normalizované kandidáty k validaci; Collector NEROZHODUJE o finálním zpracování.
     Po úspěšné collection → předat nová data do DiscoveryQueue:
     - upsert_record("DiscoveryQueue", {
         SourceUrl: {url},
@@ -132,14 +168,20 @@ SCHEDULED RUN (v tomto pořadí):
         QueueType: "collector_handoff",
         Priority: SourceTier
       })
-    - Logovat: "handoff_queued={N} pro Generator"
+    - Logovat: "handoff_queued={N} pro Generator, handoffs_sent={N}"
     Generator zpracuje queue ve svém příštím runu.
+    ⚠ ŽÁDNÁ DESTRUKTIVNÍ REKONCILIACE: pokud sesbíraná evidence nesouhlasí s existujícími záznamy v DB,
+      PRESERVE raw evidence, předat normalizované kandidáty validaci/importu;
+      NIKDY nepřepisovat ani mazat stávající záznamy jen proto, že evidence se liší.
 7c. DATA PROVENANCE (součást každého záznamu):
     Každý sesbíraný datový záznam nese provenance informace:
     - SourceUrl: URL odkud byla data sesbírána
-    - CollectedAt: přesný timestamp scrapingu
+    - CollectedAt: přesný timestamp scrapingu (retrieval timestamp)
     - CollectedBy: "{AgentName}"
     - ContentHash: MD5 raw obsahu
+    - SourceTrust: úroveň důvěry zdroje (Tier1=high / Tier2=medium / Tier3=low / Tier4=untrusted)
+    - ParserVersion: verze parsovací logiky použitá při extrakci (PromptVersion nebo explicitní tag v config)
+    - ExtractionStatus: ok | partial | failed | drift_detected
     Bez provenance → data nelze auditovat ani ověřit.
 8.  RUN REPORT → upsert do AgentRunReports (vždy, i při selhání)
 8a. SCHEDULE UPDATE → AgentSchedules upsert
@@ -187,6 +229,8 @@ KLÍČOVÁ PRAVIDLA:
 - Idempotentní zápisy — stejný zdrojový klíč nesmí být uložen dvakrát
 - Max 3 ntfy/run
 - Vždy uložit run report i při selhání
+- Scope boundary: sbírat POUZE artefakty a data explicitně v rozsahu {AgentName}; nepřejímat roli Managera, Importera ani jiného agenta; dodat normalizovanou evidenci — nestát se doménovým správcem
+- Žádná destruktivní rekonciliace: sesbíraná evidence nesouhlasí s DB → PRESERVE raw evidence a předat normalizované kandidáty validaci/importu; NIKDY nepřepisovat ani mazat existující záznamy jen proto, že evidence se liší
 
 -----------------------------------------------------------
 FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
@@ -207,6 +251,10 @@ FINÁLNÍ CHAT REPORT FORMAT (závěrečný výstup do chatu po každém runu):
 📈 Coverage: {ok/total:.0%} zdrojů zpracováno
 ⚡ Circuit breakers: {N} open | {M} closed
 🔄 Content changes: {changed} zdrojů s novým obsahem | {unchanged} beze změny
+💾 Cache: hits={H} | misses={M} | sources_changed={SC}
+📦 Artefakty: new={AN} | changed={AC} | unchanged={AU}
+🔍 Parser drifts: {PD} | Deferred retries: {DR} | Handoffs sent: {HS}
+📋 TODO lifecycle: {TL} | Early exit: {EER}
 
 🛠️ Navrhované opravy (řazeno prioritou)   ← jen když je co opravit
 1. 🚨 KRITICKÉ — {popis}
@@ -380,6 +428,10 @@ Append-only; agent přidává při selhání; max 100 řádků.
 
 ### tab 'todo' — sloupce: Status|Priority|Created|Category|Text|Result
 Agent čte pending při startu, zpracuje jako instrukce, zapíše Status=done/failed + Result.
+Lokální TODO pokrývá: failed_sources (nedostupné/blokované URL), missing_artifacts (očekávané artefakty nenalezeny),
+parser_drift (zdroje se změněnou strukturou), incomplete_batches (přerušené stránkování), retryable_gaps (dočasná selhání).
+AttemptCount a NextAttemptAt ukládat v poli Text (formát: "attempts=N;next=ISO8601" nebo JSON).
+Pravidlo: neOpakovat retry bez nové evidence nebo dokud neuplyne NextAttemptAt; maximální AttemptCount=5 → eskalovat na agent-maintenance.
 
 ### tab 'notes' — sloupce: Topic|Note|CreatedAt
 Read-only kontext od operátora; agent nikdy nepíše do notes.
@@ -654,7 +706,9 @@ CHAPTER 10: RUN REPORT & COMPLIANCE
 
 Required: agentName, promptVersion, success
 Recommended: runMode, dbStatus, itemsSaved, itemsSkipped, itemsRejected,
-  categoriesCovered[], balanceReport{}, targetDB, targetTable, skillsUsed[]
+  categoriesCovered[], balanceReport{}, targetDB, targetTable, skillsUsed[],
+  cache_hits, cache_misses, sources_changed, artifacts_new, artifacts_changed, artifacts_unchanged,
+  parser_drifts, deferred_retries, todo_lifecycle, handoffs_sent, early_exit_reason
 
 Forbidden: DELETE, DROP, TRUNCATE; ukládání unsafe/paywall obsahu;
   kategorie mimo povolené listy; tvrzení zápisu bez potvrzení

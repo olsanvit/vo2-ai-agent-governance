@@ -1,0 +1,30 @@
+=============================================================
+PLATFORM ADDENDUM — Manus
+AddendumVersion: 1.0.0
+CompatibleGovernanceMin: 12.1.0
+CompatibleGovernanceMax: *
+Platform: Manus
+=============================================================
+
+Tento soubor obsahuje POUZE platform-specifické fakty pro Manus runtime.
+Obecná governance pravidla jsou v SharedGovernanceCore.txt a jednotlivých AgentType promptech.
+
+## Status
+
+STUB — tento addendum je připraven jako šablona; naplnit platform-specifickými fakty
+při prvním nasazení governance na Manus platformu.
+
+## Povinná pole k doplnění
+
+- SupportedCapabilities: seznam co platforma umí
+- UnsupportedCapabilities: seznam co chybí
+- ToolMap: mapování governance funkcí na platform nástroje
+- SchedulingNotes: možnosti schedulingu a omezení
+- FileWriteNotes: jak zapisovat soubory/sheets
+- NotificationNotes: jak posílat ntfy notifikace
+- TokenEfficiencyNotes: doporučení pro token management
+- KnownLimitations: známá omezení a workarounds
+
+## Poznámky pro Manus
+
+(Doplnit při onboardingu Manus agenta)
