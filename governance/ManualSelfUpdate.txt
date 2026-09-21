@@ -1,13 +1,43 @@
 Template: ManualSelfUpdate
-TemplateVersion: 12.0.1
-LastUpdated: 2026-09-18
+TemplateVersion: 12.1.0
+LastUpdated: 2026-09-21
 
 =============================================================
-MANUAL SELFUPDATE TEMPLATE — governance 12.0.1
+MANUAL SELFUPDATE TEMPLATE — governance 12.1.0 / agent prompts 12.0.2
 =============================================================
 
 Kopírovat a odeslat agentovi při ruční aktualizaci governance.
 Prompt Cache Protocol: nejdříve zkontroluj versions.json, stahuj prompt jen při mismatch.
+
+-------------------------------------------------------------
+
+Aktualizuj se na governance 12.1.0 (SharedGovernanceCore) / 12.0.2 (tvůj agent prompt). Proveď selfUpdate — Prompt Cache Protocol:
+0. Stáhni https://mcp.vo2info.cz/governance/versions.json (nebo GitHub fallback níže) a porovnej všechny verze.
+   Pokud tvůj PromptVersion >= 12.0.2 A SharedGovernanceCore >= 12.1.0: přeskoč kroky 1–4, nejsi pozadu.
+   Pokud mismatch: pokračuj kroky 1–4.
+
+Co je nového v 12.1.0 / 12.0.2 (všechny agenty):
+- SharedGovernanceCore.txt 12.1.0 — 10 nových cross-cutting sekcí:
+  • SCOPE-FIRST AUTONOMY: každý agent vlastní explicitní scope; cross-agent práce jen přes HANDOFF evidence
+  • HANDOFF SEMANTICS (INBOX/OUTBOX): AgentHandoffs tabulka, schema, no-forwarding pravidlo, 7-day TTL stale
+  • PER-AGENT TODO OWNERSHIP: lifecycle s AttemptCount/NextAttemptAt, max 5 pokusů, verify+delete při dokončení
+  • APPROVAL QUEUE: spreadsheet 'approval' tab (11 polí) pro destruktivní/riskantní akce před provedením
+  • MULTI-SOURCE COLLECTION STANDARD: ImportantScore ≥ 70 → povinné ≥ 2 nezávislé zdroje + field-level provenance
+  • SOURCE QUALITY LIFECYCLE: TrustScore 0–100, circuit breaker < 30, recovery po 5 dobrých fetchách
+  • SAFE WRITES PROTOCOL: PREPARE → VALIDATE → WRITE → VERIFY pipeline (ne přímé zápisy)
+  • PLATFORM CONTROL POLICY: bez auto migrace platformy/frekvence, jen doporučení operátorovi, verzované addenda
+  • ACTIONABLE NOTIFICATIONS POLICY: co posílat / neposílat, 24h dedup okno, 9 povolených event typů
+  • CENTRAL OBSERVABILITY, LOCAL CONTROL: Monitor čte agregát, nevlastní doménové TODO ostatních agentů
+- CheckerPrompt 12.0.2: Deterministic Validation Order (6 fází), Finding Classification, Pre-write Validation API
+- GeneratorPrompt 12.0.2: Reproducibility Metadata (InputHash, OutputChecksum, …), Input Fingerprint Check (early exit)
+- CollectorPrompt 12.0.2: Incremental Source Check (ETag/fingerprint), Schema/Parser Drift Detection, Batch Anomaly Control
+- MonitorPrompt 12.0.2: Correlation Engine (>3 agenti = 1 root-cause incident), Efficiency Monitoring, AI Capacity Monitoring
+- OptimizerPrompt 12.0.2: Cache Optimization, Config Drift Detection, Versioned Prompt/Config Changes (canary + AutoRollback)
+- ImporterPrompt 12.0.2: Mandatory Import Pipeline (10 kroků), Idempotency (SHA256 batch_hash), DryRun, Rollback Protocol
+- CatalogPrompt 12.0.2: 3 nové taby (inbox/outbox/approval), Chapter 14 Autonomous Catalog Governance
+- ManagerPrompt 12.0.2: Chapter 20 Historical Completeness Engine, Ch21 Identity Resolution, Ch22 Prediction Integrity, Ch23 Batch Safety
+- Nové soubory: PlatformAddendum_Claude.txt 1.0.0, PlatformAddendum_ChatGPT.txt 1.0.0 (stuby: Gemini/Manus/Copilot/Perplexity)
+- versions.json: compatibility → 12.1.0
 
 -------------------------------------------------------------
 
