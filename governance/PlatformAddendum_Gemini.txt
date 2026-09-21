@@ -3,28 +3,87 @@ PLATFORM ADDENDUM — Gemini
 AddendumVersion: 1.0.0
 CompatibleGovernanceMin: 12.1.0
 CompatibleGovernanceMax: *
-Platform: Gemini
+Platform: Gemini (Google AI Studio / Gemini API / Gems)
 =============================================================
 
 Tento soubor obsahuje POUZE platform-specifické fakty pro Gemini runtime.
 Obecná governance pravidla jsou v SharedGovernanceCore.txt a jednotlivých AgentType promptech.
 
-## Status
+## SupportedCapabilities
 
-STUB — tento addendum je připraven jako šablona; naplnit platform-specifickými fakty
-při prvním nasazení governance na Gemini platformu.
+- Function calling (proxy pro MCP tools — přes Gemini API tool_config)
+- Google Search grounding: vestavěný nástroj, stabilní výsledky
+- Code execution (vestavěný sandbox — Python, dočasný)
+- File uploads: PDF, obrázky, video, audio přes File API (max 2 GB / soubor)
+- Kontext okno: Gemini 1.5 Pro 1M tokenů | Gemini 2.0 Pro/Flash 1M tokenů | Gemini 2.5 Pro 2M tokenů
+- Context caching: pro opakované velké prompty — výrazně snižuje náklady (TTL min 1 hod)
+- Gemini Gems: vlastní agent konfigurace (ekvivalent Custom GPT) — bez nativního schedulingu
+- Model doporučení: gemini-2.0-flash pro rychlé runy; gemini-2.5-pro pro komplexní rozhodnutí
+- Multimodal vstup: text, obraz, audio, video v jednom požadavku
 
-## Povinná pole k doplnění
+## UnsupportedCapabilities
 
-- SupportedCapabilities: seznam co platforma umí
-- UnsupportedCapabilities: seznam co chybí
-- ToolMap: mapování governance funkcí na platform nástroje
-- SchedulingNotes: možnosti schedulingu a omezení
-- FileWriteNotes: jak zapisovat soubory/sheets
-- NotificationNotes: jak posílat ntfy notifikace
-- TokenEfficiencyNotes: doporučení pro token management
-- KnownLimitations: známá omezení a workarounds
+- Native MCP: nepodporováno — použít Function calling jako proxy
+- Automatický cron scheduling: Gems nemají Tasks ekvivalent; nutný externí trigger (Cloud Scheduler, n8n, Make)
+- Direct file system access: vše přes API nebo Code Interpreter sandbox (dočasný)
+- Git CLI: jen přes GitHub API nebo Actions
+- Persistent cross-session memory: kontext jen pro aktuální session; stav musí být v DB/Sheets
+- Advisory lock via session: implementovat přes DB upsert s TTL
 
-## Poznámky pro Gemini
+## ToolMap
 
-(Doplnit při onboardingu Gemini agenta)
+| Funkce              | Gemini Function / Tool                         |
+|---------------------|------------------------------------------------|
+| DB read             | run_select_sql (Function calling → MCP proxy)  |
+| DB write            | upsert_record, smart_upsert_batch              |
+| DB schema           | ensure_table, ensure_columns                   |
+| Sheets read         | sheets_get_values                              |
+| Sheets write        | sheets_append_rows, sheets_update_row          |
+| Sheets find         | sheets_find_row                                |
+| Notifikace          | send_notification                              |
+| Run log             | log_run                                        |
+| Web vyhledávání     | google_search (vestavěný, grounding)           |
+| Spuštění kódu       | code_execution (vestavěný sandbox, dočasný)    |
+| Agent catalog       | get_agent_catalog, upsert_agent_catalog        |
+
+## SchedulingNotes
+
+- Gems NEMAJÍ nativní scheduling — nutný externí trigger (n8n, Make.com, Cloud Scheduler, GitHub Actions)
+- Cloud Scheduler → HTTP volání Gemini API = doporučená produkční varianta
+- n8n scheduler (QNAP): použít pro integraci s existující infrastrukturou
+- Minimální smysluplný interval: 1 hodina (praktické omezení, ne API limit)
+- Při externím triggeru: agent nesmí předpokládat předchozí kontext session
+
+## FileWriteNotes
+
+- Code Interpreter sandbox: dočasný — soubory nepřežijí session; pouze pro výpočty
+- File API: nahrát soubor → URI → předat do požadavku; TTL souboru 48 hodin
+- Persistentní zápisy pouze přes DB (upsert_record) nebo Drive/Sheets Actions
+- Drive operace přes Function calling (read_file_content, sheets_*)
+
+## NotificationNotes
+
+- send_notification přes Function calling → ntfy
+- Velký kontext okno (1M+ tokenů) = méně tokenové přetečení, ale náklady rostou lineárně
+- Context caching: pokud se systémový prompt nemění mezi runy, použít Gemini Context Caching → ~4× nižší náklady na input tokeny
+- Silent Mode povinný — nereprodukovat velké JSON výstupy do odpovědi
+
+## TokenEfficiencyNotes
+
+- gemini-2.0-flash: default pro rychlé/levné runy (nízká latence, nízká cena)
+- gemini-2.5-pro: doporučen pro: self-audit, governance konflikty, schema rozhodnutí, error recovery
+- Context caching (Gemini API): cache systémový prompt + SharedGovernanceCore + agent prompt jednou; platí 1 hodinu; cena čtení z cache ~4× nižší než fresh input
+- Velké kontext okno NEZNAMENÁ nulové náklady — každý token se platí; komprimovat vstupy
+- EstimatedCostUSD: pro flash ~$0.075/1M input; pro 2.5-pro ~$1.25/1M input; reportovat do AgentRunReports
+- Grounding (Google Search): +$35/1000 požadavků — používat jen kdy nezbytné
+
+## KnownLimitations
+
+- Žádný nativní scheduling — závislost na externím triggeru zvyšuje komplexitu nasazení
+- Function calling latence: podobná Actions proxy; pro rychlé runy (< 10 tool calls) zanedbatelná
+- Context caching TTL: 1 hodina minimum, max 30 dní — při denních runech nastavit 24h TTL
+- Gems (AI Studio): nemohou přímo přistupovat k produkčním API bez nakonfigurovaných Function declarations
+- Google Search grounding: výsledky jsou stabilnější než ChatGPT browsing, ale stále mohou být neaktuální (max 1 den zpoždění)
+- Code Interpreter sandbox: izolovaný, dočasný — nevhodný pro persistenci výsledků
+- Bezpečnost: API klíče NESMÍ být v prompt textu ani ve Function declarations — vždy přes environment proměnné nebo Secret Manager
+- Claude, ChatGPT, Manus, Copilot, Perplexity: viz jejich vlastní addenda
