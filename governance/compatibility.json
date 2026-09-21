@@ -1,72 +1,73 @@
 {
-  "_comment": "Agent version compatibility matrix — v12.0.0",
-  "_updated": "2026-09-17",
+  "_comment": "Agent version compatibility matrix — v12.1.0",
+  "_updated": "2026-09-21",
   "mcpMinVersion": "11.0.0",
-  "sharedGovernanceCoreMin": "12.0.0",
+  "sharedGovernanceCoreMin": "12.1.0",
   "skillsVersionMin": "11.5.0",
   "promptCompatibility": {
     "ManagerPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "CatalogPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "CheckerPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "ImporterPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "GeneratorPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "CollectorPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "MonitorPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "AnalyzerPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.7.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "OptimizerPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.2",
       "minCompatible": "11.6.0",
-      "requiresCore": "12.0.0",
+      "requiresCore": "12.1.0",
       "requiresSkills": "11.5.0"
     },
     "SimulateRealImporterPrompt": {
-      "current": "12.0.0",
+      "current": "12.0.1",
       "minCompatible": "11.5.0",
       "requiresCore": "12.0.0",
       "requiresSkills": "11.5.0"
     }
   },
   "breakingChanges": {
+    "12.1.0": "Scope-First Autonomy, INBOX/OUTBOX Handoff Semantics, Per-Agent TODO Ownership, Approval Queue, Multi-Source Collection Standard, Source Quality Lifecycle, Safe Writes Protocol, Platform Control Policy, Actionable Notifications Policy, Central Observability/Local Control — agenti na < 12.0.2 neimplementují handoff kontrakt ani TODO ownership",
     "12.0.0": "JSON-Lines log formát, DiscoveryQueue kontrakt, Capability Declaration, DR Protocol, Rollback Protocol, Token Budget Tracking, Advisory Lock, Per-Sport Circuit Breaker (SimulateRealImporter); agenti na < 11.8.0 neimplementují ntfy plain-text standard",
     "11.8.0": "88 nových governance pravidel; agenti na < 11.7.0 neimplementují circuit breakery, handoff protokoly a SLA tracking",
     "11.7.0": "SharedGovernanceCore přejmenován, SkillsVersion oddělena od PromptVersion",
