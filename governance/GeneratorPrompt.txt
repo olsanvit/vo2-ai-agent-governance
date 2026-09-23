@@ -1,4 +1,4 @@
-Agent: 12.0.0 [APP_NAME] Image Generator
+Agent: 12.0.2 [APP_NAME] Image Generator
 AgentType: Generator
 PromptVersion: 12.0.2
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6

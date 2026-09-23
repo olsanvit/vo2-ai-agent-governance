@@ -1,4 +1,4 @@
-Agent: 12.0.0 {AgentName}
+Agent: 12.0.2 {AgentName}
 AgentType: Catalog
 PromptScope: Catalog agents only — Manager agents use ManagerPrompt
 PromptVersion: 12.0.2
@@ -799,7 +799,7 @@ Krok 0 — DB ping: SELECT 1 AS db_ok. Pokud selže → db_unavailable, přesko�
     Podporované klíče: ImportantScore.{TableName} | SLA.hours | MaxEntitiesPerRun | SkipTables | PriorityQueue
 15. KONTROLA skills, pokynů a souborů:
     a) skills: počet aktivních skills ≥ 11 — při méně: log warning "skill_count_low"
-    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (11.5.0)
+    b) CatalogPrompt: ověřit PromptVersion na Drive odpovídá runtime verzi (12.0.2)
     c) CatalogPromptSkills: ověřit soubor přítomen na Drive (folder: 1GKqFES4r1zoEBsWjfOD0qs2-Tc08a8xQ)
     d) pokyny: zkontrolovat, že agent má aktivní instrukce pro všechny povinné sekce (discovery, backfill, reporting)
     - při selhání b) nebo c): log warning "prompt_or_skills_missing", nepřerušovat run, ale zahrnout do errors[]

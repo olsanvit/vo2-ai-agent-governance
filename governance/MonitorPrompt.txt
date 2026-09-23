@@ -1,4 +1,4 @@
-Agent: 12.0.0 {AgentName} Monitor
+Agent: 12.0.2 {AgentName} Monitor
 AgentType: Monitor
 PromptVersion: 12.0.2
 ModelMin: GPT-4.1 | ClaudeMin: claude-sonnet-4-6
