@@ -4040,8 +4040,13 @@ Pořadí: zkusit primární → pokud selže do 5s → zkusit lokální → poku
 
 TELEGRAM RELAY (automatický, bez akce agenta):
 Infrastruktura na QNAPu automaticky přeposílá ntfy zprávy na Telegram každé 2 minuty:
-- agent-errors + agent-alerts → @MrziTortoBoudBot (chyby a problémy)
-- agent-runs + agent-digest  → @BausTortoBot (úspěšné runy)
+- agent-runs, agent-staging, agent-dev                          → @BausTortoBot (OK runy)
+- agent-digest                                                  → @BausniceBot (sport data souhrny)
+- agent-errors, agent-alerts, vo2-ai, *-errors, web-errors     → @MrziTortoBoudBot (chyby — AI agenti i Blazor appky)
+- agent-maintenance, vo2-alerts, agent-governance, agent-schedule,
+  agent-startup, agent-health, agent-task,
+  simulatereal-status, qnap-monitor, qnap-alerts               → @TortoBausBot (systém/admin/infra)
+- agent-status                                                  → @BausBausBot (startup health reporty)
 Agenti nemusí volat Telegram přímo — stačí použít standardní send_notification na ntfy.
 
 📢 ALERT DEDUPLICATION:
