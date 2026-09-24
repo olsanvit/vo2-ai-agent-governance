@@ -1,0 +1,85 @@
+=============================================================
+ESCALATION PROTOCOL — v1.0.0
+=============================================================
+Tento soubor definuje standardni postup pro eskalaci neopravitelnych
+problemu z cloud Claude rutin do vo2-fix-queue (ntfy).
+Nacita se jako soucást Prompt Cache Protocol (krok 2b).
+Zdrojovy soubor: EscalationProtocol.txt
+=============================================================
+
+## Kdy eskalovat
+
+Eskaluj do vo2-fix-queue kdyz:
+- Problem byl detekovan, ale NENI opravitelny v cloud sandboxu
+- Priklady: db_unreachable, SSH pristup, QNAP/lokalni sit, readiness_degraded,
+  expired credentials ktere nelze obnovit automaticky, fyzicky pristup k serveru
+
+Neeskaluj:
+- Problemy ktere jsi uspesne opravil
+- Docasne chyby (timeout, rate limit) — zkus znovu
+- Nejasnosti — zkus zjistit vice informaci nejdrive
+
+## fix_type pravidla
+
+fix_type = local:
+  - Problemy vyzadujici SSH na QNAP (192.168.60.221)
+  - db_unreachable (PostgreSQL na pg16)
+  - readiness_degraded (kontejner nespusteny)
+  - Lokalni sit, VPN, fyzicky pristup
+
+fix_type = cloud:
+  - GitHub CI selhani resitelne jinym cloud agentem
+  - API token obnoveni (kdyz lze pres web/API)
+  - Cloud service konfigurace
+
+## Eskalacni postup
+
+Pro kazdy neopravitelny problem spust nasledujici:
+
+cat > /tmp/vo2_escalate.py << 'PYEOF'
+import subprocess, uuid, json, sys
+
+fix_type = sys.argv[1]       # local nebo cloud
+source   = sys.argv[2]       # nazev teto rutiny (napr. daily-agent-error-monitor)
+service  = sys.argv[3]       # nazev sluzby (napr. pg16, vo2info, SimulateReal)
+repo     = sys.argv[4]       # repo nebo prazdny retezec ''
+problem  = sys.argv[5]       # strucny popis problemu
+tried    = sys.argv[6]       # co jsi zkousel
+severity = sys.argv[7]       # high / medium / low
+
+d = {
+    'fix_type':       fix_type,
+    'source_routine': source,
+    'service':        service,
+    'repo':           repo,
+    'problem':        problem,
+    'tried':          tried,
+    'severity':       severity,
+    'request_id':     str(uuid.uuid4())
+}
+subprocess.run([
+    'curl', '-s', '-X', 'POST',
+    'https://ntfy.vo2info.cz/vo2-fix-queue',
+    '-H', 'Authorization: Basic NTFY_AUTH_TOKEN_BASE64=',
+    '-H', 'Content-Type: text/plain',
+    '-d', json.dumps(d)
+])
+print('Eskalovano:', json.dumps(d, ensure_ascii=False))
+PYEOF
+
+# Pote volej:
+# python3 /tmp/vo2_escalate.py fix_type source service repo problem tried severity
+#
+# Priklady:
+#   python3 /tmp/vo2_escalate.py local daily-agent-error-monitor pg16 '' db_unreachable 'zkouseno ping' high
+#   python3 /tmp/vo2_escalate.py cloud daily-project-error-monitor SimulateReal olsanvit/SimulateReal 'CI fail build' 'zkouseno gh run rerun' medium
+
+## Integrace do rutiny
+
+V KROK 1 (Governance Check) pridej nacitani tohoto protokolu:
+  curl -s https://mcp.vo2info.cz/governance/EscalationProtocol.txt
+  nebo: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/EscalationProtocol.txt
+
+V poslednim KROKU rutiny (Eskalace):
+  Pro kazdy detakovany a neopraveny problem zavolej vo2_escalate.py
+  s patricnymi argumenty dle sekce "Eskalacni postup" vyse.
