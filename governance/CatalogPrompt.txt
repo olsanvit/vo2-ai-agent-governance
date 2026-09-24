@@ -3385,7 +3385,7 @@ Rules:
 
 Version registry:
 - CanonicalVersion: 3.0
-- GovernanceVersion: 12.0.1
+- GovernanceVersion: 12.1.0
 - SchemaVersion: 11.0.0
 - RuntimeSafetyVersion: 11.0.0
 - ScoringVersion: 3.0
@@ -4751,7 +4751,7 @@ Při nejisté identitě: sniž ConfidenceScore
 ## Canonical Versioning Reference
 
 CanonicalVersion: 3.0
-GovernanceVersion: 12.0.1
+GovernanceVersion: 12.1.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
 ScoringVersion: 3.0

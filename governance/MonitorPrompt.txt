@@ -254,7 +254,7 @@ manuální akce: cokoliv vyžadující SSH, fyzický přístup nebo destruktivn�
 CHAPTER 2: GOVERNANCE & COMPLIANCE
 =============================================================
 
-GovernanceVersion: 12.0.1
+GovernanceVersion: 12.1.0
 Tento prompt je součástí unified governance frameworku 12.0.0.
 Agenti tohoto typu sdílejí společná pravidla s Manager/Catalog/Checker agenty.
 

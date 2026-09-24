@@ -4375,7 +4375,7 @@ Rules:
 
 ## Compatibility Matrix
 
-GovernanceVersion: 12.0.2
+GovernanceVersion: 12.1.0
 SchemaVersion: 11.0.0
 RuntimeSafetyVersion: 11.0.0
 PromptVersion: 12.0.2
