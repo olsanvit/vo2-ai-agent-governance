@@ -60,7 +60,7 @@ d = {
 subprocess.run([
     'curl', '-s', '-X', 'POST',
     'https://ntfy.vo2info.cz/vo2-fix-queue',
-    '-H', 'Authorization: Basic NTFY_AUTH_TOKEN_BASE64=',
+    '-H', 'Authorization: Basic NTFY_AUTH_TOKEN',  # token je v promptu rutiny, ne zde
     '-H', 'Content-Type: text/plain',
     '-d', json.dumps(d)
 ])
