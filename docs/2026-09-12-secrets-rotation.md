@@ -131,7 +131,30 @@ se na QNAPu vůbec nekontrolují (aplikace se špatným heslem „fungují"); te
 neprokazují. Náprava = změnit `trust` na `scram-sha-256` pro Docker sítě — předtím ověřit, že každá aplikace
 má v konfiguraci platné heslo (dnes to nikdo nekontroluje) a `password_encryption` = scram (je).
 
-### Plán: odstranění `trust` z pg_hba (připraveno 2026-09-16, NEPROVEDENO)
+### Odstranění `trust` z pg_hba — fáze 1 PROVEDENA 2026-09-24
+
+`scripts/hba-roles-qnap.sh`: pro každou roli přidá `host all <role> 172.16.0.0/12 md5` +
+`192.168.60.221/32`, `pg_reload_conf()`, a hned ověří **všechna** hesla, která pro roli existují
+v konfiguracích (`.env`, `secrets/*.env`, všechny `appsettings.Production.json`) přihlášením
+z kontejneru v síti `appnet`. Když kterákoli konfigurace neprojde, pravidlo se zase odebere.
+
+**22 rolí má pravidlo** (44 řádků `# gov-md5`), záloha `secrets/pg_hba.conf.pre-md5-*`.
+`trust` zatím zůstává — ruší se až ve fázi 2, po vyřešení zbytku.
+
+Opraveno cestou (heslo bylo platné jen díky `trust`):
+- `mcp-mab` měl v `secrets/mcp-mab.env` jiné heslo `mercs_beasts_usr` než aplikace → převzato z aplikace.
+  Heslo obsahuje znaky mimo URL abecedu → v `DATABASE_URL` musí být **percent-encoded**, jinak node hlásí `Invalid URL`.
+- `BlazorSimulateReal` měl u `roundnet` heslo z doby před rotací 09-16 → dorovnáno z `secrets/roundnet.pw`.
+
+**Blokuje fázi 2** (cizí projekty, hesla v konfiguraci neplatná):
+| Role | Konfigurace | Stav aplikace |
+|---|---|---|
+| `vo2info_ro` | `BlazorVo2Info`, 7× sekce `Admin*` | **běží** — jediný živý blokátor; vedle toho tentýž soubor používá funkční `vo2info_aps_rw`, `vo2info_vin_rw`, `vo2info_topeleven_rw`, `vo2info_simreal_rw` |
+| `aps_usr` | `BlazorAgentsPromptsSkills` (06-03) | kontejner neběží |
+| `myzabbix_usr` | `BlazorMyZabbix` (06-08) | kontejner neběží |
+| `scorer_usr` | `BlazorScorerAppdev` (06-03) | dev kontejner neběží; produkční konfigurace v pořádku |
+
+### Plán: odstranění `trust` z pg_hba (připraveno 2026-09-16, fáze 2 NEPROVEDENA)
 
 **Inventura spotřebitelů pg16** (env kontejnerů + `appsettings.Production.json` + živá spojení):
 `AgentAI` (qnap-game-mcp, vin-importer), `mcp_sr_usr`, `mcp_usm_usr`, `mcp_te_usr`, `agent_mon_usr` a
