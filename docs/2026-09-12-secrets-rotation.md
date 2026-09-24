@@ -131,6 +131,21 @@ se na QNAPu vůbec nekontrolují (aplikace se špatným heslem „fungují"); te
 neprokazují. Náprava = změnit `trust` na `scram-sha-256` pro Docker sítě — předtím ověřit, že každá aplikace
 má v konfiguraci platné heslo (dnes to nikdo nekontroluje) a `password_encryption` = scram (je).
 
+### `scorer_usr` — únik v cizím repu, ověřeno 2026-09-24 (MRTVÁ hodnota)
+
+Session ScorerApp nahlásila, že heslo role `scorer_usr` bylo verzované v **public repu
+`olsanvit/ScorerApp`** (`src/ScorerApp.Web/appsettings.Production.json`, commity `dba8317`,
+`308ce47`, `fef38af`; odtrackováno až `0f2cf8c` — v historii na originu zůstává).
+
+Ověřeno bez přenosu hodnoty, porovnáním otisků `md5("Password=<hodnota>\n")`:
+- uniklá hodnota (jejich otisk `75d56d5a`) = heslo v `/share/Public/BlazorScorerAppdev/publish/appsettings.Production.json` (9 znaků) — **shoda**
+- produkce `/share/Public/BlazorScorerApp/publish/…` má jiné, 21znakové heslo (`a3790251`) — uniklou hodnotu nepoužívá
+- test přihlášení: dev konfigurace **neprojde**, produkční ano → **uniklé heslo v pg16 už neplatí**
+
+Závěr: rotace `scorer_usr` kvůli tomuto úniku není nutná, role je fakticky rotovaná. Zbývá čistě
+historická expozice v cizím repu (přepis historie / private je na majiteli repa) a dev konfigurace
+drží mrtvou hodnotu — nahradit produkčním heslem, ne kopírovat uniklé.
+
 ### Odstranění `trust` z pg_hba — fáze 1 PROVEDENA 2026-09-24
 
 `scripts/hba-roles-qnap.sh`: pro každou roli přidá `host all <role> 172.16.0.0/12 md5` +
