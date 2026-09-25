@@ -1,15 +1,15 @@
 =============================================================
-ESCALATION PROTOCOL — v1.0.0
+ESCALATION PROTOCOL — v1.1.0
 =============================================================
 Tento soubor definuje standardni postup pro eskalaci neopravitelnych
-problemu z cloud Claude rutin do vo2-fix-queue (ntfy).
+problemu z cloud Claude rutin do CloudFixQueue (AIDB).
 Nacita se jako soucást Prompt Cache Protocol (krok 2b).
 Zdrojovy soubor: EscalationProtocol.txt
 =============================================================
 
 ## Kdy eskalovat
 
-Eskaluj do vo2-fix-queue kdyz:
+Eskaluj do CloudFixQueue kdyz:
 - Problem byl detekovan, ale NENI opravitelny v cloud sandboxu
 - Priklady: db_unreachable, SSH pristup, QNAP/lokalni sit, readiness_degraded,
   expired credentials ktere nelze obnovit automaticky, fyzicky pristup k serveru
@@ -34,52 +34,41 @@ fix_type = cloud:
 
 ## Eskalacni postup
 
-Pro kazdy neopravitelny problem spust nasledujici:
+Pro kazdy neopravitelny problem pouzij mcp__AIDB__upsert_record:
+  table: CloudFixQueue
+  criteria: { request_id: "<uuid4>" }
+  data:
+    fix_type:       "local" nebo "cloud"
+    source_routine: "<nazev teto rutiny>"
+    service:        "<nazev sluzby>"
+    repo:           "<repo nebo ''>"
+    problem:        "<strucny popis>"
+    tried:          "<co jsi zkousel>"
+    severity:       "high" / "medium" / "low"
+    status:         "pending"
+    request_id:     "<uuid4>"
 
-cat > /tmp/vo2_escalate.py << 'PYEOF'
-import subprocess, uuid, json, sys
+Pote posli notifikaci (lidska viditelnost):
+  mcp__AIDB__send_notification
+    topic: "agent-alerts"
+    title: "Fix needed — <fix_type>"
+    message: "<source_routine>: <problem> (severity: <severity>)"
 
-fix_type = sys.argv[1]       # local nebo cloud
-source   = sys.argv[2]       # nazev teto rutiny (napr. daily-agent-error-monitor)
-service  = sys.argv[3]       # nazev sluzby (napr. pg16, vo2info, SimulateReal)
-repo     = sys.argv[4]       # repo nebo prazdny retezec ''
-problem  = sys.argv[5]       # strucny popis problemu
-tried    = sys.argv[6]       # co jsi zkousel
-severity = sys.argv[7]       # high / medium / low
+POZOR: ntfy.vo2info.cz neni dostupny z cloud sandboxu pres curl.
+Veskera komunikace probiha pres AIDB MCP konektor.
 
-d = {
-    'fix_type':       fix_type,
-    'source_routine': source,
-    'service':        service,
-    'repo':           repo,
-    'problem':        problem,
-    'tried':          tried,
-    'severity':       severity,
-    'request_id':     str(uuid.uuid4())
-}
-subprocess.run([
-    'curl', '-s', '-X', 'POST',
-    'https://ntfy.vo2info.cz/vo2-fix-queue',
-    '-H', 'Authorization: Basic NTFY_AUTH_TOKEN',  # token je v promptu rutiny, ne zde
-    '-H', 'Content-Type: text/plain',
-    '-d', json.dumps(d)
-])
-print('Eskalovano:', json.dumps(d, ensure_ascii=False))
-PYEOF
-
-# Pote volej:
-# python3 /tmp/vo2_escalate.py fix_type source service repo problem tried severity
-#
 # Priklady:
-#   python3 /tmp/vo2_escalate.py local daily-agent-error-monitor pg16 '' db_unreachable 'zkouseno ping' high
-#   python3 /tmp/vo2_escalate.py cloud daily-project-error-monitor SimulateReal olsanvit/SimulateReal 'CI fail build' 'zkouseno gh run rerun' medium
+#   upsert CloudFixQueue: fix_type=local, source=daily-agent-error-monitor,
+#     service=pg16, repo='', problem='db_unreachable', tried='ping', severity=high
+#   upsert CloudFixQueue: fix_type=cloud, source=daily-project-error-monitor,
+#     service=SimulateReal, repo=olsanvit/SimulateReal, problem='CI fail build',
+#     tried='gh run rerun', severity=medium
 
 ## Integrace do rutiny
 
 V KROK 1 (Governance Check) pridej nacitani tohoto protokolu:
-  curl -s https://mcp.vo2info.cz/governance/EscalationProtocol.txt
-  nebo: https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/EscalationProtocol.txt
+  curl -s https://raw.githubusercontent.com/olsanvit/vo2-ai-agent-governance/main/governance/EscalationProtocol.txt
 
 V poslednim KROKU rutiny (Eskalace):
-  Pro kazdy detakovany a neopraveny problem zavolej vo2_escalate.py
+  Pro kazdy detakovany a neopraveny problem zavolej mcp__AIDB__upsert_record
   s patricnymi argumenty dle sekce "Eskalacni postup" vyse.
