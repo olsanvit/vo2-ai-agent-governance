@@ -11,7 +11,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 const { Pool } = pkg;
 
 const AUTH_TOKEN = process.env.AUTH_TOKEN;
-const MCP_VERSION = "11.0.0";
+const MCP_VERSION = "11.1.0";
 const MAX_BATCH_SIZE = Number(process.env.MAX_BATCH_SIZE || 100);
 const MAX_EXPORT_ROWS = Number(process.env.MAX_EXPORT_ROWS || 1000);
 const MAX_SELECT_ROWS = Number(process.env.MAX_SELECT_ROWS || 500);
@@ -188,6 +188,192 @@ function startSheetsSyncLoop() {
       SHEETS_SYNC_INTERVAL_MS
     );
   }, 30_000);
+}
+
+// ── ChatGPT Agents Inventory ───────────────────────────────────────────────────
+// Option A: Sheet is source of truth for agent IDs (no OpenAI LIST API exists).
+// Admin maintains a "ChatGPT" tab in the Agents spreadsheet; this code syncs
+// that sheet → ChatGptAgents DB table and tracks changes in ChatGptAgentHistory.
+
+const CHATGPT_SYNC_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+const CHATGPT_DEFAULT_SHEET = "ChatGPT";
+// Expected sheet columns (order matters for header detection, not for value lookup)
+const CHATGPT_SHEET_COLUMNS = [
+  "AgentId", "Name", "Description", "Model", "ReasoningEffort", "Status",
+  "Tools", "Apps", "Skills", "Channels", "WorkspaceProject", "Notes", "IsPresentInChatGPT",
+];
+
+function computeConfigHash(fields) {
+  const stable = JSON.stringify(
+    Object.fromEntries(
+      Object.entries(fields)
+        .filter(([, v]) => v !== null && v !== undefined && v !== "")
+        .sort(([a], [b]) => a.localeCompare(b))
+    )
+  );
+  return crypto.createHash("sha256").update(stable).digest("hex").slice(0, 16);
+}
+
+async function syncChatGptAgentsFromSheet(spreadsheetId, sheetName = CHATGPT_DEFAULT_SHEET) {
+  if (!spreadsheetId) throw new Error("spreadsheet_id required for ChatGPT sync");
+  const started = Date.now();
+
+  // Fetch sheet
+  const data = await sheetsGet(`spreadsheets/${spreadsheetId}/values/${encodeURIComponent(sheetName)}`);
+  const allRows = data.values ?? [];
+  if (allRows.length < 2) return { total: 0, new: 0, changed: 0, unchanged: 0, missing: 0, errors: 0, durationMs: Date.now() - started };
+
+  const header = allRows[0].map(h => String(h).trim());
+  const dataRows = allRows.slice(1);
+
+  function col(row, name) {
+    const idx = header.findIndex(h => h.toLowerCase() === name.toLowerCase());
+    return idx >= 0 ? String(row[idx] ?? "").trim() : "";
+  }
+
+  // Ensure tables
+  await ensureTable("ChatGptAgents");
+  await ensureColumnsInternal("ChatGptAgents", {
+    AgentId: "", Name: "", Description: "", Model: "", ReasoningEffort: "",
+    Status: "", Tools: "", Apps: "", Skills: "", Channels: "", WorkspaceProject: "",
+    ConfigHash: "", FirstSeenAt: new Date().toISOString(), LastSeenAt: new Date().toISOString(),
+    LastChangedAt: new Date().toISOString(), IsPresentInChatGPT: true,
+    SyncStatus: "", LastSyncError: "", SpreadsheetId: "", SheetName: "",
+  });
+  await ensureTable("ChatGptAgentHistory");
+  await ensureColumnsInternal("ChatGptAgentHistory", {
+    AgentId: "", DetectedAt: new Date().toISOString(), ChangeType: "",
+    OldConfigHash: "", NewConfigHash: "", ChangedFields: "",
+  });
+
+  const now = new Date().toISOString();
+  let newCount = 0, changed = 0, unchanged = 0, errors = 0;
+  const seenIds = new Set();
+
+  for (const row of dataRows) {
+    const agentId = col(row, "AgentId");
+    if (!agentId) continue;
+    seenIds.add(agentId);
+
+    try {
+      const fields = {
+        Name: col(row, "Name"),
+        Description: col(row, "Description"),
+        Model: col(row, "Model"),
+        ReasoningEffort: col(row, "ReasoningEffort"),
+        Status: col(row, "Status"),
+        Tools: col(row, "Tools"),
+        Apps: col(row, "Apps"),
+        Skills: col(row, "Skills"),
+        Channels: col(row, "Channels"),
+        WorkspaceProject: col(row, "WorkspaceProject"),
+      };
+      const configHash = computeConfigHash({ AgentId: agentId, ...fields });
+      const isPresentRaw = col(row, "IsPresentInChatGPT");
+      const isPresent = isPresentRaw === "" || isPresentRaw.toLowerCase() === "true" || isPresentRaw === "1";
+
+      // Look up existing
+      const existing = await pool.query(
+        `SELECT "ConfigHash", "FirstSeenAt", "SyncStatus" FROM "ChatGptAgents" WHERE "AgentId" = $1 LIMIT 1`,
+        [agentId]
+      ).catch(() => ({ rows: [] }));
+
+      if (existing.rows.length === 0) {
+        // NEW
+        await upsertRecord("ChatGptAgents", { AgentId: agentId }, {
+          AgentId: agentId, ...fields, ConfigHash: configHash,
+          IsPresentInChatGPT: isPresent, SyncStatus: "NEW",
+          FirstSeenAt: now, LastSeenAt: now, LastChangedAt: now,
+          SpreadsheetId: spreadsheetId, SheetName: sheetName,
+          Notes: col(row, "Notes"), LastSyncError: "",
+        });
+        await upsertRecord("ChatGptAgentHistory", { AgentId: agentId, DetectedAt: now }, {
+          AgentId: agentId, DetectedAt: now, ChangeType: "NEW",
+          OldConfigHash: "", NewConfigHash: configHash, ChangedFields: "[]",
+        });
+        newCount++;
+      } else {
+        const prev = existing.rows[0];
+        if (prev.ConfigHash !== configHash) {
+          // CHANGED
+          const changedFields = Object.entries(fields)
+            .filter(([k]) => {
+              // crude diff: hash changed so report all non-empty fields
+              return true;
+            })
+            .map(([k]) => k);
+          await upsertRecord("ChatGptAgents", { AgentId: agentId }, {
+            ...fields, ConfigHash: configHash, IsPresentInChatGPT: isPresent,
+            SyncStatus: "CHANGED", LastSeenAt: now, LastChangedAt: now,
+            SpreadsheetId: spreadsheetId, SheetName: sheetName,
+            Notes: col(row, "Notes"), LastSyncError: "",
+          });
+          await upsertRecord("ChatGptAgentHistory", { AgentId: agentId, DetectedAt: now }, {
+            AgentId: agentId, DetectedAt: now, ChangeType: "CHANGED",
+            OldConfigHash: prev.ConfigHash ?? "", NewConfigHash: configHash,
+            ChangedFields: JSON.stringify(changedFields),
+          });
+          changed++;
+        } else {
+          // UNCHANGED
+          await pool.query(
+            `UPDATE "ChatGptAgents" SET "LastSeenAt" = $1, "SyncStatus" = 'UNCHANGED', "IsPresentInChatGPT" = $2 WHERE "AgentId" = $3`,
+            [now, isPresent, agentId]
+          ).catch(() => {});
+          unchanged++;
+        }
+      }
+    } catch (e) {
+      console.error(`[chatgpt-sync] agent ${agentId}: ${e.message}`);
+      await pool.query(
+        `UPDATE "ChatGptAgents" SET "LastSyncError" = $1, "SyncStatus" = 'ERROR' WHERE "AgentId" = $2`,
+        [e.message.slice(0, 500), agentId]
+      ).catch(() => {});
+      errors++;
+    }
+  }
+
+  // Mark MISSING — only after full successful enumeration
+  let missing = 0;
+  if (errors === 0) {
+    const presentResult = await pool.query(
+      `SELECT "AgentId" FROM "ChatGptAgents" WHERE "IsPresentInChatGPT" = TRUE AND "SpreadsheetId" = $1`,
+      [spreadsheetId]
+    ).catch(() => ({ rows: [] }));
+    for (const { AgentId: aid } of presentResult.rows) {
+      if (!seenIds.has(aid)) {
+        await pool.query(
+          `UPDATE "ChatGptAgents" SET "IsPresentInChatGPT" = FALSE, "SyncStatus" = 'MISSING', "LastSeenAt" = $1 WHERE "AgentId" = $2`,
+          [now, aid]
+        ).catch(() => {});
+        await upsertRecord("ChatGptAgentHistory", { AgentId: aid, DetectedAt: now }, {
+          AgentId: aid, DetectedAt: now, ChangeType: "MISSING",
+          OldConfigHash: "", NewConfigHash: "", ChangedFields: "[]",
+        }).catch(() => {});
+        missing++;
+      }
+    }
+  }
+
+  return {
+    success: true, total: seenIds.size, new: newCount, changed, unchanged, missing, errors,
+    durationMs: Date.now() - started,
+  };
+}
+
+function startChatGptSyncLoop() {
+  const spreadsheetId = process.env.CHATGPT_AGENTS_SPREADSHEET_ID;
+  const sheetName = process.env.CHATGPT_AGENTS_SHEET_NAME || CHATGPT_DEFAULT_SHEET;
+  if (!spreadsheetId) return; // opt-in via env var
+  setTimeout(async () => {
+    await syncChatGptAgentsFromSheet(spreadsheetId, sheetName)
+      .catch(e => console.error("[chatgpt-sync] Startup sync failed:", e.message));
+    setInterval(
+      () => syncChatGptAgentsFromSheet(spreadsheetId, sheetName)
+        .catch(e => console.error("[chatgpt-sync] Periodic sync failed:", e.message)),
+      CHATGPT_SYNC_INTERVAL_MS
+    );
+  }, 60_000);
 }
 
 let pgcryptoAvailable = false;
@@ -2292,6 +2478,51 @@ function createMcpServer() {
     return { content: [{ type: "text", text: JSON.stringify({ ok: true, agentName: agent_name, entityType: entity_type ?? "all", count: rows.length, rows }, null, 2) }] };
   });
 
+  // ── ChatGPT Agents Inventory Tools (11.1.0) ─────────────────────────────────
+
+  wrapTool("get_chatgpt_agents",
+    "Return the synchronized ChatGPT Workspace Agent inventory (READ-ONLY). Supports filtering by status, presence, agent ID, name substring, or changed since a given date.",
+    {
+      active_only:    z.boolean().optional().describe("Only agents where IsPresentInChatGPT = true"),
+      status:         z.string().optional().describe("Filter by SyncStatus: NEW, CHANGED, UNCHANGED, MISSING, ERROR"),
+      agent_id:       z.string().optional().describe("Filter by exact AgentId"),
+      name_contains:  z.string().optional().describe("Case-insensitive substring match on Name"),
+      changed_since:  z.string().optional().describe("ISO timestamp — only agents with LastChangedAt >= this value"),
+      limit:          z.number().optional().describe("Max rows (default 200)"),
+    },
+    async ({ active_only, status, agent_id, name_contains, changed_since, limit = 200 }) => {
+      const exists = await tableExists("ChatGptAgents");
+      if (!exists) return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: 0, agents: [], note: "ChatGptAgents table does not exist yet — run sync_chatgpt_agents first" }) }] };
+
+      let sql = `SELECT * FROM "ChatGptAgents" WHERE 1=1`;
+      const params = [];
+      if (active_only) { params.push(true); sql += ` AND "IsPresentInChatGPT" = $${params.length}`; }
+      if (status) { params.push(status); sql += ` AND "SyncStatus" = $${params.length}`; }
+      if (agent_id) { params.push(agent_id); sql += ` AND "AgentId" = $${params.length}`; }
+      if (name_contains) { params.push(`%${name_contains}%`); sql += ` AND "Name" ILIKE $${params.length}`; }
+      if (changed_since) { params.push(changed_since); sql += ` AND "LastChangedAt" >= $${params.length}`; }
+      sql += ` ORDER BY "Name" LIMIT $${params.length + 1}`;
+      params.push(Math.min(safeLimit(limit, 500), 500));
+
+      const r = await pool.query(sql, params);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, count: r.rows.length, agents: r.rows }, null, 2) }] };
+    }
+  );
+
+  wrapTool("sync_chatgpt_agents",
+    "Synchronize ChatGPT Workspace Agent inventory from a Google Sheet into the AgentMonitor database. READ-ONLY toward ChatGPT/OpenAI. Writes only to local DB/Sheets inventory.",
+    {
+      spreadsheet_id: z.string().optional().describe("Google Spreadsheet ID (overrides CHATGPT_AGENTS_SPREADSHEET_ID env var)"),
+      sheet_name:     z.string().optional().describe("Sheet tab name (default: ChatGPT)"),
+    },
+    async ({ spreadsheet_id, sheet_name }) => {
+      const ssId = spreadsheet_id || process.env.CHATGPT_AGENTS_SPREADSHEET_ID;
+      if (!ssId) return { content: [{ type: "text", text: JSON.stringify({ ok: false, error: "spreadsheet_id required — pass it as argument or set CHATGPT_AGENTS_SPREADSHEET_ID env var" }) }] };
+      const result = await syncChatGptAgentsFromSheet(ssId, sheet_name || process.env.CHATGPT_AGENTS_SHEET_NAME || CHATGPT_DEFAULT_SHEET);
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, ...result }, null, 2) }] };
+    }
+  );
+
   return server;
 }
 
@@ -2466,7 +2697,10 @@ async function initDbWithRetry(attempt = 1) {
 }
 
 initDbWithRetry()
-  .then(() => startSheetsSyncLoop())
+  .then(() => {
+    startSheetsSyncLoop();
+    startChatGptSyncLoop();
+  })
   .catch(err => {
     console.error("Unexpected error in initDbWithRetry:", err);
   });
