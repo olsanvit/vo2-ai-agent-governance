@@ -2530,6 +2530,23 @@ const app = express();
 app.use(express.json({ limit: "25mb" }));
 app.use("/uploads", express.static(UPLOAD_DIR));
 
+// Prompty pro agenty = první krok Prompt Cache Protocol (MCP → vo2info.cz → GitHub → Drive).
+// Bez autentizace záměrně: agent stahuje prompt dřív, než má token, a prompty nejsou tajné.
+// Deploy 2026-09-25 tuhle trasu shodil (běžela jen v kopii na QNAPu, v repu nebyla) a agentům
+// zbyl jen Drive — proto je od 2026-09-26 součástí repa.
+const GOVERNANCE_DIR = process.env.GOVERNANCE_DIR || "/app/governance";
+app.use(
+  "/governance",
+  express.static(GOVERNANCE_DIR, {
+    index: false,        // žádný výpis adresáře
+    dotfiles: "deny",
+    fallthrough: false,  // neznámý soubor = 404, ne propad do dalších tras
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".txt")) res.type("text/plain; charset=utf-8");
+    },
+  })
+);
+
 app.use((req, res, next) => {
   res.setTimeout(45000, () => {
     if (!res.headersSent) res.status(503).json({ error: "Request timeout" });
